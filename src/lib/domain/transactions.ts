@@ -2,7 +2,8 @@
 // edit, duplicate, and delete. Pure TypeScript, no Firebase imports.
 import { toStorage, type Chart, type IsoDate } from './chart.ts';
 import { parseAmount } from './money.ts';
-import type { Entry, PaidLink, Transaction } from './schemas.ts';
+import type { Entry, PaidLink, Scheduled, Transaction } from './schemas.ts';
+import { clearSettledWithLastPayment } from './scheduled.ts';
 import type { ChartWrite } from './writes.ts';
 
 /** Derived from Account Types, never chosen or stored. */
@@ -266,12 +267,17 @@ export function planSaveTransaction(
 }
 
 /** Deleting is permanent. Opening Balances and changes that refill an Archived Account are refused. */
-export function planDeleteTransaction(chart: Chart, id: string): ChartWrite[] {
+export function planDeleteTransaction(
+	chart: Chart,
+	id: string,
+	{ now = new Date(), plans = [] }: { now?: Date; plans?: Scheduled[] } = {}
+): ChartWrite[] {
 	const tx = chart.transaction(id);
 	if (!tx) throw new Error('This Transaction no longer exists');
 	assertNotOpening(tx);
 	assertArchivedStayEmpty(chart, tx.entries, []);
-	return [{ op: 'deleteTransaction', id }];
+	// With `plans`, a "Mark paid" left without any payment is cleared in the same write.
+	return [{ op: 'deleteTransaction', id }, ...clearSettledWithLastPayment(chart, tx, plans, now)];
 }
 
 /** Centavos as plain text the form can parse back exactly: 501500 → "5015.00". */

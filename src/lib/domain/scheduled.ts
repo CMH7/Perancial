@@ -257,3 +257,29 @@ export function planDeletePlan(chart: Chart, planId: string): ChartWrite[] {
 		);
 	return [{ op: 'deleteScheduled', id: planId }];
 }
+
+/**
+ * "Mark paid" settles the payments made so far. When the last paying Transaction of an occurrence
+ * is unlinked or deleted, the mark goes too, so a later payment starts from partly paid again.
+ */
+export function clearSettledWithLastPayment(
+	chart: Chart,
+	tx: Transaction,
+	plans: Scheduled[],
+	now: Date
+): ChartWrite[] {
+	const link = tx.pays;
+	if (link?.plan !== 'scheduled') return [];
+	const plan = plans.find((p) => p.id === link.planId);
+	const change = plan?.occurrences[link.due];
+	if (!plan || !change?.settled) return [];
+	const others = paymentsFor(chart, { planId: plan.id, due: link.due }).filter(
+		(p) => p.id !== tx.id
+	);
+	if (others.length) return [];
+	const { settled: _settled, ...rest } = change;
+	const occurrences = { ...plan.occurrences };
+	if (Object.keys(rest).length) occurrences[link.due] = rest;
+	else delete occurrences[link.due];
+	return save(plan, { occurrences }, now);
+}

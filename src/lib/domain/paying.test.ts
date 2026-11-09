@@ -4,7 +4,7 @@ import { linkCandidates, planLink, planUnlink, recordDraft } from './paying.ts';
 import type { PlanVersion, Scheduled, Transaction } from './schemas.ts';
 import { occurrencesOf, occurrenceStatus } from './scheduled.ts';
 import type { OccurrenceView } from './scheduled-views.ts';
-import { planSaveTransaction } from './transactions.ts';
+import { planDeleteTransaction, planSaveTransaction } from './transactions.ts';
 import { account, now, roots, tx } from './test-fixtures.ts';
 
 const lines: PlanVersion['lines'] = [
@@ -167,5 +167,49 @@ describe('planLink and planUnlink', () => {
 
 	it('refuses a Transaction that already pays another occurrence', () => {
 		expect(() => planLink(chart, 'taken', link, { now: later })).toThrow(/already pays/);
+	});
+});
+
+describe('clearing Mark paid with the last payment', () => {
+	const later = new Date('2026-11-10T08:00:00Z');
+	const due = '2026-11-05';
+	const settled: Scheduled = {
+		...rent,
+		occurrences: { [due]: { settled: true }, '2026-12-05': rent.occurrences['2026-12-05'] }
+	};
+	const payment = (id: string) =>
+		t(
+			id,
+			due,
+			[
+				['bpi', -500000],
+				['rent', 500000]
+			],
+			{ pays: { plan: 'scheduled', planId: 'rent', due } }
+		);
+	const planWrite = (writes: ReturnType<typeof planUnlink>) =>
+		writes.find((w) => w.op === 'setScheduled');
+
+	it('clears it when the last paying Transaction is unlinked or deleted', () => {
+		const chart = buildChart(accounts, [payment('only')]);
+		for (const writes of [
+			planUnlink(chart, 'only', { now: later, plans: [settled] }),
+			planDeleteTransaction(chart, 'only', { now: later, plans: [settled] })
+		]) {
+			expect(planWrite(writes)).toMatchObject({
+				id: 'rent',
+				data: { occurrences: { '2026-12-05': rent.occurrences['2026-12-05'] }, updatedAt: later }
+			});
+			expect(
+				planWrite(writes)!.op === 'setScheduled' && planWrite(writes)!.data.occurrences[due]
+			).toBeFalsy();
+		}
+	});
+
+	it('keeps it while another payment remains, or when nothing was marked', () => {
+		const two = buildChart(accounts, [payment('a'), payment('b')]);
+		expect(planWrite(planUnlink(two, 'a', { now: later, plans: [settled] }))).toBeUndefined();
+		const one = buildChart(accounts, [payment('only')]);
+		expect(planWrite(planUnlink(one, 'only', { now: later, plans: [rent] }))).toBeUndefined();
 	});
 });
