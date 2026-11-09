@@ -78,6 +78,9 @@ _Avoid_: posting, split, leg
 **Double-entry**
 The bookkeeping method Perancial uses: every Transaction has at least two Entries that cancel out, so money is never created or lost, only moved between Accounts.
 
+**Internal Transfer**
+A Transaction seen from one Group Account whose Entries all sit on Accounts inside that group. The money only moves between the group's own Accounts, so the group's Balance does not change. Whether a Transaction is internal depends on the group you look from: moving money from a bank Account to an e-wallet is internal to Assets, but not to the group that holds only the banks.
+
 **Installment Plan**
 A purchase or loan paid back in scheduled payments. What is still owed is a Liability, held in its own Liability Account; interest and fees charged on it are Expenses. A scheduled payment counts as paid only when a Transaction pays it.
 _Avoid_: installment (alone, when the whole plan is meant)
