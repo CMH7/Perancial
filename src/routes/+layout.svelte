@@ -12,9 +12,11 @@
 
 	let { data, children }: LayoutProps = $props();
 
-	// Live Accounts and Transactions while the owner is signed in.
+	// Live Accounts and Transactions while the owner is signed in. Keyed on the UID alone:
+	// `data` is a new object on every navigation, which must not restart the listeners.
+	const ownerUid = $derived(data.owner ? data.user?.uid : undefined);
 	$effect(() => {
-		if (data.owner && data.user) return ledger.start(data.user.uid);
+		if (ownerUid) return ledger.start(ownerUid);
 	});
 
 	// The load gate only runs on navigation; this catches sign-out mid-session.
