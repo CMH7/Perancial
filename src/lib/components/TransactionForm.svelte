@@ -12,10 +12,10 @@
 		type DraftLine,
 		type LineSide,
 		type Transaction,
-		type TransactionDraft,
-		type TransactionKind
+		type TransactionDraft
 	} from '#lib/domain/index.ts';
 	import { ledger } from '#lib/ledger.svelte.ts';
+	import { KIND } from './kind.ts';
 	import { SvelteSet } from 'svelte/reactivity';
 
 	let {
@@ -48,13 +48,6 @@
 		return touched.has(index === undefined ? field : `${field}.${index}`)
 			? errorAt.get(at)
 			: undefined;
-	};
-
-	const KIND: Record<TransactionKind, { label: string; style: string }> = {
-		expense: { label: 'Expense', style: 'bg-rose-100 text-rose-800' },
-		income: { label: 'Income', style: 'bg-emerald-100 text-emerald-800' },
-		transfer: { label: 'Transfer', style: 'bg-sky-100 text-sky-800' },
-		'income-and-expense': { label: 'Income and Expense', style: 'bg-violet-100 text-violet-800' }
 	};
 
 	// Leaf Accounts by Account Type, as full paths. Archived ones only when this Transaction uses them.

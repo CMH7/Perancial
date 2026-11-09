@@ -37,6 +37,7 @@
 		<nav class="flex items-center gap-4">
 			<a href={resolve('/')} class="font-semibold">Perancial</a>
 			<a href={resolve('/')} class="text-gray-600 hover:text-gray-900">Accounts</a>
+			<a href={resolve('/transactions')} class="text-gray-600 hover:text-gray-900">Journal</a>
 			<a
 				href={resolve('/transactions/new')}
 				class="rounded bg-gray-900 px-2 py-1 text-white hover:bg-gray-700">New Transaction</a
