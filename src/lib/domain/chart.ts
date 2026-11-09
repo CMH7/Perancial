@@ -17,6 +17,8 @@ export type Chart = {
 	path(id: string): Account[];
 	/** Root Accounts are always Group Accounts; any other Account is one when it has children. */
 	isGroup(id: string): boolean;
+	/** The Transaction with this ID, if it has loaded. */
+	transaction(id: string): Transaction | undefined;
 	/** Whether any Transaction (Opening Balance included) has an Entry on this Account itself. */
 	hasEntries(id: string): boolean;
 	/** Number of Accounts anywhere under `id`. */
@@ -74,6 +76,7 @@ export function buildChart(accounts: Account[], transactions: Transaction[]): Ch
 
 	return {
 		account: (id) => byId.get(id),
+		transaction: (id) => transactions.find((tx) => tx.id === id),
 		hasEntries: (id) => transactions.some((tx) => tx.entries.some((e) => e.accountId === id)),
 		balance,
 		descendantCount,

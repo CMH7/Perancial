@@ -65,7 +65,13 @@ export type CreateAccountInput = NewChildAccount & {
 type PlanOptions = { newId: () => string; now: Date };
 
 /** The Opening Balance Transaction for a Leaf Account, or nothing when the amount is zero. */
-function openingWrite(id: string, type: AccountType, display: number, now: Date): ChartWrite[] {
+export function openingWrite(
+	id: string,
+	type: AccountType,
+	display: number,
+	now: Date,
+	createdAt: Date = now
+): ChartWrite[] {
 	if (display === 0 || !takesOpeningBalance(type)) return [];
 	const amount = toStorage(type, display);
 	return [
@@ -81,7 +87,7 @@ function openingWrite(id: string, type: AccountType, display: number, now: Date)
 					{ accountId: 'opening-balances', amount: -amount }
 				],
 				accountIds: [id, 'opening-balances'],
-				createdAt: now,
+				createdAt,
 				updatedAt: now
 			}
 		}
@@ -173,7 +179,7 @@ export function planCreateAccount(
 }
 
 /** A typed amount (e.g. "₱1,234.50") as integer centavos; empty means zero. */
-const AmountText = z.string().transform((text, ctx) => {
+export const AmountText = z.string().transform((text, ctx) => {
 	const centavos = parseAmount(text);
 	if (centavos === null) {
 		ctx.addIssue({ code: 'custom', message: 'Enter an amount like 1,234.56' });
@@ -182,14 +188,15 @@ const AmountText = z.string().transform((text, ctx) => {
 	return centavos;
 });
 
-const ChildRow = z.object({
+/** Name, description, and typed Opening Balance: one Account's fields as typed in a form. */
+export const AccountFields = z.object({
 	name: z.string().trim().min(1, 'Name is required'),
 	description: z.string().trim(),
 	openingBalance: AmountText
 });
 
 /** The create-Account form as typed; parses into a `CreateAccountInput`. */
-export const CreateAccountForm = ChildRow.extend({
+export const CreateAccountForm = AccountFields.extend({
 	parentId: z.string().min(1),
-	children: z.array(ChildRow)
+	children: z.array(AccountFields)
 });
