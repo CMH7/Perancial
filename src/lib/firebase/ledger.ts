@@ -4,8 +4,11 @@
 import {
 	collection,
 	doc,
+	getDocs,
 	onSnapshot,
+	query,
 	runTransaction,
+	where,
 	writeBatch,
 	type DocumentData,
 	type Firestore
@@ -80,6 +83,26 @@ export async function ensureSystemAccounts(db: Firestore, uid: string): Promise<
 		});
 		return created;
 	});
+}
+
+/**
+ * One-time upgrade: rewrites Transactions stored before `kind` was renamed to `origin` into the
+ * full current shape. Safe to call on every sign-in; returns how many it rewrote.
+ */
+export async function migrateLegacyTransactions(db: Firestore, uid: string): Promise<number> {
+	const legacy = await getDocs(
+		query(collection(db, transactionsPath(uid)), where('kind', 'in', ['opening', 'normal']))
+	);
+	// A batch holds at most 500 writes; there are only a handful of legacy Opening Balances.
+	for (let i = 0; i < legacy.docs.length; i += 500) {
+		const batch = writeBatch(db);
+		for (const snap of legacy.docs.slice(i, i + 500)) {
+			const { id: _id, ...data } = parseTransaction(snap.id, fromFirestore(snap.data()));
+			batch.set(snap.ref, TransactionDoc.parse(data));
+		}
+		await batch.commit();
+	}
+	return legacy.size;
 }
 
 export type LedgerSnapshot = { accounts: Account[]; transactions: Transaction[] };

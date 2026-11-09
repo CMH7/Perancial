@@ -57,16 +57,30 @@ service cloud.firestore {
       }
 
       match /transactions/{txId} {
-        function fields() {
-          return ['date', 'kind', 'description', 'entries', 'accountIds', 'createdAt', 'updatedAt'];
+        // Shape only: bookkeeping rules (Entries sum to zero, Leaf Accounts, no future dates)
+        // live in the domain module, which validates every write first.
+        function required() {
+          return ['date', 'origin', 'description', 'entries', 'accountIds', 'createdAt', 'updatedAt'];
+        }
+        // Added in v2; optional so documents written before them stay valid.
+        function optional() {
+          return ['note', 'status', 'tags', 'pays'];
+        }
+        function validTags(d) {
+          return !('tags' in d) || (d.tags is list && d.tags.size() <= 50
+            && d.tags.join(',').matches('^[a-z0-9,-]*$') && !d.tags.hasAny(['']));
         }
         function validTransaction(d) {
-          return d.keys().hasOnly(fields()) && d.keys().hasAll(fields())
-            && d.kind in ['opening', 'normal']
+          return d.keys().hasAll(required()) && d.keys().hasOnly(required().concat(optional()))
+            && d.origin in ['opening', 'normal']
             && (d.date == null || d.date is string)
-            && d.description is string
-            && d.entries is list && d.entries.size() >= 2
+            && d.description is string && d.description.size() >= 1 && d.description.size() <= 200
+            && d.entries is list && d.entries.size() >= 2 && d.entries.size() <= 100
             && d.accountIds is list
+            && (!('note' in d) || (d.note is string && d.note.size() <= 5000))
+            && (!('status' in d) || d.status in ['cleared', 'pending'])
+            && validTags(d)
+            && (!('pays' in d) || d.pays == null || d.pays is map)
             && d.createdAt is timestamp && d.updatedAt is timestamp;
         }
 

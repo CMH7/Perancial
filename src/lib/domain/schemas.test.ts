@@ -5,7 +5,7 @@ const now = new Date('2026-11-09T00:00:00Z');
 
 const lunch = {
 	date: '2026-11-03',
-	kind: 'normal',
+	origin: 'normal',
 	description: 'Lunch',
 	entries: [
 		{ accountId: 'food', amount: 20000 },
@@ -18,7 +18,61 @@ const lunch = {
 
 describe('parseTransaction', () => {
 	it('parses a balanced two-Entry Transaction and attaches its id', () => {
-		expect(parseTransaction('tx1', lunch)).toEqual({ id: 'tx1', ...lunch });
+		expect(parseTransaction('tx1', lunch)).toMatchObject({ id: 'tx1', ...lunch });
+	});
+
+	it('fills defaults for fields older documents lack', () => {
+		expect(parseTransaction('tx1', lunch)).toMatchObject({
+			note: '',
+			status: 'cleared',
+			tags: [],
+			pays: null
+		});
+	});
+
+	it('reads a legacy kind field as origin', () => {
+		const { origin, ...rest } = lunch;
+		const parsed = parseTransaction('tx1', { ...rest, kind: origin });
+		expect(parsed.origin).toBe('normal');
+		expect(parsed).not.toHaveProperty('kind');
+	});
+
+	it('keeps a pending status, tags, a fee line and a paid link', () => {
+		const rent = {
+			...lunch,
+			status: 'pending',
+			tags: ['house', 'q4-2026'],
+			entries: [
+				{ accountId: 'rent', amount: 1200000 },
+				{ accountId: 'bank-fees', amount: 1500, fee: 'additional' },
+				{ accountId: 'bpi', amount: -1201500 }
+			],
+			pays: { plan: 'scheduled', planId: 'p1', due: '2026-12-05' }
+		};
+		expect(parseTransaction('tx1', rent)).toMatchObject(rent);
+	});
+
+	it('rejects malformed status, tags, fee and paid link', () => {
+		const bad = (patch: object) => () => parseTransaction('tx1', { ...lunch, ...patch });
+		expect(bad({ status: 'posted' })).toThrow();
+		expect(bad({ tags: ['House'] })).toThrow(/lowercase/);
+		expect(bad({ tags: ['baguio 2026'] })).toThrow(/lowercase/);
+		expect(bad({ tags: ['trip', 'trip'] })).toThrow(/repeat/);
+		expect(bad({ tags: Array.from({ length: 51 }, (_, i) => `t${i}`) })).toThrow(/50/);
+		expect(bad({ entries: [{ ...lunch.entries[0], fee: 'extra' }, lunch.entries[1]] })).toThrow();
+		expect(bad({ pays: { plan: 'loan', planId: 'p1', due: '2026-12-05' } })).toThrow();
+		expect(bad({ pays: { plan: 'scheduled', planId: 'p1', due: '5 Dec' } })).toThrow();
+	});
+
+	it('limits Description, Note and the number of Entries', () => {
+		const bad = (patch: object) => () => parseTransaction('tx1', { ...lunch, ...patch });
+		expect(bad({ description: 'x'.repeat(201) })).toThrow(/200/);
+		expect(bad({ note: 'x'.repeat(5001) })).toThrow(/5,000/);
+		const many = Array.from({ length: 101 }, (_, i) => ({
+			accountId: `a${i}`,
+			amount: i === 0 ? -100 : 1
+		}));
+		expect(bad({ entries: many })).toThrow(/100/);
 	});
 
 	it('rejects a Transaction whose Entries do not add up to zero', () => {
@@ -57,7 +111,7 @@ describe('parseTransaction', () => {
 	it('requires a null date on an Opening Balance Transaction', () => {
 		const opening = {
 			...lunch,
-			kind: 'opening',
+			origin: 'opening',
 			description: 'Opening Balance',
 			entries: [
 				{ accountId: 'cash', amount: 500000 },

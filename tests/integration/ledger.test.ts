@@ -1,6 +1,12 @@
-import { doc, setDoc, type Firestore } from 'firebase/firestore';
+import { doc, getDoc, setDoc, type Firestore } from 'firebase/firestore';
 import { describe, expect, it } from 'vitest';
-import { accountsPath, commitLedger, ensureSystemAccounts } from '../../src/lib/firebase/ledger.ts';
+import {
+	accountsPath,
+	commitLedger,
+	ensureSystemAccounts,
+	migrateLegacyTransactions,
+	transactionsPath
+} from '../../src/lib/firebase/ledger.ts';
 import { buildChart } from '../../src/lib/domain/index.ts';
 import { OWNER_UID, accountData, firstSnapshot, ownerDb, useEmulator } from '../emulator.ts';
 
@@ -32,7 +38,7 @@ describe('subscribeLedger', () => {
 				id: 'opening_cash',
 				data: {
 					date: null,
-					kind: 'opening',
+					origin: 'opening',
 					description: 'Opening Balance',
 					entries: [
 						{ accountId: 'cash', amount: 345000 },
@@ -76,5 +82,40 @@ describe('commitLedger', () => {
 		).rejects.toThrow();
 		const { accounts } = await firstSnapshot(db);
 		expect(accounts).toEqual([]);
+	});
+});
+
+describe('migrateLegacyTransactions', () => {
+	it('rewrites documents that still use kind into the full v2 shape, once', async () => {
+		const db = ownerDb(env());
+		const now = new Date();
+		await env().withSecurityRulesDisabled(async (ctx) => {
+			const raw = ctx.firestore() as unknown as Firestore;
+			await setDoc(doc(raw, transactionsPath(OWNER_UID), 'opening_cash'), {
+				date: null,
+				kind: 'opening',
+				description: 'Opening Balance',
+				entries: [
+					{ accountId: 'cash', amount: 345000 },
+					{ accountId: 'opening-balances', amount: -345000 }
+				],
+				accountIds: ['cash', 'opening-balances'],
+				createdAt: now,
+				updatedAt: now
+			});
+		});
+
+		expect(await migrateLegacyTransactions(db, OWNER_UID)).toBe(1);
+		expect(await migrateLegacyTransactions(db, OWNER_UID)).toBe(0);
+
+		const stored = (await getDoc(doc(db, transactionsPath(OWNER_UID), 'opening_cash'))).data();
+		expect(stored).not.toHaveProperty('kind');
+		expect(stored).toMatchObject({
+			origin: 'opening',
+			note: '',
+			status: 'cleared',
+			tags: [],
+			pays: null
+		});
 	});
 });

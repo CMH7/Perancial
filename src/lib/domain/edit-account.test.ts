@@ -82,13 +82,17 @@ describe('planEditAccount', () => {
 			id: 'opening_cash',
 			data: {
 				date: null,
-				kind: 'opening',
+				origin: 'opening',
 				description: 'Opening Balance',
+				note: '',
+				status: 'cleared',
+				tags: [],
 				entries: [
 					{ accountId: 'cash', amount: 500000 },
 					{ accountId: 'opening-balances', amount: -500000 }
 				],
 				accountIds: ['cash', 'opening-balances'],
+				pays: null,
 				createdAt: now,
 				updatedAt: later
 			}

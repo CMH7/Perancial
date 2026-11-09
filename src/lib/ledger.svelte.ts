@@ -4,6 +4,7 @@ import { db } from '#lib/firebase/app.ts';
 import {
 	commitLedger,
 	ensureSystemAccounts,
+	migrateLegacyTransactions,
 	newAccountId,
 	subscribeLedger
 } from '#lib/firebase/ledger.ts';
@@ -32,14 +33,16 @@ class Ledger {
 		return newAccountId(db, this.#uid);
 	}
 
-	/** Seeds missing System Accounts, then listens. Returns a function that stops listening. */
+	/** Seeds missing System Accounts, upgrades legacy Transactions, then listens. Returns a function that stops listening. */
 	start(uid: string): () => void {
 		this.stop();
 		this.#uid = uid;
 		this.error = null;
-		ensureSystemAccounts(db, uid).catch((err: Error) => {
-			this.error = `Could not set up your accounts: ${err.message}`;
-		});
+		Promise.all([ensureSystemAccounts(db, uid), migrateLegacyTransactions(db, uid)]).catch(
+			(err: Error) => {
+				this.error = `Could not set up your accounts: ${err.message}`;
+			}
+		);
 		this.#stop = subscribeLedger(
 			db,
 			uid,

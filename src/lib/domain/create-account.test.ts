@@ -108,13 +108,17 @@ describe('planCreateAccount', () => {
 				id: 'opening_bpi',
 				data: {
 					date: null,
-					kind: 'opening',
+					origin: 'opening',
 					description: 'Opening Balance',
+					note: '',
+					status: 'cleared',
+					tags: [],
 					entries: [
 						{ accountId: 'bpi', amount: 200000 },
 						{ accountId: 'opening-balances', amount: -200000 }
 					],
 					accountIds: ['bpi', 'opening-balances'],
+					pays: null,
 					createdAt: now,
 					updatedAt: now
 				}
