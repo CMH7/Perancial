@@ -6,6 +6,7 @@ import {
 	ensureSystemAccounts,
 	migrateLegacyTransactions,
 	newAccountId,
+	newTransactionId,
 	subscribeLedger
 } from '#lib/firebase/ledger.ts';
 
@@ -31,6 +32,12 @@ class Ledger {
 	newAccountId() {
 		if (!this.#uid) throw new Error('Not signed in');
 		return newAccountId(db, this.#uid);
+	}
+
+	/** A fresh ID for a new Transaction. */
+	newTransactionId() {
+		if (!this.#uid) throw new Error('Not signed in');
+		return newTransactionId(db, this.#uid);
 	}
 
 	/** Seeds missing System Accounts, upgrades legacy Transactions, then listens. Returns a function that stops listening. */

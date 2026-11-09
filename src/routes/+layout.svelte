@@ -34,7 +34,14 @@
 
 {#if data.owner}
 	<header class="flex items-center justify-between border-b bg-white px-6 py-3 text-sm">
-		<a href={resolve('/')} class="font-semibold">Perancial</a>
+		<nav class="flex items-center gap-4">
+			<a href={resolve('/')} class="font-semibold">Perancial</a>
+			<a href={resolve('/')} class="text-gray-600 hover:text-gray-900">Accounts</a>
+			<a
+				href={resolve('/transactions/new')}
+				class="rounded bg-gray-900 px-2 py-1 text-white hover:bg-gray-700">New Transaction</a
+			>
+		</nav>
 		<div class="flex items-center gap-4 text-gray-500">
 			<span>{data.user?.email}</span>
 			<button onclick={signOut} class="rounded px-2 py-1 hover:bg-gray-100 hover:text-gray-900"
