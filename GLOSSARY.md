@@ -78,5 +78,9 @@ _Avoid_: posting, split, leg
 **Double-entry**
 The bookkeeping method Perancial uses: every Transaction has at least two Entries that cancel out, so money is never created or lost, only moved between Accounts.
 
+**Installment Plan**
+A purchase or loan paid back in scheduled payments. What is still owed is a Liability, held in its own Liability Account; interest and fees charged on it are Expenses. A scheduled payment counts as paid only when a Transaction pays it.
+_Avoid_: installment (alone, when the whole plan is meant)
+
 **Balance**
 The amount an Account holds as of a date (today by default). For a Leaf Account: its Opening Balance plus its Entries dated on or before that date. For a Group Account: the sum of its children's Balances. Entries dated later do not count yet.
