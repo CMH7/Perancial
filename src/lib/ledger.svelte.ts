@@ -3,6 +3,7 @@ import { buildChart, type Account, type ChartWrite, type Transaction } from '#li
 import { db } from '#lib/firebase/app.ts';
 import {
 	commitLedger,
+	commitLedgerInBatches,
 	ensureSystemAccounts,
 	migrateLegacyTransactions,
 	newAccountId,
@@ -26,6 +27,12 @@ class Ledger {
 	commit(writes: ChartWrite[]) {
 		if (!this.#uid) throw new Error('Not signed in');
 		return commitLedger(db, this.#uid, writes);
+	}
+
+	/** Commits a change too big for one batch, in batches of at most 500. Not atomic as a whole. */
+	commitInBatches(writes: ChartWrite[]) {
+		if (!this.#uid) throw new Error('Not signed in');
+		return commitLedgerInBatches(db, this.#uid, writes);
 	}
 
 	/** A fresh ID for a new Account. */

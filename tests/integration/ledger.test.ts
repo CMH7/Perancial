@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
 	accountsPath,
 	commitLedger,
+	commitLedgerInBatches,
 	ensureSystemAccounts,
 	migrateLegacyTransactions,
 	transactionsPath
@@ -117,5 +118,35 @@ describe('migrateLegacyTransactions', () => {
 			tags: [],
 			pays: null
 		});
+	});
+});
+
+describe('commitLedgerInBatches', () => {
+	it('commits more writes than one Firestore batch allows', async () => {
+		const db = ownerDb(env());
+		const now = new Date();
+		const writes = Array.from({ length: 501 }, (_, i) => ({
+			op: 'setTransaction' as const,
+			id: `tx${i}`,
+			data: {
+				date: '2026-11-01',
+				origin: 'normal' as const,
+				description: `Lunch ${i}`,
+				note: '',
+				status: 'cleared' as const,
+				tags: ['lunch'],
+				entries: [
+					{ accountId: 'food', amount: 100 },
+					{ accountId: 'cash', amount: -100 }
+				],
+				accountIds: ['food', 'cash'],
+				pays: null,
+				createdAt: now,
+				updatedAt: now
+			}
+		}));
+		await commitLedgerInBatches(db, OWNER_UID, writes);
+		const { transactions } = await firstSnapshot(db, (s) => s.transactions.length === 501);
+		expect(transactions).toHaveLength(501);
 	});
 });
