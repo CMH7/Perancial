@@ -2,6 +2,7 @@
 	// PROTOTYPE — add/edit Account form, shared by all variants (each variant hosts it differently).
 	import {
 		db,
+		TYPE_HELP,
 		byId,
 		isGroup,
 		hasEntries,
@@ -80,7 +81,7 @@
 					<option value={p.id}>{pathOf(p.id).map((x) => x.name).join(' › ')}</option>
 				{/each}
 			</select>
-			<span class="text-xs text-gray-500">Type: {type} (inherited from parent)</span>
+			<span class="text-xs text-gray-500">Type: {type} (inherited from parent). {TYPE_HELP[type].what} e.g. {TYPE_HELP[type].examples}</span>
 		</label>
 	{/if}
 

@@ -1,7 +1,7 @@
 <script lang="ts">
 	// PROTOTYPE — Variant C: drill-down, one level at a time. Account Types as tabs, breadcrumb,
 	// big tappable rows (closest to a future mobile layout). Form replaces the list inline.
-	import { TYPES, byId, childrenOf, isGroup, balance, totals, pathOf, countDescendants, doArchive, doDelete } from './data.svelte';
+	import { TYPES, TYPE_HELP, byId, childrenOf, isGroup, balance, totals, pathOf, countDescendants, doArchive, doDelete } from './data.svelte';
 	import Amount from './Amount.svelte';
 	import AccountForm from './AccountForm.svelte';
 	import MoveForm from './MoveForm.svelte';
@@ -33,11 +33,18 @@
 	<div class="mb-4 flex gap-1 border-b">
 		{#each TYPES as ty (ty.type)}
 			<button
+				title={TYPE_HELP[ty.type].what}
 				onclick={() => go(ty.type)}
 				class="-mb-px border-b-2 px-4 py-2 text-sm {rootType === ty.type ? 'border-gray-900 font-semibold' : 'border-transparent text-gray-500 hover:text-gray-800'}"
 				>{ty.label}<span class="ml-2 text-xs text-gray-400"><Amount c={balance(ty.type)} /></span></button
 			>
 		{/each}
+	</div>
+
+	<div class="mb-4 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+		<span class="font-semibold">{TYPES.find((x) => x.type === rootType)?.label}:</span>
+		{byId(rootType).description}
+		<div class="mt-0.5 text-xs text-blue-700">e.g. {TYPE_HELP[rootType].examples}</div>
 	</div>
 
 	<nav class="mb-4 flex items-center gap-1 text-sm text-gray-500">
@@ -49,7 +56,7 @@
 
 	<div class="mb-4 flex items-end justify-between rounded-xl bg-gray-900 p-5 text-white">
 		<div>
-			<div class="text-sm text-gray-400">{acc.description || (isGroup(acc) ? 'Group Account' : 'Leaf Account')}</div>
+			<div class="text-sm text-gray-400">{acc.system === 'root' ? `Total ${acc.name}` : acc.description || (isGroup(acc) ? 'Group Account' : 'Leaf Account')}</div>
 			<div class="text-3xl"><Amount c={balance(acc.id)} bold /></div>
 		</div>
 		<div class="flex gap-3 text-xs text-gray-300">

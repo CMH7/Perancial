@@ -26,6 +26,30 @@ export const TYPES: { type: AccountType; label: string }[] = [
 	{ type: 'expense', label: 'Expenses' }
 ];
 
+/** Plain-English guide per Account Type: seeded as the Root Account's Description. */
+export const TYPE_HELP: Record<AccountType, { what: string; examples: string }> = {
+	asset: {
+		what: 'Money you have, or money others owe you.',
+		examples: 'Bank accounts, e-wallets, cash, savings goals, money you lent to someone'
+	},
+	liability: {
+		what: 'Money you owe.',
+		examples: 'Credit cards, loans, money you borrowed from someone, unpaid bills'
+	},
+	equity: {
+		what: 'Your starting point. Managed for you; you rarely add anything here.',
+		examples: 'Opening Balances (automatic: balances the starting amounts you enter)'
+	},
+	income: {
+		what: 'Where money comes from.',
+		examples: 'Salary, freelance, interest, gifts received, refunds'
+	},
+	expense: {
+		what: 'What money is spent on.',
+		examples: 'Food, rent, utilities, transport, subscriptions'
+	}
+};
+
 let seq = 100;
 const nid = () => `a${seq++}`;
 
@@ -43,7 +67,7 @@ function seed(): Account[] {
 	) =>
 		out.push({ id, name, description, type, parentId, system: null, archived: false, opening, activity, ...extra });
 
-	for (const t of TYPES) add(t.type, t.label, t.type, null, 0, 0, '', { system: 'root' });
+	for (const t of TYPES) add(t.type, t.label, t.type, null, 0, 0, TYPE_HELP[t.type].what, { system: 'root' });
 	add('opening-balances', 'Opening Balances', 'equity', 'equity', 0, 0, 'Balances the starting amounts of your accounts', { system: 'opening-balances' });
 
 	// Assets
