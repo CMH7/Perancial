@@ -6,7 +6,9 @@
 	import {
 		formatAmount,
 		parseAmount,
+		linkCandidates,
 		planChangeOccurrence,
+		planLink,
 		shortDate,
 		type OccurrenceChange,
 		type OccurrenceView
@@ -20,7 +22,33 @@
 	const chart = $derived(ledger.chart);
 	const name = (id: string) => chart.account(id)?.name ?? '(deleted Account)';
 
-	let mode = $state<'closed' | 'choose' | 'amounts' | 'move'>('closed');
+	let mode = $state<'closed' | 'choose' | 'amounts' | 'move' | 'link'>('closed');
+	const candidates = $derived(mode === 'link' ? linkCandidates(chart, view) : []);
+	const recordHref = $derived(
+		`${resolve('/transactions/new')}?plan=${encodeURIComponent(view.plan.id)}&due=${occ.due}`
+	);
+
+	function record() {
+		// eslint-disable-next-line svelte/no-navigation-without-resolve -- resolved path plus a query
+		goto(recordHref);
+	}
+
+	async function link(txId: string) {
+		error = '';
+		try {
+			await ledger.commit(
+				planLink(
+					chart,
+					txId,
+					{ plan: 'scheduled', planId: view.plan.id, due: occ.due },
+					{ now: new Date() }
+				)
+			);
+			mode = 'closed';
+		} catch (err) {
+			error = (err as Error).message;
+		}
+	}
 	let amounts = $state<string[]>([]);
 	let moveTo = $state('');
 	let error = $state('');
@@ -93,6 +121,19 @@
 		{/if}
 	</div>
 	<div class="flex gap-1 text-xs">
+		<button class="rounded bg-gray-900 px-2 py-1 text-white hover:bg-gray-700" onclick={record}
+			>Record</button
+		>
+		<button class="rounded px-2 py-1 hover:bg-gray-100" onclick={() => (mode = 'link')}
+			>Link…</button
+		>
+		{#if status.status === 'partly-paid'}
+			<button
+				class="rounded px-2 py-1 hover:bg-gray-100"
+				title="Settle it as paid, for example after a discount"
+				onclick={() => change({ settled: true })}>Mark paid</button
+			>
+		{/if}
 		<button class="rounded px-2 py-1 hover:bg-gray-100" onclick={() => change({ skipped: true })}
 			>Skip</button
 		>
@@ -137,6 +178,32 @@
 						>
 					</button>
 				</div>
+			{:else if mode === 'link'}
+				<p class="text-gray-600">
+					Unlinked Transactions on this plan's Accounts within a week of {shortDate(occ.date)}:
+				</p>
+				{#if candidates.length === 0}
+					<p class="text-gray-500">None found. Record it instead.</p>
+				{:else}
+					<ul class="divide-y rounded-lg border">
+						{#each candidates as t (t.id)}
+							<li class="flex items-center justify-between gap-2 px-3 py-2">
+								<span class="min-w-0 truncate">{t.date} · {t.description}</span>
+								<span class="flex items-center gap-2">
+									<span class="tabular-nums"
+										>{formatAmount(
+											t.entries.reduce((sum, e) => sum + Math.max(e.amount, 0), 0)
+										)}</span
+									>
+									<button
+										class="rounded border px-2 py-0.5 text-xs hover:bg-gray-50"
+										onclick={() => link(t.id)}>Link</button
+									>
+								</span>
+							</li>
+						{/each}
+					</ul>
+				{/if}
 			{:else if mode === 'move'}
 				<form
 					class="flex items-center gap-2"

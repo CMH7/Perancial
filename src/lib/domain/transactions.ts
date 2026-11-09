@@ -2,7 +2,7 @@
 // edit, duplicate, and delete. Pure TypeScript, no Firebase imports.
 import { toStorage, type Chart, type IsoDate } from './chart.ts';
 import { parseAmount } from './money.ts';
-import type { Entry, Transaction } from './schemas.ts';
+import type { Entry, PaidLink, Transaction } from './schemas.ts';
 import type { ChartWrite } from './writes.ts';
 
 /** Derived from Account Types, never chosen or stored. */
@@ -225,7 +225,20 @@ function assertNotOpening(tx: Transaction | undefined) {
 export function planSaveTransaction(
 	chart: Chart,
 	draft: TransactionDraft,
-	{ id, now, today, existing }: { id: string; now: Date; today: IsoDate; existing?: Transaction }
+	{
+		id,
+		now,
+		today,
+		existing,
+		pays
+	}: {
+		id: string;
+		now: Date;
+		today: IsoDate;
+		existing?: Transaction;
+		/** The occurrence a new Transaction pays (Record); an edit keeps its own link. */
+		pays?: PaidLink;
+	}
 ): ChartWrite[] {
 	assertNotOpening(existing);
 	const ev = evaluateDraft(chart, draft, { today, existing });
@@ -244,7 +257,7 @@ export function planSaveTransaction(
 				tags: normalizeTags(draft.tags),
 				entries: ev.entries,
 				accountIds: [...new Set(ev.entries.map((e) => e.accountId))],
-				pays: existing?.pays ?? null,
+				pays: existing ? existing.pays : (pays ?? null),
 				createdAt: existing?.createdAt ?? now,
 				updatedAt: now
 			}

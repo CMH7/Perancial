@@ -11,6 +11,7 @@
 		today,
 		type DraftLine,
 		type LineSide,
+		type PaidLink,
 		type Transaction,
 		type TransactionDraft
 	} from '#lib/domain/index.ts';
@@ -21,11 +22,14 @@
 	let {
 		initial,
 		existing,
+		pays,
 		onsaved
 	}: {
 		initial: TransactionDraft;
 		/** The Transaction being edited; absent for a new one. */
 		existing?: Transaction;
+		/** The occurrence a new Transaction pays (Record). */
+		pays?: PaidLink;
 		onsaved: (id: string) => void;
 	} = $props();
 
@@ -120,7 +124,7 @@
 		try {
 			const id = existing?.id ?? ledger.newTransactionId();
 			await ledger.commit(
-				planSaveTransaction(chart, draft, { id, now: new Date(), today: todayIso, existing })
+				planSaveTransaction(chart, draft, { id, now: new Date(), today: todayIso, existing, pays })
 			);
 			onsaved(id);
 		} catch (err) {

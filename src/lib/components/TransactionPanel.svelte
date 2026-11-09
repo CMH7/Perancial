@@ -8,6 +8,7 @@
 		journalRow,
 		planDeleteTransaction,
 		planSetStatus,
+		planUnlink,
 		type ActionCheck,
 		type Transaction
 	} from '#lib/domain/index.ts';
@@ -36,6 +37,25 @@
 			month: 'short',
 			year: 'numeric'
 		});
+
+	/** What the Transaction pays, by name: "Rent, 5 Dec 2026". */
+	const paysLabel = $derived.by(() => {
+		if (!tx.pays) return '';
+		const plan = ledger.scheduled.find((p) => p.id === tx.pays!.planId);
+		const name =
+			plan?.versions.findLast((v) => v.from <= tx.pays!.due)?.description ??
+			plan?.versions[0].description;
+		return `${name ?? 'a deleted plan'}, ${due(tx.pays.due)}`;
+	});
+
+	async function unlink() {
+		statusError = '';
+		try {
+			await ledger.commit(planUnlink(chart, tx.id, { now: new Date() }));
+		} catch (err) {
+			statusError = `Could not unlink: ${(err as Error).message}`;
+		}
+	}
 
 	let confirmDelete = $state(false);
 	let statusError = $state('');
@@ -117,7 +137,19 @@
 	</div>
 
 	{#if tx.pays}
-		<p class="rounded bg-sky-50 p-2 text-sky-900">Pays: the occurrence due {due(tx.pays.due)}</p>
+		<p class="flex items-center justify-between gap-2 rounded bg-sky-50 p-2 text-sky-900">
+			<span>
+				Pays:
+				{#if ledger.scheduled.some((p) => p.id === tx.pays?.planId)}
+					<a class="underline" href={resolve('/scheduled/[id]', { id: tx.pays.planId })}
+						>{paysLabel}</a
+					>
+				{:else}
+					{paysLabel}
+				{/if}
+			</span>
+			<button onclick={unlink} class="rounded px-2 py-0.5 text-xs hover:bg-sky-100">Unlink</button>
+		</p>
 	{/if}
 
 	{#if tx.note}
@@ -143,7 +175,7 @@
 			title="Delete Transaction"
 			check={deleteCheck}
 			question={`Delete "${tx.description}" (${tx.date}, ${row.from.join(' + ')} → ${row.to.join(' + ')}, ${formatAmount(row.total)})?${
-				tx.pays ? ` This makes the occurrence due ${due(tx.pays.due)} unpaid or partly paid.` : ''
+				tx.pays ? ` This makes ${paysLabel} unpaid or partly paid.` : ''
 			} This can't be undone.`}
 			confirmLabel="Delete"
 			danger
