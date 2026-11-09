@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseAccount, parseTransaction } from './schemas.ts';
+import { parseAccount, parseScheduled, parseTransaction } from './schemas.ts';
 
 const now = new Date('2026-11-09T00:00:00Z');
 
@@ -150,5 +150,83 @@ describe('parseAccount', () => {
 			createdAt: now,
 			updatedAt: now
 		});
+	});
+});
+
+describe('parseScheduled', () => {
+	const rent = {
+		versions: [
+			{
+				from: '2026-01-05',
+				description: 'Rent',
+				note: '',
+				tags: ['house'],
+				lines: [
+					{ accountId: 'bpi', side: 'from', amount: null },
+					{ accountId: 'rent', side: 'to', amount: 1200000 },
+					{ accountId: 'bank-fees', side: 'to', amount: 1500, fee: 'additional' }
+				],
+				rule: { type: 'monthly', day: 5, start: '2026-01-05' }
+			}
+		],
+		end: { type: 'never' },
+		createdAt: now,
+		updatedAt: now
+	};
+
+	it('parses a plan, filling an empty map of occurrence changes', () => {
+		expect(parseScheduled('p1', rent)).toEqual({ id: 'p1', ...rent, occurrences: {} });
+	});
+
+	it('accepts every rule type and end, and changes to single occurrences', () => {
+		const rules = [
+			{ type: 'once', date: '2026-12-01' },
+			{ type: 'cutoff', start: '2026-01-15' },
+			{ type: 'weekly', every: 2, start: '2026-01-02' },
+			{ type: 'yearly', start: '2026-03-01' }
+		];
+		for (const rule of rules) {
+			const plan = { ...rent, versions: [{ ...rent.versions[0], rule }] };
+			expect(parseScheduled('p1', plan).versions[0].rule).toEqual(rule);
+		}
+		const changed = parseScheduled('p1', {
+			...rent,
+			end: { type: 'after', count: 12 },
+			occurrences: {
+				'2026-02-05': { skipped: true },
+				'2026-03-05': { movedTo: '2026-03-07', amounts: [null, 1300000, 1500], settled: true }
+			}
+		});
+		expect(changed.end).toEqual({ type: 'after', count: 12 });
+		expect(changed.occurrences['2026-03-05'].movedTo).toBe('2026-03-07');
+	});
+
+	it('needs a line on each side, positive amounts, fees only on To, and versions in date order', () => {
+		const lines = (l: object[]) => () =>
+			parseScheduled('p1', { ...rent, versions: [{ ...rent.versions[0], lines: l }] });
+		expect(lines([{ accountId: 'rent', side: 'to', amount: 100 }])).toThrow(/each side/);
+		expect(
+			lines([
+				{ accountId: 'bpi', side: 'from', amount: -100 },
+				{ accountId: 'rent', side: 'to', amount: 100 }
+			])
+		).toThrow();
+		expect(
+			lines([
+				{ accountId: 'bpi', side: 'from', amount: 100, fee: 'less' },
+				{ accountId: 'rent', side: 'to', amount: 100 }
+			])
+		).toThrow(/fee/i);
+		const v = rent.versions[0];
+		expect(() =>
+			parseScheduled('p1', { ...rent, versions: [{ ...v, from: '2026-06-05' }, v] })
+		).toThrow(/order/);
+		expect(() => parseScheduled('p1', { ...rent, versions: [] })).toThrow();
+		expect(() =>
+			parseScheduled('p1', {
+				...rent,
+				versions: [{ ...v, rule: { type: 'monthly', day: 32, start: '2026-01-05' } }]
+			})
+		).toThrow();
 	});
 });

@@ -87,6 +87,23 @@ service cloud.firestore {
         allow read, delete: if isOwner(uid);
         allow create, update: if isOwner(uid) && validTransaction(request.resource.data);
       }
+
+      // Scheduled Transactions (ADR 0003). Shape only at the top level; versions, lines and
+      // rules are checked by the domain module's Zod schema before every write.
+      match /scheduled/{planId} {
+        function fields() {
+          return ['versions', 'end', 'occurrences', 'createdAt', 'updatedAt'];
+        }
+        function validPlan(d) {
+          return d.keys().hasOnly(fields()) && d.keys().hasAll(fields())
+            && d.versions is list && d.versions.size() >= 1 && d.versions.size() <= 100
+            && d.end is map && d.occurrences is map
+            && d.createdAt is timestamp && d.updatedAt is timestamp;
+        }
+
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid) && validPlan(request.resource.data);
+      }
     }
 
     // Everything else falls through to deny.
