@@ -51,7 +51,7 @@
 	async function unlink() {
 		statusError = '';
 		try {
-			await ledger.commit(planUnlink(chart, tx.id, { now: new Date() }));
+			await ledger.commit(planUnlink(chart, tx.id, { now: new Date(), plans: ledger.scheduled }));
 		} catch (err) {
 			statusError = `Could not unlink: ${(err as Error).message}`;
 		}
@@ -181,7 +181,9 @@
 			danger
 			onclose={() => (confirmDelete = false)}
 			onconfirm={async () => {
-				await ledger.commit(planDeleteTransaction(chart, tx.id));
+				await ledger.commit(
+					planDeleteTransaction(chart, tx.id, { now: new Date(), plans: ledger.scheduled })
+				);
 				confirmDelete = false;
 				onclose();
 			}}

@@ -1,8 +1,8 @@
 // Paying occurrences: the Record form's starting draft, Transactions that could be linked after the
 // fact, and setting or clearing a Transaction's paid link. Pure TypeScript, no Firebase imports.
 import type { Chart, IsoDate } from './chart.ts';
-import type { PaidLink, PlanLine, Transaction } from './schemas.ts';
-import { addDays } from './scheduled.ts';
+import type { PaidLink, PlanLine, Scheduled, Transaction } from './schemas.ts';
+import { addDays, clearSettledWithLastPayment } from './scheduled.ts';
 import type { OccurrenceView } from './scheduled-views.ts';
 import type { DraftLine, TransactionDraft } from './transactions.ts';
 import type { ChartWrite } from './writes.ts';
@@ -90,7 +90,15 @@ export function planLink(
 	return setPays(chart, txId, link, now);
 }
 
-/** Removes a Transaction's paid link; the Transaction stays. */
-export function planUnlink(chart: Chart, txId: string, { now }: { now: Date }): ChartWrite[] {
-	return setPays(chart, txId, null, now);
+/**
+ * Removes a Transaction's paid link; the Transaction stays. With `plans`, a "Mark paid" left
+ * without any payment is cleared in the same write.
+ */
+export function planUnlink(
+	chart: Chart,
+	txId: string,
+	{ now, plans = [] }: { now: Date; plans?: Scheduled[] }
+): ChartWrite[] {
+	const writes = setPays(chart, txId, null, now);
+	return [...writes, ...clearSettledWithLastPayment(chart, chart.transaction(txId)!, plans, now)];
 }
