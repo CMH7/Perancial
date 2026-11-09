@@ -4,6 +4,7 @@ import {
 	deleteCheck,
 	moveTargets,
 	planDeleteAccount,
+	planDropAccount,
 	planMoveAccount,
 	planSetArchived
 } from './account-actions.ts';
@@ -77,6 +78,85 @@ describe('planMoveAccount', () => {
 		);
 		expect(() => planMoveAccount(chart, 'gcash', 'ploan', { now: later })).toThrow(
 			/can't move there/
+		);
+	});
+});
+
+describe('planDropAccount', () => {
+	const orders = (writes: ReturnType<typeof planDropAccount>) =>
+		writes.map((w) => [w.id, w.op === 'setAccount' ? w.data.order : null]);
+
+	it('dragging up puts the Account before the target', () => {
+		expect(orders(planDropAccount(chart, 'gcash', 'maribank', { now: later }))).toEqual([
+			['gcash', 0],
+			['maribank', 1],
+			['cash', 2]
+		]);
+	});
+
+	it('dragging down puts it after the target; a hidden Archived Account keeps its place', () => {
+		// asset: maribank 0, cash 1, gcash 2, spent 3, old 4 (archived)
+		expect(orders(planDropAccount(chart, 'cash', 'spent', { now: later }))).toEqual([
+			['gcash', 1],
+			['spent', 2],
+			['cash', 3]
+		]);
+	});
+
+	it('dropping on itself writes nothing', () => {
+		expect(planDropAccount(chart, 'cash', 'cash', { now: later })).toEqual([]);
+	});
+
+	it('pulls tied orders apart', () => {
+		const tied = buildChart(
+			[
+				...roots,
+				account('a', 'asset', 'asset', { order: 1 }),
+				account('b', 'asset', 'asset', { order: 1 }),
+				account('c', 'asset', 'asset', { order: 1 })
+			],
+			[]
+		);
+		const writes = planDropAccount(tied, 'c', 'a', { now: later });
+		const after = buildChart(
+			[
+				...roots,
+				...['a', 'b', 'c'].map((id) => {
+					const w = writes.find((x) => x.id === id);
+					return w?.op === 'setAccount'
+						? { id, ...w.data }
+						: account(id, 'asset', 'asset', { order: 1 });
+				})
+			],
+			[]
+		);
+		expect(after.children('asset').map((a) => a.id)).toEqual(['c', 'a', 'b']);
+	});
+
+	it('never moves or writes a System Account', () => {
+		const equity = buildChart(
+			[
+				...roots,
+				account('capital', 'equity', 'equity', { order: 1 }),
+				account('drawings', 'equity', 'equity', { order: 2 })
+			],
+			[]
+		);
+		expect(orders(planDropAccount(equity, 'drawings', 'capital', { now: later }))).toEqual([
+			['drawings', 1],
+			['capital', 2]
+		]);
+		expect(() => planDropAccount(equity, 'capital', 'opening-balances', { now: later })).toThrow(
+			/can't be dropped there/
+		);
+		expect(() => planDropAccount(chart, 'asset', 'liability', { now: later })).toThrow(
+			/can't be dropped there/
+		);
+	});
+
+	it('refuses a target under a different parent', () => {
+		expect(() => planDropAccount(chart, 'travel', 'cash', { now: later })).toThrow(
+			/can't be dropped there/
 		);
 	});
 });

@@ -3,6 +3,7 @@ import {
 	buildChart,
 	planCreateAccount,
 	planDeleteAccount,
+	planDropAccount,
 	planMoveAccount,
 	planSetArchived,
 	type Chart
@@ -79,5 +80,48 @@ describe('move, archive, and delete through the rules', () => {
 		await wait((s) => s.accounts.some((a) => a.id === old.id && a.archived));
 		await commitLedger(db, OWNER_UID, planSetArchived(chart(), old.id, false, now()));
 		await wait((s) => s.accounts.some((a) => a.id === old.id && !a.archived));
+	});
+
+	it('reorders siblings by drag-and-drop without touching Balances or parents', async () => {
+		const db = ownerDb(env());
+		await ensureSystemAccounts(db, OWNER_UID);
+		let snap: LedgerSnapshot = await firstSnapshot(db, (s) => s.accounts.length === 6);
+		for (const [name, openingBalance] of [
+			['Cash', 100000],
+			['Bank', 200000],
+			['Wallet', 0]
+		] as const) {
+			await commitLedger(
+				db,
+				OWNER_UID,
+				planCreateAccount(
+					buildChart(snap.accounts, snap.transactions),
+					{ parentId: 'asset', name, description: '', openingBalance, children: [] },
+					{ newId: () => newAccountId(db, OWNER_UID), now: new Date() }
+				)
+			);
+			const count = snap.accounts.length + 1;
+			snap = await firstSnapshot(db, (s) => s.accounts.length === count);
+		}
+		const id = (name: string) => snap.accounts.find((a) => a.name === name)!.id;
+		const before = buildChart(snap.accounts, snap.transactions);
+
+		await commitLedger(
+			db,
+			OWNER_UID,
+			planDropAccount(before, id('Wallet'), id('Cash'), { now: new Date() })
+		);
+
+		// A fresh listener stands in for a reload on another device.
+		const fresh = await firstSnapshot(ownerDb(env()), (s) =>
+			s.accounts.some((a) => a.name === 'Wallet' && a.order === 0)
+		);
+		const after = buildChart(fresh.accounts, fresh.transactions);
+		expect(after.children('asset').map((a) => a.name)).toEqual(['Wallet', 'Cash', 'Bank']);
+		for (const name of ['Cash', 'Bank', 'Wallet']) {
+			expect(after.balance(id(name))).toBe(before.balance(id(name)));
+			expect(after.account(id(name))?.parentId).toBe('asset');
+		}
+		expect(after.balance('asset')).toBe(300000);
 	});
 });
