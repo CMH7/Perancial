@@ -13,8 +13,8 @@ Every money movement is a **Transaction** made of two or more **Entries**, each 
 
 - Entries store signed integer centavos, following the standard debit/credit rule: increases to Asset and Expense are positive; increases to Liability, Income, and Equity are negative. The user never sees debit/credit; the UI asks for From, To, and Amount, and display signs are friendly per Account Type.
 - A Transaction may have any number of Entries (splits such as loan principal plus interest); the common two-Entry case is just a simple form.
-- An Opening Balance is a Transaction dated on the Opening Date between the Leaf Account and the system Account **Equity › Opening Balances**. Only Asset and Liability Leaf Accounts take an Opening Balance.
-- Balances are never stored. A Leaf Account's Balance as of a date is the sum of its Entries dated on or before it; a Group Account's is the sum of its children.
+- An Opening Balance is a Transaction between the Leaf Account and the system Account **Equity › Opening Balances**. It has no user-facing date: it means "the amount before the first recorded Transaction" and counts toward the Balance as of any date, so Transactions can be backdated freely (the owner re-enters a year of history from a spreadsheet by hand). Only Asset and Liability Leaf Accounts take an Opening Balance.
+- Balances are never stored. A Leaf Account's Balance as of a date is its Opening Balance plus its Entries dated on or before it; a Group Account's is the sum of its children.
 
 ## Alternatives considered
 
