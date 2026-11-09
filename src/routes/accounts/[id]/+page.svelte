@@ -2,17 +2,26 @@
 	// Chart of Accounts, drill-down layout: one level at a time, Account Types as tabs.
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import { ACCOUNT_TYPE_GUIDE } from '#lib/domain/index.ts';
+	import {
+		ACCOUNT_TYPE_GUIDE,
+		archiveCheck,
+		deleteCheck,
+		planDeleteAccount,
+		planSetArchived
+	} from '#lib/domain/index.ts';
 	import { ledger } from '#lib/ledger.svelte.ts';
 	import { goto } from '$app/navigation';
 	import Amount from '#lib/components/Amount.svelte';
+	import ConfirmAction from '#lib/components/ConfirmAction.svelte';
 	import CreateAccountForm from '#lib/components/CreateAccountForm.svelte';
 	import EditAccountForm from '#lib/components/EditAccountForm.svelte';
 	import Modal from '#lib/components/Modal.svelte';
+	import MoveAccountForm from '#lib/components/MoveAccountForm.svelte';
 
 	let showArchived = $state(false);
-	let creating = $state(false);
-	let editing = $state(false);
+	/** The open dialog, if any. */
+	let dialog = $state<'create' | 'edit' | 'move' | 'archive' | 'delete' | null>(null);
+	const close = () => (dialog = null);
 
 	const chart = $derived(ledger.chart);
 	const id = $derived(page.params.id ?? 'asset');
@@ -25,6 +34,7 @@
 	const group = $derived(chart.isGroup(id));
 	const accountHref = (accountId: string) => resolve('/accounts/[id]', { id: accountId });
 	const insideLabel = (n: number) => `${n} ${n === 1 ? 'account' : 'accounts'} inside`;
+	const andInside = (n: number) => (n ? ` and ${insideLabel(n)}` : '');
 </script>
 
 <main class="mx-auto max-w-3xl px-4 py-8">
@@ -107,13 +117,30 @@
 					</div>
 					<div class="text-3xl"><Amount value={chart.balance(account.id)} bold /></div>
 				</div>
-				{#if account.system !== 'opening-balances'}
-					<button
-						onclick={() => (editing = true)}
-						class="rounded px-2 py-1 text-xs text-gray-300 hover:bg-gray-800 hover:text-white"
-						>Edit</button
-					>
-				{/if}
+				<div class="flex flex-wrap justify-end gap-1 text-xs text-gray-300">
+					{#if account.system !== 'opening-balances'}
+						<button
+							onclick={() => (dialog = 'edit')}
+							class="rounded px-2 py-1 hover:bg-gray-800 hover:text-white">Edit</button
+						>
+					{/if}
+					{#if !account.system}
+						<button
+							onclick={() => (dialog = 'move')}
+							class="rounded px-2 py-1 hover:bg-gray-800 hover:text-white">Move</button
+						>
+						<button
+							onclick={() => (dialog = 'archive')}
+							class="rounded px-2 py-1 hover:bg-gray-800 hover:text-white"
+							>{account.archived ? 'Unarchive' : 'Archive'}</button
+						>
+						<button
+							onclick={() => (dialog = 'delete')}
+							class="rounded px-2 py-1 text-red-300 hover:bg-gray-800 hover:text-red-200"
+							>Delete</button
+						>
+					{/if}
+				</div>
 			</div>
 
 			<ul class="divide-y rounded-xl border bg-white">
@@ -158,7 +185,7 @@
 
 			<div class="mt-3 flex items-center justify-between text-sm">
 				{#if account.system !== 'opening-balances'}
-					<button onclick={() => (creating = true)} class="text-blue-600 hover:underline"
+					<button onclick={() => (dialog = 'create')} class="text-blue-600 hover:underline"
 						>+ Add account inside {account.name}</button
 					>
 				{:else}
@@ -172,21 +199,66 @@
 	{/if}
 </main>
 
-{#if creating && account}
-	<Modal onclose={() => (creating = false)}>
-		<CreateAccountForm
-			parentId={account.id}
-			onclose={() => (creating = false)}
-			oncreated={(groupId) => {
-				creating = false;
-				if (groupId) goto(accountHref(groupId));
-			}}
-		/>
-	</Modal>
-{/if}
-
-{#if editing && account}
-	<Modal onclose={() => (editing = false)}>
-		<EditAccountForm accountId={account.id} onclose={() => (editing = false)} />
+{#if dialog && account}
+	<Modal onclose={close}>
+		{#if dialog === 'create'}
+			<CreateAccountForm
+				parentId={account.id}
+				onclose={close}
+				oncreated={(groupId) => {
+					close();
+					if (groupId) goto(accountHref(groupId));
+				}}
+			/>
+		{:else if dialog === 'edit'}
+			<EditAccountForm accountId={account.id} onclose={close} />
+		{:else if dialog === 'move'}
+			<MoveAccountForm accountId={account.id} onclose={close} />
+		{:else if dialog === 'archive' && account.archived}
+			<ConfirmAction
+				title="Unarchive {account.name}"
+				check={{ allowed: true, inside: chart.descendantCount(account.id) }}
+				question="Show {account.name}{andInside(chart.descendantCount(account.id))} again?"
+				confirmLabel="Unarchive"
+				onclose={close}
+				onconfirm={async () => {
+					await ledger.commit(planSetArchived(chart, account.id, false, { now: new Date() }));
+					close();
+				}}
+			/>
+		{:else if dialog === 'archive'}
+			{@const check = archiveCheck(chart, account.id)}
+			<ConfirmAction
+				title="Archive {account.name}"
+				{check}
+				question="Archive {account.name}{andInside(
+					check.allowed ? check.inside : 0
+				)}? It will be hidden but keeps its history, and you can unarchive it later."
+				confirmLabel="Archive"
+				onclose={close}
+				onconfirm={async () => {
+					await ledger.commit(planSetArchived(chart, account.id, true, { now: new Date() }));
+					close();
+				}}
+			/>
+		{:else if dialog === 'delete'}
+			{@const check = deleteCheck(chart, account.id)}
+			<ConfirmAction
+				title="Delete {account.name}"
+				{check}
+				question="Delete {account.name}{andInside(
+					check.allowed ? check.inside : 0
+				)}? This can't be undone."
+				confirmLabel="Delete"
+				danger
+				onclose={close}
+				onconfirm={async () => {
+					const parentId = account.parentId ?? 'asset';
+					await ledger.commit(planDeleteAccount(chart, account.id));
+					close();
+					goto(accountHref(parentId));
+				}}
+			/>
+		{/if}
 	</Modal>
 {/if}
