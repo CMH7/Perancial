@@ -54,6 +54,10 @@ The one system-managed Account, a Leaf under the Equity Root Account. Every Open
 **System Account**
 An Account the app creates and manages itself: the Root Accounts and Opening Balances.
 
+**Abnormal Balance**
+A Balance on the opposite side of what its Account Type usually holds: an overdrawn bank Account, an overpaid credit card, refunds exceeding spending. Shown with a minus sign; a normal Balance of any Account Type is shown positive.
+_Avoid_: negative balance (ambiguous, since Liabilities are stored as negatives)
+
 **Net Worth**
 Total Assets minus Total Liabilities: what the user would have left if they paid off everything they owe.
 
