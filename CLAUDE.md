@@ -9,6 +9,14 @@ Single-user personal finance app (SvelteKit 3, Svelte 5, Tailwind 4, TypeScript,
 - **Every issue goes in its module's milestone**: wayfinder maps and tickets, implementation issues, and bugs. The milestone's percentage is how module progress is tracked.
 - Wayfinder maps carry the `wayfinder:map` label; their tickets are sub-issues with `wayfinder:<type>` labels and native blocking.
 
+## Commands
+
+- `bun run dev`: dev server (SPA, no SSR). Put `FIREBASE_USE_EMULATORS=true` in `.env.local` to use the local emulators.
+- `bun run emulators`: Auth + Firestore emulators for project `demo-perancial`; data kept in `.emulator-data/`.
+- `bun run test`: unit tests. `bun run test:rules`: Firestore rules tests (starts the emulator itself).
+- `bun run check`, `bun run lint`, `bun run build`, `bun run deploy`.
+- Emulators need Java 21+ on PATH (`JAVA_HOME`).
+
 ## Conventions
 
 - Bookkeeping rules live in a pure TypeScript domain module (no Firebase imports), built test-first with Vitest (`bun run test`).
