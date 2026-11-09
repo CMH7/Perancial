@@ -30,10 +30,10 @@ Money coming in: salary, interest, gifts received.
 Money going out: food, rent, bills.
 
 **Root Account**
-One of the five fixed top-level Accounts, one per Account Type. Cannot be renamed into another type or deleted.
+One of the five fixed top-level Accounts, one per Account Type. Cannot be renamed into another type or deleted. Always a Group Account, even with no children, so it never holds Entries directly.
 
 **Group Account**
-An Account that has child Accounts. Its Balance is the sum of its children's Balances and cannot be entered directly.
+An Account that has child Accounts. Being a Group Account is decided only by having children (Root Accounts excepted); there is no empty Group Account. Its Balance is the sum of its children's Balances and cannot be entered directly.
 _Avoid_: header account, parent account (fine informally, but Group Account is canonical)
 
 **Leaf Account**
