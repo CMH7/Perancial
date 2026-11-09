@@ -38,13 +38,17 @@ export function opening(accountId: string, amount: number): Transaction {
 	return {
 		id: `opening_${accountId}`,
 		date: null,
-		kind: 'opening',
+		origin: 'opening',
 		description: 'Opening Balance',
+		note: '',
+		status: 'cleared',
+		tags: [],
 		entries: [
 			{ accountId, amount },
 			{ accountId: 'opening-balances', amount: -amount }
 		],
 		accountIds: [accountId, 'opening-balances'],
+		pays: null,
 		createdAt: now,
 		updatedAt: now
 	};
@@ -54,10 +58,14 @@ export function tx(id: string, date: string, entries: [string, number][]): Trans
 	return {
 		id,
 		date,
-		kind: 'normal',
+		origin: 'normal',
 		description: id,
+		note: '',
+		status: 'cleared',
+		tags: [],
 		entries: entries.map(([accountId, amount]) => ({ accountId, amount })),
 		accountIds: entries.map(([accountId]) => accountId),
+		pays: null,
 		createdAt: now,
 		updatedAt: now
 	};

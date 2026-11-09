@@ -80,13 +80,17 @@ export function openingWrite(
 			id: openingTransactionId(id),
 			data: {
 				date: null,
-				kind: 'opening',
+				origin: 'opening',
 				description: 'Opening Balance',
+				note: '',
+				status: 'cleared',
+				tags: [],
 				entries: [
 					{ accountId: id, amount },
 					{ accountId: 'opening-balances', amount: -amount }
 				],
 				accountIds: [id, 'opening-balances'],
+				pays: null,
 				createdAt,
 				updatedAt: now
 			}

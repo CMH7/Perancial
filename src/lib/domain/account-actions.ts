@@ -133,7 +133,7 @@ export function deleteCheck(chart: Chart, id: string): ActionCheck {
 	if (account.system) return { allowed: false, reason: "System Accounts can't be deleted." };
 	const hasHistory = chart
 		.subtree(id)
-		.some((a) => chart.transactionsFor(a.id).some((tx) => tx.kind !== 'opening'));
+		.some((a) => chart.transactionsFor(a.id).some((tx) => tx.origin !== 'opening'));
 	if (hasHistory)
 		return {
 			allowed: false,
