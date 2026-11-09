@@ -1,41 +1,10 @@
 import { doc, setDoc, type Firestore } from 'firebase/firestore';
 import { describe, expect, it } from 'vitest';
-import {
-	accountsPath,
-	commitLedger,
-	ensureSystemAccounts,
-	subscribeLedger,
-	type LedgerSnapshot
-} from '../../src/lib/firebase/ledger.ts';
+import { accountsPath, commitLedger, ensureSystemAccounts } from '../../src/lib/firebase/ledger.ts';
 import { buildChart } from '../../src/lib/domain/index.ts';
-import { OWNER_UID, accountData, ownerDb, useEmulator } from '../emulator.ts';
+import { OWNER_UID, accountData, firstSnapshot, ownerDb, useEmulator } from '../emulator.ts';
 
 const env = useEmulator();
-
-/**
- * Resolves with the first snapshot from subscribeLedger that passes `until` (or rejects on error).
- * Early snapshots can come from the local cache before server data arrives.
- */
-function firstSnapshot(
-	db: Firestore,
-	until: (snap: LedgerSnapshot) => boolean = () => true
-): Promise<LedgerSnapshot> {
-	return new Promise((resolve, reject) => {
-		const stop = subscribeLedger(
-			db,
-			OWNER_UID,
-			(snap) => {
-				if (!until(snap)) return;
-				stop();
-				resolve(snap);
-			},
-			(err) => {
-				stop();
-				reject(err);
-			}
-		);
-	});
-}
 
 describe('ensureSystemAccounts', () => {
 	it('creates the five Root Accounts and Opening Balances exactly once', async () => {

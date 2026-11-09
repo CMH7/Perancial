@@ -4,6 +4,8 @@ import type { Account, AccountType, Transaction } from './schemas.ts';
 export type IsoDate = string;
 
 export type Chart = {
+	/** The Account with this ID, if it has loaded. */
+	account(id: string): Account | undefined;
 	/**
 	 * Balance as of `asOf` (default: today), in display sign: a normal Balance is positive
 	 * for every Account Type. Opening Balances count on any date; later Entries don't count yet.
@@ -15,6 +17,8 @@ export type Chart = {
 	path(id: string): Account[];
 	/** Root Accounts are always Group Accounts; any other Account is one when it has children. */
 	isGroup(id: string): boolean;
+	/** Whether any Transaction (Opening Balance included) has an Entry on this Account itself. */
+	hasEntries(id: string): boolean;
 	/** Number of Accounts anywhere under `id`. */
 	descendantCount(id: string): number;
 	/** Total Assets, Total Liabilities (both display sign) and Net Worth = Assets − Liabilities. */
@@ -23,6 +27,10 @@ export type Chart = {
 
 /** Storage sign is the debit/credit rule; these types grow with negative amounts. */
 const CREDIT_NORMAL: ReadonlySet<AccountType> = new Set(['liability', 'equity', 'income']);
+
+/** Converts a display-sign amount (normal Balance positive) to storage sign for this type. */
+export const toStorage = (type: AccountType, display: number) =>
+	CREDIT_NORMAL.has(type) ? -display : display;
 
 /** Today in local time as `YYYY-MM-DD`. */
 export function today(): IsoDate {
@@ -65,6 +73,8 @@ export function buildChart(accounts: Account[], transactions: Transaction[]): Ch
 	}
 
 	return {
+		account: (id) => byId.get(id),
+		hasEntries: (id) => transactions.some((tx) => tx.entries.some((e) => e.accountId === id)),
 		balance,
 		descendantCount,
 		children(id, { showArchived = false } = {}) {
