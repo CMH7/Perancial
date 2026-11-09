@@ -7,6 +7,7 @@
 		archiveCheck,
 		deleteCheck,
 		planDeleteAccount,
+		planDropAccount,
 		planSetArchived
 	} from '#lib/domain/index.ts';
 	import { ledger } from '#lib/ledger.svelte.ts';
@@ -35,6 +36,21 @@
 	const accountHref = (accountId: string) => resolve('/accounts/[id]', { id: accountId });
 	const insideLabel = (n: number) => `${n} ${n === 1 ? 'account' : 'accounts'} inside`;
 	const andInside = (n: number) => (n ? ` and ${insideLabel(n)}` : '');
+
+	// Drag-and-drop reordering of the child rows.
+	let dragId = $state<string | null>(null);
+	let overId = $state<string | null>(null);
+	let reorderError = $state('');
+	const dragIndex = () => children.findIndex((c) => c.id === dragId);
+	async function drop(id: string, targetId: string) {
+		dragId = overId = null;
+		reorderError = '';
+		try {
+			await ledger.commit(planDropAccount(chart, id, targetId, { now: new Date() }));
+		} catch (err) {
+			reorderError = `Could not reorder: ${(err as Error).message}`;
+		}
+	}
 </script>
 
 <main class="mx-auto max-w-3xl px-4 py-8">
@@ -143,17 +159,53 @@
 				</div>
 			</div>
 
+			{#if reorderError}<p class="mb-2 text-sm text-red-600">{reorderError}</p>{/if}
 			<ul class="divide-y rounded-xl border bg-white">
-				{#each children as child (child.id)}
+				{#each children as child, i (child.id)}
 					{@const childGroup = chart.isGroup(child.id)}
-					<li>
+					{@const canDrag = !child.system}
+					<li
+						draggable={canDrag}
+						ondragstart={(e) => {
+							dragId = child.id;
+							e.dataTransfer?.setData('text/plain', child.id);
+							if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
+						}}
+						ondragend={() => (dragId = overId = null)}
+						ondragover={(e) => {
+							if (!dragId || !canDrag) return;
+							e.preventDefault();
+							overId = child.id;
+						}}
+						ondragleave={() => {
+							if (overId === child.id) overId = null;
+						}}
+						ondrop={(e) => {
+							e.preventDefault();
+							if (dragId) drop(dragId, child.id);
+						}}
+						class="relative {dragId === child.id ? 'opacity-40' : ''} {overId === child.id &&
+						dragId !== child.id
+							? dragIndex() < i
+								? 'shadow-[inset_0_-2px_0_var(--color-blue-500)]'
+								: 'shadow-[inset_0_2px_0_var(--color-blue-500)]'
+							: ''}"
+					>
 						<a
 							href={accountHref(child.id)}
-							class="flex items-center justify-between gap-4 px-5 py-4 hover:bg-gray-50 {child.archived
+							draggable="false"
+							class="flex items-center justify-between gap-4 py-4 pr-5 pl-2 hover:bg-gray-50 {child.archived
 								? 'opacity-50'
 								: ''}"
 						>
-							<div class="min-w-0">
+							<span
+								class="w-4 shrink-0 text-center text-gray-300 select-none {canDrag
+									? 'cursor-grab'
+									: 'invisible'}"
+								title="Drag to reorder"
+								aria-hidden="true">⠿</span
+							>
+							<div class="min-w-0 flex-1">
 								<div class="font-medium">
 									{child.name}
 									{#if child.archived}<span class="ml-2 rounded bg-gray-200 px-1 text-[10px]"

@@ -45,6 +45,49 @@ export function planMoveAccount(
 	return [updateAccount(account, { parentId: destId, order }, now)];
 }
 
+/**
+ * Drag-and-drop among siblings: the Account takes the target's place (before it when dragged up,
+ * after it when dragged down). System Accounts stay put; only changed `order`s are written.
+ */
+export function planDropAccount(
+	chart: Chart,
+	id: string,
+	targetId: string,
+	{ now }: Now
+): ChartWrite[] {
+	const account = chart.account(id);
+	const target = chart.account(targetId);
+	if (
+		!account ||
+		!target ||
+		account.system ||
+		target.system ||
+		account.parentId !== target.parentId ||
+		account.parentId === null
+	)
+		throw new Error("This account can't be dropped there");
+	if (id === targetId) return [];
+
+	const movable = chart.children(account.parentId, { showArchived: true }).filter((a) => !a.system);
+	const slots = strictlyIncreasing(movable.map((a) => a.order));
+	const list = movable.filter((a) => a.id !== id);
+	list.splice(
+		movable.findIndex((a) => a.id === targetId),
+		0,
+		account
+	);
+	return list.flatMap((a, i) =>
+		a.order === slots[i] ? [] : [updateAccount(a, { order: slots[i] }, now)]
+	);
+}
+
+/** Sorted `order` values with ties pushed apart, so every sibling gets a distinct slot. */
+function strictlyIncreasing(orders: number[]): number[] {
+	const slots: number[] = [];
+	for (const o of orders) slots.push(slots.length && o <= slots.at(-1)! ? slots.at(-1)! + 1 : o);
+	return slots;
+}
+
 export type ActionCheck = { allowed: true; inside: number } | { allowed: false; reason: string };
 
 /** Every Entry ever recorded, including future-dated ones. */
