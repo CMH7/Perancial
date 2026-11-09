@@ -26,7 +26,12 @@ export default defineConfig({
 			{
 				// Run through `bun run test:rules`, which starts the Firestore emulator first.
 				extends: true,
-				test: { name: 'rules', include: ['tests/rules/**/*.test.ts'], environment: 'node' }
+				test: {
+					name: 'rules',
+					include: ['tests/rules/**/*.test.ts', 'tests/integration/**/*.test.ts'],
+					environment: 'node',
+					fileParallelism: false
+				}
 			}
 		]
 	}

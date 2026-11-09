@@ -7,9 +7,15 @@
 	import { onAuthStateChanged } from 'firebase/auth';
 	import { auth } from '#lib/firebase/app.ts';
 	import { signOut } from '#lib/firebase/auth.ts';
+	import { ledger } from '#lib/ledger.svelte.ts';
 	import type { LayoutProps } from './$types';
 
 	let { data, children }: LayoutProps = $props();
+
+	// Live Accounts and Transactions while the owner is signed in.
+	$effect(() => {
+		if (data.owner && data.user) return ledger.start(data.user.uid);
+	});
 
 	// The load gate only runs on navigation; this catches sign-out mid-session.
 	$effect(() =>

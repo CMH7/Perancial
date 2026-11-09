@@ -2,6 +2,7 @@ rules_version = '2';
 
 // Single-user app: only the owner can read or write, and only under users/{their uid}.
 // Keep OWNER_UID in sync with src/lib/owner.ts (checked by src/lib/owner.test.ts).
+// Rules guard security and System Accounts; bookkeeping rules live in src/lib/domain.
 service cloud.firestore {
   match /databases/{database}/documents {
     function isOwner(uid) {
@@ -10,8 +11,68 @@ service cloud.firestore {
         && uid == 'nljVk7wwFdO2PFeKwZ1WwAdOn0J2';
     }
 
-    match /users/{uid}/{document=**} {
-      allow read, write: if isOwner(uid);
+    match /users/{uid} {
+      function accountPath(id) {
+        return /databases/$(database)/documents/users/$(uid)/accounts/$(id);
+      }
+
+      match /accounts/{accountId} {
+        function fields() {
+          return ['name', 'description', 'type', 'parentId', 'system', 'archived', 'order', 'createdAt', 'updatedAt'];
+        }
+        function validShape(d) {
+          return d.keys().hasOnly(fields()) && d.keys().hasAll(fields())
+            && d.name is string && d.description is string
+            && d.type in ['asset', 'liability', 'equity', 'income', 'expense']
+            && (d.parentId == null || d.parentId is string)
+            && d.system in [null, 'root', 'opening-balances']
+            && d.archived is bool && d.order is number
+            && d.createdAt is timestamp && d.updatedAt is timestamp;
+        }
+        function isRootId() {
+          return accountId in ['asset', 'liability', 'equity', 'income', 'expense'];
+        }
+        // System Accounts live at fixed IDs; any other Account sits under a parent of the same type.
+        // getAfter: a parent created in the same batch counts.
+        function validPlacement(d) {
+          return (d.system == 'root' && isRootId() && d.parentId == null && d.type == accountId)
+            || (d.system == 'opening-balances' && accountId == 'opening-balances'
+                && d.parentId == 'equity' && d.type == 'equity')
+            || (d.system == null && !isRootId() && accountId != 'opening-balances'
+                && d.parentId is string && d.parentId != 'opening-balances'
+                && existsAfter(accountPath(d.parentId))
+                && getAfter(accountPath(d.parentId)).data.type == d.type);
+        }
+
+        allow read: if isOwner(uid);
+        allow create: if isOwner(uid)
+          && validShape(request.resource.data) && validPlacement(request.resource.data);
+        // Root Accounts: description only. Opening Balances: locked. User Accounts: anything valid.
+        allow update: if isOwner(uid)
+          && validShape(request.resource.data) && validPlacement(request.resource.data)
+          && (resource.data.system == null
+              || (resource.data.system == 'root'
+                  && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['description', 'updatedAt'])));
+        allow delete: if isOwner(uid) && resource.data.system == null;
+      }
+
+      match /transactions/{txId} {
+        function fields() {
+          return ['date', 'kind', 'description', 'entries', 'accountIds', 'createdAt', 'updatedAt'];
+        }
+        function validTransaction(d) {
+          return d.keys().hasOnly(fields()) && d.keys().hasAll(fields())
+            && d.kind in ['opening', 'normal']
+            && (d.date == null || d.date is string)
+            && d.description is string
+            && d.entries is list && d.entries.size() >= 2
+            && d.accountIds is list
+            && d.createdAt is timestamp && d.updatedAt is timestamp;
+        }
+
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid) && validTransaction(request.resource.data);
+      }
     }
 
     // Everything else falls through to deny.
