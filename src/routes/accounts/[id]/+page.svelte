@@ -7,10 +7,12 @@
 	import { goto } from '$app/navigation';
 	import Amount from '#lib/components/Amount.svelte';
 	import CreateAccountForm from '#lib/components/CreateAccountForm.svelte';
+	import EditAccountForm from '#lib/components/EditAccountForm.svelte';
 	import Modal from '#lib/components/Modal.svelte';
 
 	let showArchived = $state(false);
 	let creating = $state(false);
+	let editing = $state(false);
 
 	const chart = $derived(ledger.chart);
 	const id = $derived(page.params.id ?? 'asset');
@@ -91,17 +93,27 @@
 				{/each}
 			</nav>
 
-			<div class="mb-4 rounded-xl bg-gray-900 p-5 text-white">
-				<div class="text-sm text-gray-400">
-					{#if account.system === 'root'}
-						Total {account.name}
-					{:else}
-						{account.description || (group ? 'Group Account' : 'Leaf Account')}
-					{/if}
-					{#if account.archived}<span class="ml-2 rounded bg-gray-700 px-1.5 text-xs">archived</span
-						>{/if}
+			<div class="mb-4 flex items-end justify-between gap-4 rounded-xl bg-gray-900 p-5 text-white">
+				<div>
+					<div class="text-sm text-gray-400">
+						{#if account.system === 'root'}
+							Total {account.name}
+						{:else}
+							{account.description || (group ? 'Group Account' : 'Leaf Account')}
+						{/if}
+						{#if account.archived}<span class="ml-2 rounded bg-gray-700 px-1.5 text-xs"
+								>archived</span
+							>{/if}
+					</div>
+					<div class="text-3xl"><Amount value={chart.balance(account.id)} bold /></div>
 				</div>
-				<div class="text-3xl"><Amount value={chart.balance(account.id)} bold /></div>
+				{#if account.system !== 'opening-balances'}
+					<button
+						onclick={() => (editing = true)}
+						class="rounded px-2 py-1 text-xs text-gray-300 hover:bg-gray-800 hover:text-white"
+						>Edit</button
+					>
+				{/if}
 			</div>
 
 			<ul class="divide-y rounded-xl border bg-white">
@@ -170,5 +182,11 @@
 				if (groupId) goto(accountHref(groupId));
 			}}
 		/>
+	</Modal>
+{/if}
+
+{#if editing && account}
+	<Modal onclose={() => (editing = false)}>
+		<EditAccountForm accountId={account.id} onclose={() => (editing = false)} />
 	</Modal>
 {/if}
