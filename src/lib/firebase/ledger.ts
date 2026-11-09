@@ -190,3 +190,19 @@ export async function commitLedger(db: Firestore, uid: string, writes: LedgerWri
 	}
 	await batch.commit();
 }
+
+/** Firestore allows at most 500 writes in one batch. */
+const BATCH_LIMIT = 500;
+
+/**
+ * For changes too big for one batch (renaming a tag on every Transaction): validates every write,
+ * then commits them in batches of at most 500. Not atomic as a whole, so callers must plan writes
+ * that give the same result when run again after a partial failure.
+ */
+export async function commitLedgerInBatches(db: Firestore, uid: string, writes: LedgerWrite[]) {
+	for (const w of writes)
+		if (w.op === 'setAccount') AccountDoc.parse(w.data);
+		else if (w.op === 'setTransaction') TransactionDoc.parse(w.data);
+	for (let i = 0; i < writes.length; i += BATCH_LIMIT)
+		await commitLedger(db, uid, writes.slice(i, i + BATCH_LIMIT));
+}
