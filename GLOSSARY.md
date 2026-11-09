@@ -51,8 +51,27 @@ _Avoid_: starting amount
 **Opening Date**
 The date an Opening Balance is true as of.
 
+**Opening Balances (Account)**
+The one system-managed Account, a Leaf under the Equity Root Account. Every Opening Balance is a Transaction between it and the Leaf Account being opened. Cannot be renamed or deleted.
+
+**System Account**
+An Account the app creates and manages itself: the Root Accounts and Opening Balances.
+
 **Net Worth**
 Total Assets minus Total Liabilities: what the user would have left if they paid off everything they owe.
 
+## Money movements
+
+**Transaction**
+One money movement on a date, moving money from one or more Accounts to one or more others. Its Entries always add up to zero, so the books always balance.
+_Avoid_: journal entry (accounting term for the same thing)
+
+**Entry**
+One line of a Transaction: an amount added to or taken from one Leaf Account.
+_Avoid_: posting, split, leg
+
+**Double-entry**
+The bookkeeping method Perancial uses: every Transaction has at least two Entries that cancel out, so money is never created or lost, only moved between Accounts.
+
 **Balance**
-The amount an Account holds at a point in time. For a Leaf Account: Opening Balance plus the effect of everything after it. For a Group Account: the sum of its children's Balances.
+The amount an Account holds as of a date (today by default). For a Leaf Account: the sum of its Entries dated on or before that date, the Opening Balance included. For a Group Account: the sum of its children's Balances. Entries dated later do not count yet.
