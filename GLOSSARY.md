@@ -108,10 +108,16 @@ A plan for a Transaction that repeats or happens once later: its Accounts, amoun
 _Avoid_: recurring transaction, template
 
 **Occurrence**
-One due date a Scheduled Transaction produces, such as "Rent, 5 Dec". It is known by the date its repeat rule gave it, even after being moved to another day. It counts as paid only when a Transaction is recorded for it; it can also be skipped.
+One due date a Scheduled Transaction produces, such as "Rent, 5 Dec". It is known by the date its repeat rule gave it, even after being moved to another day. It is unpaid, Partly Paid or Paid depending on the Transactions that pay it, or it can be skipped.
+
+**Paid**
+An Occurrence or Installment Plan payment whose paying Transactions add up to its amount, or that the user settled after at least one payment (a discount, a waived fee). Only Transactions pay; nothing is paid without one.
+
+**Partly Paid**
+An Occurrence or Installment Plan payment that has at least one paying Transaction but has not reached its amount yet.
 
 **Overdue**
-An Occurrence whose date has passed without being paid or skipped. It stays overdue until the user records or skips it.
+An Occurrence whose date has passed without being Paid or skipped. It stays overdue until the user records or skips it.
 
 **Cut-off**
 One of the two pay dates in a month, the 15th and the 30th (the last day of February). Planning and forecasting are grouped by cut-off.
