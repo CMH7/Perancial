@@ -87,3 +87,14 @@ _Avoid_: installment (alone, when the whole plan is meant)
 
 **Balance**
 The amount an Account holds as of a date (today by default). For a Leaf Account: its Opening Balance plus its Entries dated on or before that date. For a Group Account: the sum of its children's Balances. Entries dated later do not count yet.
+
+**Pending**
+A Transaction the user has recorded but the bank, e-wallet or card has not shown yet, such as a card purchase not yet posted or a transfer still processing. It still counts toward Balances.
+_Avoid_: uncleared, unposted
+
+**Cleared**
+A Transaction the bank, e-wallet or card has shown. Every Transaction is either Cleared or Pending; an Opening Balance is always Cleared.
+_Avoid_: posted, reconciled
+
+**Cleared Balance**
+The Balance of an Asset or Liability Account counting only Cleared Transactions. It is what the user compares with the bank app or statement.
