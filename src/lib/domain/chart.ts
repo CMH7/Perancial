@@ -56,7 +56,8 @@ export function buildChart(accounts: Account[], transactions: Transaction[]): Ch
 
 	function balance(id: string, asOf: IsoDate = today()): number {
 		const sum = storageSum(id, asOf);
-		return CREDIT_NORMAL.has(byId.get(id)!.type) ? -sum : sum;
+		const type = byId.get(id)?.type;
+		return type && CREDIT_NORMAL.has(type) ? -sum : sum;
 	}
 
 	function descendantCount(id: string): number {
@@ -76,7 +77,7 @@ export function buildChart(accounts: Account[], transactions: Transaction[]): Ch
 			return out;
 		},
 		isGroup(id) {
-			return byId.get(id)!.system === 'root' || kids(id).length > 0;
+			return byId.get(id)?.system === 'root' || kids(id).length > 0;
 		},
 		totals(asOf = today()) {
 			const assets = balance('asset', asOf);

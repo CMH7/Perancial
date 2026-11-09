@@ -153,6 +153,16 @@ describe('tree', () => {
 	});
 });
 
+describe('before the System Accounts have loaded', () => {
+	it('treats unknown Accounts as empty instead of failing', () => {
+		const chart = buildChart([account('cash', 'asset', 'asset')], [opening('cash', 345000)]);
+		expect(chart.balance('missing')).toBe(0);
+		expect(chart.totals()).toEqual({ assets: 345000, liabilities: 0, netWorth: 345000 });
+		expect(chart.path('missing')).toEqual([]);
+		expect(chart.isGroup('missing')).toBe(false);
+	});
+});
+
 describe('totals', () => {
 	it('gives Total Assets, Total Liabilities, and Net Worth, counting Abnormal Balances', () => {
 		const chart = buildChart(
