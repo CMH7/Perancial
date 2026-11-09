@@ -61,13 +61,23 @@ export function buildChart(accounts: Account[], transactions: Transaction[]): Ch
 	for (const list of childrenOf.values()) list.sort((a, b) => a.order - b.order);
 	const kids = (id: string) => childrenOf.get(id) ?? [];
 
-	/** Sum in storage sign: own Entries plus every descendant's, as of a date. */
-	function storageSum(id: string, asOf: IsoDate): number {
-		let sum = 0;
+	// Own Entry totals per Account, one pass over every Entry per as-of date, cached.
+	const ownSums = new Map<IsoDate, Map<string, number>>();
+	function ownSumsAsOf(asOf: IsoDate): Map<string, number> {
+		let sums = ownSums.get(asOf);
+		if (sums) return sums;
+		sums = new Map();
 		for (const tx of transactions) {
 			if (tx.date !== null && tx.date > asOf) continue;
-			for (const e of tx.entries) if (e.accountId === id) sum += e.amount;
+			for (const e of tx.entries) sums.set(e.accountId, (sums.get(e.accountId) ?? 0) + e.amount);
 		}
+		ownSums.set(asOf, sums);
+		return sums;
+	}
+
+	/** Sum in storage sign: own Entries plus every descendant's, as of a date. */
+	function storageSum(id: string, asOf: IsoDate): number {
+		let sum = ownSumsAsOf(asOf).get(id) ?? 0;
 		for (const child of kids(id)) sum += storageSum(child.id, asOf);
 		return sum;
 	}

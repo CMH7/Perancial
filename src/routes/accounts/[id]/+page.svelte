@@ -5,6 +5,7 @@
 	import {
 		ACCOUNT_TYPE_GUIDE,
 		archiveCheck,
+		clearedBalance,
 		deleteCheck,
 		planDeleteAccount,
 		planDropAccount,
@@ -12,6 +13,7 @@
 	} from '#lib/domain/index.ts';
 	import { ledger } from '#lib/ledger.svelte.ts';
 	import { goto } from '$app/navigation';
+	import AccountRegister from '#lib/components/AccountRegister.svelte';
 	import Amount from '#lib/components/Amount.svelte';
 	import ConfirmAction from '#lib/components/ConfirmAction.svelte';
 	import CreateAccountForm from '#lib/components/CreateAccountForm.svelte';
@@ -132,6 +134,11 @@
 							>{/if}
 					</div>
 					<div class="text-3xl"><Amount value={chart.balance(account.id)} bold /></div>
+					{#if account.type === 'asset' || account.type === 'liability'}
+						<div class="text-xs text-gray-400" title="Counting only cleared Transactions">
+							Cleared Balance <Amount value={clearedBalance(chart, account.id)} />
+						</div>
+					{/if}
 				</div>
 				<div class="flex flex-wrap justify-end gap-1 text-xs text-gray-300">
 					{#if account.system !== 'opening-balances'}
@@ -229,7 +236,7 @@
 						{#if group}
 							No accounts here yet.
 						{:else}
-							Transactions for this account will list here.
+							No accounts inside yet.
 						{/if}
 					</li>
 				{/each}
@@ -247,6 +254,8 @@
 					<input type="checkbox" bind:checked={showArchived} class="rounded" /> Show archived
 				</label>
 			</div>
+
+			<AccountRegister accountId={account.id} onopening={() => (dialog = 'edit')} />
 		{/if}
 	{/if}
 </main>

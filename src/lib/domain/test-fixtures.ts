@@ -30,7 +30,10 @@ export const roots = [
 	account('equity', 'equity', null),
 	account('income', 'income', null),
 	account('expense', 'expense', null),
-	account('opening-balances', 'equity', 'equity', { system: 'opening-balances' })
+	account('opening-balances', 'equity', 'equity', {
+		name: 'Opening Balances',
+		system: 'opening-balances'
+	})
 ];
 
 /** Opening Balance in storage sign (Asset positive, Liability negative), against Opening Balances. */
