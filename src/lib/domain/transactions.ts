@@ -267,3 +267,17 @@ export function draftFromTransaction(tx: Transaction): TransactionDraft {
 export function duplicateDraft(tx: Transaction, { today }: { today: IsoDate }): TransactionDraft {
 	return { ...draftFromTransaction(tx), date: today, status: 'cleared' };
 }
+
+/** A blank draft for a new Transaction: dated today, cleared, one From and one To line. */
+export function emptyDraft({ today }: { today: IsoDate }): TransactionDraft {
+	return {
+		date: today,
+		description: '',
+		note: '',
+		status: 'cleared',
+		tags: [],
+		from: [{ accountId: '', amount: '' }],
+		to: [{ accountId: '', amount: '' }],
+		fees: []
+	};
+}
