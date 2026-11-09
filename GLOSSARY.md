@@ -102,3 +102,16 @@ The Balance of an Asset or Liability Account counting only Cleared Transactions.
 **Tag**
 A short label on a Transaction that gathers related Transactions across Accounts and kinds, such as a trip, an event or a project. A tag never says where money is or what kind of money it is; that is what Accounts are for.
 _Avoid_: category, label (as a stand-in for an Account)
+
+**Scheduled Transaction**
+A plan for a Transaction that repeats or happens once later: its Accounts, amounts and description, plus a repeat rule such as every cut-off, monthly on a day, or yearly. It never affects Balances; only the Transactions recorded from it do.
+_Avoid_: recurring transaction, template
+
+**Occurrence**
+One due date a Scheduled Transaction produces, such as "Rent, 5 Dec". It is known by the date its repeat rule gave it, even after being moved to another day. It counts as paid only when a Transaction is recorded for it; it can also be skipped.
+
+**Overdue**
+An Occurrence whose date has passed without being paid or skipped. It stays overdue until the user records or skips it.
+
+**Cut-off**
+One of the two pay dates in a month, the 15th and the 30th (the last day of February). Planning and forecasting are grouped by cut-off.
