@@ -4,7 +4,12 @@ import { initializeTestEnvironment, type RulesTestEnvironment } from '@firebase/
 import { doc, setDoc, type Firestore } from 'firebase/firestore';
 import { afterAll, beforeAll, beforeEach } from 'vitest';
 import { OWNER_UID } from '../src/lib/owner.ts';
-import { accountsPath, systemAccounts } from '../src/lib/firebase/ledger.ts';
+import {
+	accountsPath,
+	subscribeLedger,
+	systemAccounts,
+	type LedgerSnapshot
+} from '../src/lib/firebase/ledger.ts';
 import type { AccountDoc } from '../src/lib/domain/index.ts';
 
 export { OWNER_UID };
@@ -54,4 +59,29 @@ export function accountData(overrides: Partial<AccountDoc> = {}): AccountDoc {
 		updatedAt: now,
 		...overrides
 	};
+}
+
+/**
+ * Resolves with the first snapshot from subscribeLedger that passes `until` (or rejects on error).
+ * Early snapshots can come from the local cache before server data arrives.
+ */
+export function firstSnapshot(
+	db: Firestore,
+	until: (snap: LedgerSnapshot) => boolean = () => true
+): Promise<LedgerSnapshot> {
+	return new Promise((resolve, reject) => {
+		const stop = subscribeLedger(
+			db,
+			OWNER_UID,
+			(snap) => {
+				if (!until(snap)) return;
+				stop();
+				resolve(snap);
+			},
+			(err) => {
+				stop();
+				reject(err);
+			}
+		);
+	});
 }

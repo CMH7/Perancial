@@ -17,6 +17,7 @@ import {
 	parseAccount,
 	parseTransaction,
 	type Account,
+	type ChartWrite,
 	type Transaction
 } from '#lib/domain/index.ts';
 
@@ -137,11 +138,7 @@ export function subscribeLedger(
 	};
 }
 
-export type LedgerWrite =
-	| { op: 'setAccount'; id: string; data: AccountDoc }
-	| { op: 'deleteAccount'; id: string }
-	| { op: 'setTransaction'; id: string; data: TransactionDoc }
-	| { op: 'deleteTransaction'; id: string };
+export type LedgerWrite = ChartWrite;
 
 /** A fresh Firestore document ID for a new Account or Transaction. */
 export const newAccountId = (db: Firestore, uid: string) =>

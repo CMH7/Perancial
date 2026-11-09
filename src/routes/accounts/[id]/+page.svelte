@@ -4,9 +4,13 @@
 	import { page } from '$app/state';
 	import { ACCOUNT_TYPE_GUIDE } from '#lib/domain/index.ts';
 	import { ledger } from '#lib/ledger.svelte.ts';
+	import { goto } from '$app/navigation';
 	import Amount from '#lib/components/Amount.svelte';
+	import CreateAccountForm from '#lib/components/CreateAccountForm.svelte';
+	import Modal from '#lib/components/Modal.svelte';
 
 	let showArchived = $state(false);
+	let creating = $state(false);
 
 	const chart = $derived(ledger.chart);
 	const id = $derived(page.params.id ?? 'asset');
@@ -140,7 +144,14 @@
 				{/each}
 			</ul>
 
-			<div class="mt-3 flex justify-end text-sm">
+			<div class="mt-3 flex items-center justify-between text-sm">
+				{#if account.system !== 'opening-balances'}
+					<button onclick={() => (creating = true)} class="text-blue-600 hover:underline"
+						>+ Add account inside {account.name}</button
+					>
+				{:else}
+					<span></span>
+				{/if}
 				<label class="flex items-center gap-2 text-gray-600">
 					<input type="checkbox" bind:checked={showArchived} class="rounded" /> Show archived
 				</label>
@@ -148,3 +159,16 @@
 		{/if}
 	{/if}
 </main>
+
+{#if creating && account}
+	<Modal onclose={() => (creating = false)}>
+		<CreateAccountForm
+			parentId={account.id}
+			onclose={() => (creating = false)}
+			oncreated={(groupId) => {
+				creating = false;
+				if (groupId) goto(accountHref(groupId));
+			}}
+		/>
+	</Modal>
+{/if}

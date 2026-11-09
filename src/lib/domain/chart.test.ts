@@ -1,68 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { buildChart } from './chart.ts';
-import type { Account, AccountType, Transaction } from './schemas.ts';
-
-const now = new Date('2026-11-09T00:00:00Z');
-
-function account(
-	id: string,
-	type: AccountType,
-	parentId: string | null,
-	extra: Partial<Account> = {}
-): Account {
-	return {
-		id,
-		name: id,
-		description: '',
-		type,
-		parentId,
-		system: parentId === null ? 'root' : null,
-		archived: false,
-		order: 0,
-		createdAt: now,
-		updatedAt: now,
-		...extra
-	};
-}
-
-const roots = [
-	account('asset', 'asset', null),
-	account('liability', 'liability', null),
-	account('equity', 'equity', null),
-	account('income', 'income', null),
-	account('expense', 'expense', null),
-	account('opening-balances', 'equity', 'equity', { system: 'opening-balances' })
-];
-
-/** Opening Balance in storage sign (Asset positive, Liability negative), against Opening Balances. */
-function opening(accountId: string, amount: number): Transaction {
-	return {
-		id: `opening_${accountId}`,
-		date: null,
-		kind: 'opening',
-		description: 'Opening Balance',
-		entries: [
-			{ accountId, amount },
-			{ accountId: 'opening-balances', amount: -amount }
-		],
-		accountIds: [accountId, 'opening-balances'],
-		createdAt: now,
-		updatedAt: now
-	};
-}
-
-function tx(id: string, date: string, entries: [string, number][]): Transaction {
-	return {
-		id,
-		date,
-		kind: 'normal',
-		description: id,
-		entries: entries.map(([accountId, amount]) => ({ accountId, amount })),
-		accountIds: entries.map(([accountId]) => accountId),
-		createdAt: now,
-		updatedAt: now
-	};
-}
+import type { Account } from './schemas.ts';
+import { account, opening, roots, tx } from './test-fixtures.ts';
 
 describe('balance as of a date', () => {
 	const accounts = [
