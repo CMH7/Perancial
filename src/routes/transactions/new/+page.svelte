@@ -1,22 +1,54 @@
 <script lang="ts">
-	// Record a new Transaction. `?copy=<id>` starts from a duplicate of that Transaction.
+	// Record a new Transaction. `?copy=<id>` starts from a duplicate of that Transaction;
+	// `?plan=<id>&due=<date>` records that Scheduled Transaction occurrence (Record), linked to it.
+	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import TransactionForm from '#lib/components/TransactionForm.svelte';
-	import { duplicateDraft, emptyDraft, today } from '#lib/domain/index.ts';
+	import {
+		addDays,
+		duplicateDraft,
+		emptyDraft,
+		occurrencesOf,
+		occurrenceStatus,
+		recordDraft,
+		shortDate,
+		today,
+		type PaidLink
+	} from '#lib/domain/index.ts';
 	import { ledger } from '#lib/ledger.svelte.ts';
 
 	/** Bumped after each save so the form starts over. */
 	let round = $state(0);
 	let savedId = $state<string | null>(null);
+	const todayIso = today();
+	const params = $derived(page.url.searchParams);
 
-	const source = $derived(
-		ledger.transactions.find((t) => t.id === page.url.searchParams.get('copy'))
-	);
+	const source = $derived(ledger.transactions.find((t) => t.id === params.get('copy')));
+	const recording = $derived.by(() => {
+		const plan = ledger.scheduled.find((p) => p.id === params.get('plan'));
+		const due = params.get('due');
+		if (!plan || !due) return undefined;
+		const occurrence = occurrencesOf(plan, {
+			from: addDays(due, -400),
+			to: addDays(due, 400)
+		}).find((o) => o.due === due);
+		if (!occurrence) return undefined;
+		const view = {
+			plan,
+			occurrence,
+			status: occurrenceStatus(ledger.chart, occurrence, { today: todayIso })
+		};
+		const pays: PaidLink = { plan: 'scheduled', planId: plan.id, due };
+		return { view, pays };
+	});
+	// The form copies this once when it mounts, so later changes don't reset what the user typed.
 	const initial = $derived(
-		source && round === 0
-			? duplicateDraft(source, { today: today() })
-			: emptyDraft({ today: today() })
+		round === 0 && recording
+			? recordDraft(recording.view, { today: todayIso })
+			: round === 0 && source
+				? duplicateDraft(source, { today: todayIso })
+				: emptyDraft({ today: todayIso })
 	);
 </script>
 
@@ -32,10 +64,20 @@
 				> or record another below.
 			</p>
 		{/if}
+		{#if recording && round === 0}
+			<p class="mb-4 rounded-lg bg-sky-50 p-3 text-sm text-sky-900">
+				Recording {recording.view.occurrence.version.description}, due {shortDate(
+					recording.view.occurrence.due
+				)}{#if recording.view.status.status === 'partly-paid'}: only what is left{/if}. Change
+				anything before saving.
+			</p>
+		{/if}
 		{#key round}
 			<TransactionForm
 				{initial}
+				pays={round === 0 ? recording?.pays : undefined}
 				onsaved={(id) => {
+					if (recording && round === 0) return goto(resolve('/scheduled'));
 					savedId = id;
 					round++;
 				}}

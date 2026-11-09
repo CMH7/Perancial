@@ -13,3 +13,4 @@ export * from './register.ts';
 export * from './tags.ts';
 export * from './scheduled.ts';
 export * from './scheduled-views.ts';
+export * from './paying.ts';

@@ -11,6 +11,7 @@
 		formatAmount,
 		nextOccurrence,
 		planDeletePlan,
+		planChangeOccurrence,
 		planEndPlan,
 		planHistory,
 		shortDate,
@@ -47,6 +48,18 @@
 		unpaid: 'Unpaid',
 		skipped: 'Skipped'
 	};
+
+	let settleError = $state('');
+	/** Mark paid (after at least one payment) or unpaid again. */
+	async function settle(due: string, settled: boolean) {
+		if (!plan) return;
+		settleError = '';
+		try {
+			await ledger.commit(planChangeOccurrence(chart, plan, due, { settled }, { now: new Date() }));
+		} catch (err) {
+			settleError = (err as Error).message;
+		}
+	}
 
 	let dialog = $state<'end' | 'delete' | null>(null);
 	const deleteCheck = $derived.by((): ActionCheck => {
@@ -111,6 +124,7 @@
 		</div>
 
 		<h2 class="mb-2 text-sm font-semibold text-gray-500 uppercase">Past occurrences</h2>
+		{#if settleError}<p class="mb-2 text-xs text-red-600">{settleError}</p>{/if}
 		{#if history.length === 0}
 			<p class="rounded-xl border bg-white px-5 py-6 text-center text-sm text-gray-500">
 				None yet.
@@ -136,6 +150,18 @@
 									/ {formatAmount(o.total)}</span
 								>{/if}</span
 						>
+						{#if o.settled && s.status === 'paid'}
+							<button
+								class="rounded px-2 py-0.5 text-xs text-gray-600 hover:bg-gray-100"
+								title="Marked paid by hand"
+								onclick={() => settle(o.due, false)}>Mark unpaid</button
+							>
+						{:else if s.status === 'partly-paid'}
+							<button
+								class="rounded px-2 py-0.5 text-xs text-gray-600 hover:bg-gray-100"
+								onclick={() => settle(o.due, true)}>Mark paid</button
+							>
+						{/if}
 					</li>
 				{/each}
 			</ul>
