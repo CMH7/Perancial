@@ -4,6 +4,10 @@ import type { Account, AccountType, Transaction } from './schemas.ts';
 export type IsoDate = string;
 
 export type Chart = {
+	/** Every loaded Account. */
+	all(): Account[];
+	/** The Account and everything under it (empty when it hasn't loaded). */
+	subtree(id: string): Account[];
 	/** The Account with this ID, if it has loaded. */
 	account(id: string): Account | undefined;
 	/**
@@ -19,6 +23,8 @@ export type Chart = {
 	isGroup(id: string): boolean;
 	/** The Transaction with this ID, if it has loaded. */
 	transaction(id: string): Transaction | undefined;
+	/** Transactions with an Entry on this Account itself (Opening Balance included). */
+	transactionsFor(id: string): Transaction[];
 	/** Whether any Transaction (Opening Balance included) has an Entry on this Account itself. */
 	hasEntries(id: string): boolean;
 	/** Number of Accounts anywhere under `id`. */
@@ -74,9 +80,18 @@ export function buildChart(accounts: Account[], transactions: Transaction[]): Ch
 		return kids(id).reduce((n, child) => n + 1 + descendantCount(child.id), 0);
 	}
 
+	function subtree(id: string): Account[] {
+		const self = byId.get(id);
+		return self ? [self, ...kids(id).flatMap((child) => subtree(child.id))] : [];
+	}
+
 	return {
+		all: () => accounts,
+		subtree,
 		account: (id) => byId.get(id),
 		transaction: (id) => transactions.find((tx) => tx.id === id),
+		transactionsFor: (id) =>
+			transactions.filter((tx) => tx.entries.some((e) => e.accountId === id)),
 		hasEntries: (id) => transactions.some((tx) => tx.entries.some((e) => e.accountId === id)),
 		balance,
 		descendantCount,

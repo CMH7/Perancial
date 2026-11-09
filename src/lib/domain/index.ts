@@ -6,3 +6,4 @@ export * from './account-types.ts';
 export * from './writes.ts';
 export * from './create-account.ts';
 export * from './edit-account.ts';
+export * from './account-actions.ts';
