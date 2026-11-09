@@ -134,22 +134,7 @@ export function evaluateDraft(
 		fail('total', 'From and To must add up to the same amount');
 
 	// Accounts.
-	const fromIds = new Set(draft.from.map((l) => l.accountId).filter(Boolean));
-	for (const [side, lines] of sides)
-		lines.forEach((line, index) => {
-			const at = `${side}.${index}.account`;
-			const account = chart.account(line.accountId);
-			if (!line.accountId || !account) fail(at, 'Choose an Account');
-			else if (account.id === OPENING_BALANCES || account.system)
-				fail(at, 'Opening Balances change from the Account itself');
-			else if (chart.isGroup(account.id)) fail(at, 'Choose an Account with no Accounts under it');
-			else if (account.archived && !kept.has(account.id))
-				fail(at, 'This Account is archived: unarchive it first');
-			else if (side === 'fees' && account.type !== 'expense')
-				fail(at, 'A fee goes to an Expense Account');
-			else if (side !== 'from' && fromIds.has(account.id))
-				fail(at, 'The same Account is on both sides');
-		});
+	errors.push(...lineAccountErrors(chart, draft, kept));
 
 	// Fields.
 	if (!ISO_DATE.test(draft.date)) fail('date', 'Choose a date');
@@ -175,6 +160,41 @@ export function evaluateDraft(
 			? kindOf(chart, known)
 			: null;
 	return { amounts, filled, fromTotal, toTotal, kind, entries, errors };
+}
+
+/**
+ * Each line's Account must be a chosen, non-system Leaf Account, not archived unless `kept`;
+ * fees go to Expense Accounts; no Account is on both sides. Shared with the plan editor.
+ */
+export function lineAccountErrors(
+	chart: Chart,
+	lines: Pick<TransactionDraft, 'from' | 'to' | 'fees'>,
+	kept: ReadonlySet<string> = new Set()
+): DraftError[] {
+	const errors: DraftError[] = [];
+	const fail = (at: string, message: string) => errors.push({ at, message });
+	const fromIds = new Set(lines.from.map((l) => l.accountId).filter(Boolean));
+	const sides: [LineSide, DraftLine[]][] = [
+		['from', lines.from],
+		['to', lines.to],
+		['fees', lines.fees]
+	];
+	for (const [side, list] of sides)
+		list.forEach((line, index) => {
+			const at = `${side}.${index}.account`;
+			const account = chart.account(line.accountId);
+			if (!line.accountId || !account) fail(at, 'Choose an Account');
+			else if (account.id === OPENING_BALANCES || account.system)
+				fail(at, 'Opening Balances change from the Account itself');
+			else if (chart.isGroup(account.id)) fail(at, 'Choose an Account with no Accounts under it');
+			else if (account.archived && !kept.has(account.id))
+				fail(at, 'This Account is archived: unarchive it first');
+			else if (side === 'fees' && account.type !== 'expense')
+				fail(at, 'A fee goes to an Expense Account');
+			else if (side !== 'from' && fromIds.has(account.id))
+				fail(at, 'The same Account is on both sides');
+		});
+	return errors;
 }
 
 /** Every Entry ever recorded: no Transaction is dated after today, so this is the final Balance. */
