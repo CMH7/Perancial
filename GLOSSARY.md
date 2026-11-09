@@ -98,3 +98,7 @@ _Avoid_: posted, reconciled
 
 **Cleared Balance**
 The Balance of an Asset or Liability Account counting only Cleared Transactions. It is what the user compares with the bank app or statement.
+
+**Tag**
+A short label on a Transaction that gathers related Transactions across Accounts and kinds, such as a trip, an event or a project. A tag never says where money is or what kind of money it is; that is what Accounts are for.
+_Avoid_: category, label (as a stand-in for an Account)
