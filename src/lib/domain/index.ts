@@ -8,3 +8,4 @@ export * from './create-account.ts';
 export * from './edit-account.ts';
 export * from './account-actions.ts';
 export * from './transactions.ts';
+export * from './journal.ts';
