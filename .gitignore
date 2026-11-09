@@ -28,3 +28,6 @@ firebase-debug.log
 firestore-debug.log
 ui-debug.log
 *-service-account*.json
+
+# Firebase emulator data
+.emulator-data/
