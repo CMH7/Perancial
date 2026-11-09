@@ -150,3 +150,37 @@ describe('commitLedgerInBatches', () => {
 		expect(transactions).toHaveLength(501);
 	});
 });
+
+describe('Scheduled Transactions in the ledger', () => {
+	it('commits, publishes and deletes a plan', async () => {
+		const db = ownerDb(env());
+		const now = new Date();
+		const data = {
+			versions: [
+				{
+					from: '2026-01-05',
+					description: 'Rent',
+					note: '',
+					tags: [],
+					lines: [
+						{ accountId: 'bpi', side: 'from' as const, amount: null },
+						{ accountId: 'rent', side: 'to' as const, amount: 1200000 }
+					],
+					rule: { type: 'monthly' as const, day: 5, start: '2026-01-05' }
+				}
+			],
+			end: { type: 'never' as const },
+			occurrences: { '2026-02-05': { skipped: true } },
+			createdAt: now,
+			updatedAt: now
+		};
+		await commitLedger(db, OWNER_UID, [{ op: 'setScheduled', id: 'p1', data }]);
+		const { scheduled } = await firstSnapshot(db, (s) => s.scheduled.length === 1);
+		expect(scheduled[0]).toMatchObject({ id: 'p1', end: { type: 'never' } });
+		expect(scheduled[0].occurrences['2026-02-05']).toEqual({ skipped: true });
+		expect(scheduled[0].createdAt).toBeInstanceOf(Date);
+
+		await commitLedger(db, OWNER_UID, [{ op: 'deleteScheduled', id: 'p1' }]);
+		await firstSnapshot(db, (s) => s.scheduled.length === 0);
+	});
+});

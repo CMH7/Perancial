@@ -16,16 +16,20 @@ import {
 import {
 	ACCOUNT_TYPE_GUIDE,
 	AccountDoc,
+	ScheduledDoc,
 	TransactionDoc,
 	parseAccount,
+	parseScheduled,
 	parseTransaction,
 	type Account,
 	type ChartWrite,
+	type Scheduled,
 	type Transaction
 } from '#lib/domain/index.ts';
 
 export const accountsPath = (uid: string) => `users/${uid}/accounts`;
 export const transactionsPath = (uid: string) => `users/${uid}/transactions`;
+export const scheduledPath = (uid: string) => `users/${uid}/scheduled`;
 
 /** Firestore Timestamps → Date (duck-typed, so the emulator test SDK's Timestamps work too). */
 function fromFirestore(data: DocumentData): Record<string, unknown> {
@@ -105,12 +109,16 @@ export async function migrateLegacyTransactions(db: Firestore, uid: string): Pro
 	return legacy.size;
 }
 
-export type LedgerSnapshot = { accounts: Account[]; transactions: Transaction[] };
+export type LedgerSnapshot = {
+	accounts: Account[];
+	transactions: Transaction[];
+	scheduled: Scheduled[];
+};
 
 /**
- * Live view of all Accounts and Transactions. Every document is parsed; if any is malformed,
+ * Live view of all Accounts, Transactions and Scheduled Transactions. Every document is parsed; if any is malformed,
  * `onError` fires and no data is published, so a bad document never yields a wrong Balance.
- * `onData` fires once both collections have loaded, then on every change. Returns unsubscribe.
+ * `onData` fires once every collection has loaded, then on every change. Returns unsubscribe.
  */
 export function subscribeLedger(
 	db: Firestore,
@@ -120,8 +128,9 @@ export function subscribeLedger(
 ): () => void {
 	let accounts: Account[] | undefined;
 	let transactions: Transaction[] | undefined;
+	let scheduled: Scheduled[] | undefined;
 	const publish = () => {
-		if (accounts && transactions) onData({ accounts, transactions });
+		if (accounts && transactions && scheduled) onData({ accounts, transactions, scheduled });
 	};
 	const parseAll = <T>(
 		docs: { id: string; ref: { path: string }; data(): DocumentData }[],
@@ -155,9 +164,18 @@ export function subscribeLedger(
 		},
 		onError
 	);
+	const stopScheduled = onSnapshot(
+		collection(db, scheduledPath(uid)),
+		(snap) => {
+			scheduled = parseAll(snap.docs, parseScheduled);
+			publish();
+		},
+		onError
+	);
 	return () => {
 		stopAccounts();
 		stopTransactions();
+		stopScheduled();
 	};
 }
 
@@ -168,6 +186,8 @@ export const newAccountId = (db: Firestore, uid: string) =>
 	doc(collection(db, accountsPath(uid))).id;
 export const newTransactionId = (db: Firestore, uid: string) =>
 	doc(collection(db, transactionsPath(uid))).id;
+export const newScheduledId = (db: Firestore, uid: string) =>
+	doc(collection(db, scheduledPath(uid))).id;
 
 /** Validates every write with the Zod schemas, then commits them atomically in one batch. */
 export async function commitLedger(db: Firestore, uid: string, writes: LedgerWrite[]) {
@@ -186,6 +206,12 @@ export async function commitLedger(db: Firestore, uid: string, writes: LedgerWri
 			case 'deleteTransaction':
 				batch.delete(doc(db, transactionsPath(uid), w.id));
 				break;
+			case 'setScheduled':
+				batch.set(doc(db, scheduledPath(uid), w.id), ScheduledDoc.parse(w.data));
+				break;
+			case 'deleteScheduled':
+				batch.delete(doc(db, scheduledPath(uid), w.id));
+				break;
 		}
 	}
 	await batch.commit();
@@ -203,6 +229,7 @@ export async function commitLedgerInBatches(db: Firestore, uid: string, writes: 
 	for (const w of writes)
 		if (w.op === 'setAccount') AccountDoc.parse(w.data);
 		else if (w.op === 'setTransaction') TransactionDoc.parse(w.data);
+		else if (w.op === 'setScheduled') ScheduledDoc.parse(w.data);
 	for (let i = 0; i < writes.length; i += BATCH_LIMIT)
 		await commitLedger(db, uid, writes.slice(i, i + BATCH_LIMIT));
 }

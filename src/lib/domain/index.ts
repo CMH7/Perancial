@@ -11,3 +11,4 @@ export * from './transactions.ts';
 export * from './journal.ts';
 export * from './register.ts';
 export * from './tags.ts';
+export * from './scheduled.ts';

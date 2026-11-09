@@ -1,5 +1,11 @@
 // Reactive, app-wide view of the owner's Chart of Accounts, fed by Firestore listeners.
-import { buildChart, type Account, type ChartWrite, type Transaction } from '#lib/domain/index.ts';
+import {
+	buildChart,
+	type Account,
+	type ChartWrite,
+	type Scheduled,
+	type Transaction
+} from '#lib/domain/index.ts';
 import { db } from '#lib/firebase/app.ts';
 import {
 	commitLedger,
@@ -7,6 +13,7 @@ import {
 	ensureSystemAccounts,
 	migrateLegacyTransactions,
 	newAccountId,
+	newScheduledId,
 	newTransactionId,
 	subscribeLedger
 } from '#lib/firebase/ledger.ts';
@@ -14,6 +21,7 @@ import {
 class Ledger {
 	accounts = $state.raw<Account[]>([]);
 	transactions = $state.raw<Transaction[]>([]);
+	scheduled = $state.raw<Scheduled[]>([]);
 	/** True once both collections have loaded at least once. */
 	ready = $state(false);
 	/** Set when seeding fails or a document can't be parsed; data is not trusted then. */
@@ -41,6 +49,12 @@ class Ledger {
 		return newAccountId(db, this.#uid);
 	}
 
+	/** A fresh ID for a new Scheduled Transaction. */
+	newScheduledId() {
+		if (!this.#uid) throw new Error('Not signed in');
+		return newScheduledId(db, this.#uid);
+	}
+
 	/** A fresh ID for a new Transaction. */
 	newTransactionId() {
 		if (!this.#uid) throw new Error('Not signed in');
@@ -60,9 +74,10 @@ class Ledger {
 		this.#stop = subscribeLedger(
 			db,
 			uid,
-			({ accounts, transactions }) => {
+			({ accounts, transactions, scheduled }) => {
 				this.accounts = accounts;
 				this.transactions = transactions;
+				this.scheduled = scheduled;
 				this.ready = true;
 			},
 			(err) => {
@@ -78,6 +93,7 @@ class Ledger {
 		this.#uid = null;
 		this.accounts = [];
 		this.transactions = [];
+		this.scheduled = [];
 		this.ready = false;
 	}
 }
