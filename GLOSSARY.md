@@ -51,5 +51,8 @@ _Avoid_: starting amount
 **Opening Date**
 The date an Opening Balance is true as of.
 
+**Net Worth**
+Total Assets minus Total Liabilities: what the user would have left if they paid off everything they owe.
+
 **Balance**
 The amount an Account holds at a point in time. For a Leaf Account: Opening Balance plus the effect of everything after it. For a Group Account: the sum of its children's Balances.
