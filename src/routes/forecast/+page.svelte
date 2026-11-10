@@ -238,8 +238,8 @@
 						{/if}
 					</div>
 					<p class="text-sm text-gray-500">
-						Pay received {day(view.inflowWindow.from)}–{day(view.inflowWindow.to)} funds what's due
-						{day(view.fundedWindow.from)}–{day(view.fundedWindow.to)}.
+						Pay received {day(view.inflowWindow.from)}–{day(view.inflowWindow.to)} funds what's due in
+						the same days.
 					</p>
 				</div>
 				<div class="flex flex-wrap gap-2 text-sm">

@@ -4,7 +4,6 @@
 import type { IsoDate } from './chart.ts';
 import {
 	buildForecast,
-	fundedWindow,
 	fundingAccountsFor,
 	fundingCutoffOf,
 	nextCutoff,
@@ -84,7 +83,7 @@ function setTargetSources(
 
 /**
  * Allocates one later Outflow early: a one-time transfer from a Funding Account of this Cut-off
- * into the reserve, dated the first day this Cut-off funds; the target is then paid from the
+ * into the reserve, dated on the Cut-off date (or today, when later); the target is then paid from the
  * reserve, which joins the target Cut-off's Funding Accounts.
  */
 export function planAllocateEarly(
@@ -113,7 +112,8 @@ export function planAllocateEarly(
 	if (input.scheduled.some((p) => p.allocates && keyOf(p.allocates) === keyOf(target.link)))
 		throw new Error('That Outflow is already allocated');
 
-	const date = fundedWindow(cutoff).from;
+	// The day this Cut-off's pay lands, or today when that has passed.
+	const date = cutoff < input.today ? input.today : cutoff;
 	const amount = target.remaining;
 	const transfer: ChartWrite = {
 		op: 'setScheduled',
