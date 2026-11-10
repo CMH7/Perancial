@@ -138,5 +138,34 @@ An Occurrence whose date has passed without being Paid or skipped. It stays over
 One of the two pay dates in a month, the 15th and the 30th (the last day of February). Each Cut-off covers the days since the previous one: the 15th covers days 1–15, the 30th covers day 16 to the month's end. The pay received in the days up to a Cut-off funds the expenses due from the next day until the next Cut-off. Planning and forecasting are grouped by cut-off.
 
 **Forecast**
-The plan for one Cut-off: its expected incomes, the planned expenses they fund, and which Accounts pay each one.
+The plan for one Cut-off: its Inflows, the Outflows they fund, and which Accounts pay each one.
 _Avoid_: budget
+
+**Inflow**
+Money expected to arrive in an Asset Account in a Cut-off: pay, a repayment from someone who owes the owner, or a loan received. It is received when a Transaction pays it. Money already held, such as a leftover or money set aside earlier, is not an Inflow.
+_Avoid_: income (that is the Account Type)
+
+**Outflow**
+Money planned to leave the owner's Asset Accounts in the days a Cut-off funds: a bill, an Installment Plan payment, a card payment, a transfer to savings. It is Paid when Transactions pay it. A charge made on a card is not an Outflow; paying the card is.
+_Avoid_: expense (that is the Account Type)
+
+**Section**
+A heading that gathers a Forecast's Inflows or Outflows, such as Important, a credit card, or Internal Transfers. Every Liability paid in a Cut-off, such as a card or a person the owner owes, has its own Section: the payment is the Outflow, and the charges made on that Liability are listed under it.
+_Avoid_: group (that is the Group Account), category
+
+**Funding Account**
+An Asset Leaf Account chosen for one Cut-off's Forecast. Outflows can only be paid from Funding Accounts.
+
+**Paying source**
+A Funding Account chosen to fund part of an Outflow, with an amount. An Outflow can have several.
+_Avoid_: Paying Acc
+
+**Early allocation**
+Moving money into a reserve Account during an earlier Cut-off for a specific Outflow that a later Cut-off funds, so the Outflow is then paid from that reserve. The reserve is an ordinary Asset Leaf Account the owner sets up.
+_Avoid_: E.Alloc (fine as a column label), advance
+
+**Carried over**
+An Outflow still not Paid, or an Inflow still not received, when the days its Cut-off covers have ended. It shows in the Forecast for today's days instead, until it is Paid, received or skipped.
+
+**Unplanned**
+A Transaction from a Funding Account, dated in the days a Cut-off funds, that pays no Outflow. It lowers what is actually left in that Account but was never part of the plan.
