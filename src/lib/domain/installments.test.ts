@@ -433,6 +433,15 @@ describe('plan page helpers', () => {
 			);
 			expect(d).toMatchObject({ title: 'UB', tags: ['babu'], rows: three.rows, createdAt: now });
 		});
+		it('sets and clears the Forecast Section', () => {
+			const c = buildChart(book, []);
+			const set = data(planEditTerms(c, [three], three, { section: 'important' }, { now: later }));
+			expect(set.section).toBe('important');
+			const plan = { ...three, section: 'important' };
+			expect(data(planEditTerms(c, [plan], plan, { section: null }, { now: later })).section).toBe(
+				null
+			);
+		});
 		it('moves to another free Liability, never one another plan holds', () => {
 			const c = buildChart(book, []);
 			const other = {

@@ -351,7 +351,7 @@ export function archiveOffer(
 
 /** The plan terms that can change after creation; rows change one at a time instead. */
 export type TermsPatch = Partial<
-	Pick<InstallmentTerms, 'title' | 'tags' | 'note' | 'purchaseDate' | 'accounts'>
+	Pick<InstallmentTerms, 'title' | 'tags' | 'note' | 'purchaseDate' | 'accounts' | 'section'>
 >;
 
 /** Edits a plan's terms. Existing Transactions are never rewritten. */

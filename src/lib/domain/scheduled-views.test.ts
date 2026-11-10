@@ -135,6 +135,15 @@ describe('evaluatePlanDraft', () => {
 describe('planCreatePlan and planDraftFrom', () => {
 	const chart = buildChart(accounts, []);
 
+	it('keeps the Forecast Section through create and edit', () => {
+		const [w] = planCreatePlan(chart, draft({ section: 'important' }), { id: 'p9', now });
+		if (w.op !== 'setScheduled') throw new Error('expected a plan');
+		expect(w.data.section).toBe('important');
+		expect(planDraftFrom({ id: 'p9', ...w.data }).section).toBe('important');
+		const [plain] = planCreatePlan(chart, draft(), { id: 'p8', now });
+		expect(plain.op === 'setScheduled' && 'section' in plain.data).toBe(false);
+	});
+
 	it('writes a plan whose first version starts with the rule, lines From, To, then fees', () => {
 		const writes = planCreatePlan(
 			chart,

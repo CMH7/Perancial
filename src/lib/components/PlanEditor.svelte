@@ -11,6 +11,7 @@
 		type RepeatRule
 	} from '#lib/domain/index.ts';
 	import { ledger } from '#lib/ledger.svelte.ts';
+	import SectionPicker from './SectionPicker.svelte';
 
 	let {
 		initial,
@@ -175,6 +176,10 @@
 		/>
 		{#if shown('description')}<span class="text-xs text-red-600">{shown('description')}</span>{/if}
 	</label>
+
+	<div class="max-w-sm">
+		<SectionPicker value={draft.section} onchange={(id) => (draft.section = id)} />
+	</div>
 
 	<div class="grid gap-6 md:grid-cols-2">
 		{@render column('from', 'From', draft.from)}
