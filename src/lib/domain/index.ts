@@ -17,3 +17,4 @@ export * from './scheduled-views.ts';
 export * from './paying.ts';
 export * from './installments.ts';
 export * from './installment-create.ts';
+export * from './installment-views.ts';
