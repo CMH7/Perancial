@@ -13,6 +13,10 @@ export const load: LayoutLoad = async ({ url }) => {
 	const owner = isOwner(user?.uid);
 	const onLogin = url.pathname === '/login';
 
+	// PROTOTYPE: let /prototype/* render signed out in dev (stub data). Drop before merging anything.
+	const prototype = import.meta.env.DEV && url.pathname.startsWith('/prototype');
+	if (prototype && !owner) return { user: null, owner };
+
 	// Every route except /login needs the owner. /login itself handles non-owner sign-ins.
 	if (!owner && !onLogin) redirect(307, resolve('/login'));
 	if (owner && onLogin) redirect(307, resolve('/'));

@@ -22,7 +22,9 @@
 	// The load gate only runs on navigation; this catches sign-out mid-session.
 	$effect(() =>
 		onAuthStateChanged(auth, (user) => {
-			if (!user && page.url.pathname !== '/login') goto(resolve('/login'));
+			// PROTOTYPE: /prototype/* stays signed out in dev. Drop before merging anything.
+			const prototype = import.meta.env.DEV && page.url.pathname.startsWith('/prototype');
+			if (!user && page.url.pathname !== '/login' && !prototype) goto(resolve('/login'));
 		})
 	);
 </script>
