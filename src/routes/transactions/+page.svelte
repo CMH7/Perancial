@@ -63,6 +63,7 @@
 	const selectedPending = $derived(
 		rows.filter((r) => selected.has(r.id) && r.status === 'pending')
 	);
+	const selectedCleared = $derived(selected.size - selectedPending.length);
 
 	/** Ticks or unticks one row; with Shift, every row between it and the last one ticked. */
 	function pick(index: number, on: boolean, range: boolean) {
@@ -197,6 +198,13 @@
 						title={selectedPending.length ? '' : 'None of the selected rows is pending'}
 						onclick={() => bulk({ status: 'cleared' })}
 						>Mark cleared{selectedPending.length ? ` (${selectedPending.length})` : ''}</button
+					>
+					<button
+						class="rounded border border-sky-300 bg-white px-3 py-1 hover:bg-sky-100 disabled:opacity-50"
+						disabled={busy || selectedCleared === 0}
+						title={selectedCleared ? '' : 'None of the selected rows is cleared'}
+						onclick={() => bulk({ status: 'pending' })}
+						>Mark pending{selectedCleared ? ` (${selectedCleared})` : ''}</button
 					>
 					<span class="flex items-center gap-1">
 						<input

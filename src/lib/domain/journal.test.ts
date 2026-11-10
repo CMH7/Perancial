@@ -166,6 +166,15 @@ describe('planQuickChange', () => {
 		}
 	});
 
+	it('sets several cleared Transactions back to pending', () => {
+		const writes = planQuickChange(chart, ['rent', 'salary', 'grab'], { status: 'pending' }, opts);
+		expect(writes.map((w) => w.id)).toEqual(['rent', 'salary']);
+		expect(writes).toEqual([
+			expect.objectContaining({ data: expect.objectContaining({ status: 'pending' }) }),
+			expect.objectContaining({ data: expect.objectContaining({ status: 'pending' }) })
+		]);
+	});
+
 	it('moves the date and keeps everything else, links included', () => {
 		const linked = buildChart(chart.all(), [
 			...transactions.filter((x) => x.id !== 'rent'),
