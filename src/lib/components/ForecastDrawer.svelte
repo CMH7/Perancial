@@ -9,6 +9,7 @@
 		formatPicks,
 		parseAmount,
 		planSetSources,
+		planUndoAllocation,
 		recordPicks,
 		shortDate,
 		sourceEditErrors,
@@ -65,6 +66,26 @@
 		if (!accountId) return;
 		rows.push({ accountId, amount: text(Math.max(0, o.total - covered)), paid: 0 });
 	}
+	// Undo an Early allocation, from the transfer or from its target.
+	const transfer = $derived(
+		o.ealloc
+			? input.scheduled.find((p) => p.id === o.link.planId)
+			: input.scheduled.find(
+					(p) =>
+						p.allocates && `${p.allocates.plan}:${p.allocates.planId}:${p.allocates.due}` === o.key
+				)
+	);
+	let undoError = $state('');
+	async function undo() {
+		undoError = '';
+		try {
+			if (transfer) await ledger.commit(planUndoAllocation(input, transfer, new Date()));
+			if (o.ealloc) onclose();
+		} catch (err) {
+			undoError = (err as Error).message;
+		}
+	}
+
 	async function saveSources() {
 		saveError = '';
 		saving = true;
@@ -137,6 +158,12 @@
 	{#if o.allocatedIn}<p class="text-xs text-violet-700">
 			Allocated in the {shortDate(o.allocatedIn)} Cut-off.
 		</p>{/if}
+	{#if transfer}
+		<p class="text-xs">
+			<button class="underline" onclick={undo}>Undo allocation</button>
+			{#if undoError}<span class="block text-red-600">{undoError}</span>{/if}
+		</p>
+	{/if}
 	{#if o.carried === 'in'}<p class="text-xs text-amber-700">Carried over: still unpaid.</p>{/if}
 	{#if o.carried && o.carried !== 'in'}<p class="text-xs text-gray-500">
 			Carried to the {shortDate(o.carried)} Forecast; this one keeps only what was paid.

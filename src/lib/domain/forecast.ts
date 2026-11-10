@@ -5,7 +5,7 @@ import type { AccountUser } from './account-actions.ts';
 import type { Chart, IsoDate } from './chart.ts';
 import { cutoffOf } from './installment-views.ts';
 import { rowStatuses, rowTotal } from './installments.ts';
-import { type PaidStatus } from './payable.ts';
+import { paymentsFor, txTotal, type PaidStatus } from './payable.ts';
 import { addDays, occurrenceStatus, occurrencesOf, type Occurrence } from './scheduled.ts';
 import type {
 	Account,
@@ -206,6 +206,8 @@ export type ForecastOutflow = {
 	ealloc?: PaidLink;
 	/** The Cut-off whose Early allocation set this Outflow's money aside. */
 	allocatedIn?: IsoDate;
+	/** How much of that Early allocation's transfer has been recorded (money in the reserve). */
+	allocatedPaid?: number;
 	/** `in`: carried into this Forecast; a date: carried out to that Cut-off's Forecast. */
 	carried?: 'in' | IsoDate;
 	plan: Scheduled | Installment;
@@ -515,22 +517,32 @@ function outflowsFromRows(ctx: Ctx, range: DateRange): ForecastOutflow[] {
 	});
 }
 
-type Partial_ = Omit<ForecastOutflow, 'unfunded' | 'remaining' | 'allocatedIn' | 'carried'>;
+type Partial_ = Omit<
+	ForecastOutflow,
+	'unfunded' | 'remaining' | 'allocatedIn' | 'allocatedPaid' | 'carried'
+>;
 
 function finishOutflow(ctx: Ctx, o: Partial_): ForecastOutflow {
 	const covered = o.sources.reduce((s, x) => s + (x.valid ? x.amount : 0), 0);
 	const done = o.status === 'paid' || o.status === 'skipped';
 	const allocator = ctx.input.scheduled.find((p) => p.allocates && keyOf(p.allocates) === o.key);
 	// The Cut-off that funds the allocating transfer's (first) Occurrence.
-	const transferDate = allocator
-		? occurrencesOf(allocator, { from: '1900-01-01', to: addDays(o.due, 366) })[0]?.date
+	const transfer = allocator
+		? occurrencesOf(allocator, { from: '1900-01-01', to: addDays(o.due, 366) })[0]
 		: undefined;
-	const allocatedIn = transferDate ? fundingCutoffOf(transferDate) : undefined;
+	const allocatedIn = transfer ? fundingCutoffOf(transfer.date) : undefined;
+	const allocatedPaid = transfer
+		? paymentsFor(ctx.input.chart, scheduledLink(transfer.planId, transfer.due)).reduce(
+				(s, tx) => s + txTotal(tx),
+				0
+			)
+		: undefined;
 	return {
 		...o,
 		unfunded: done ? 0 : Math.max(0, o.total - covered),
 		remaining: done ? 0 : Math.max(0, o.total - o.paid),
-		allocatedIn
+		allocatedIn,
+		allocatedPaid
 	};
 }
 
@@ -768,9 +780,14 @@ function buildLanes(
 		const transfers = outflows.filter(
 			(o) => o.kind === 'transfer' && o.transferTo === accountId && !o.ealloc && o.carried !== 'in'
 		);
-		const allocations = outflows
-			.filter((o) => o.allocatedIn)
-			.flatMap((o) => o.sources.filter((s) => s.accountId === accountId));
+		const allocated = outflows.filter((o) => o.allocatedIn);
+		const allocations = allocated.flatMap((o) =>
+			o.sources.filter((s) => s.accountId === accountId)
+		);
+		// Money is in the reserve only once the transfer is recorded.
+		const allocatedIn = allocated
+			.filter((o) => o.sources.some((s) => s.accountId === accountId))
+			.reduce((s, o) => s + Math.min(o.allocatedPaid ?? 0, o.total), 0);
 		const draws = outflows.flatMap((o) =>
 			o.sources.filter((s) => s.accountId === accountId && s.valid).map((s) => ({ o, s }))
 		);
@@ -782,7 +799,7 @@ function buildLanes(
 		const received =
 			mine.reduce((s, i) => s + i.received, 0) +
 			transfers.reduce((s, o) => s + Math.min(o.paid, o.total), 0) +
-			allocatedFor;
+			allocatedIn;
 		const paid = draws.reduce((s, x) => s + x.s.paid, 0) + spent.reduce((s, u) => s + u.amount, 0);
 		const ea = draws.filter((x) => x.o.ealloc);
 		return {

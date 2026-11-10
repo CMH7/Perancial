@@ -386,7 +386,9 @@ describe('Early allocation', () => {
 		expect(b.lanes.find((l) => l.accountId === 'reserve')).toMatchObject({
 			allocatedFor: 250_000,
 			inn: 250_000,
-			plannedLeft: 0
+			plannedLeft: 0,
+			// Not in the reserve yet: the transfer isn't recorded.
+			received: 0
 		});
 	});
 });
