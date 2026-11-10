@@ -4,7 +4,13 @@ import { buildChart, type Chart, type IsoDate } from './chart.ts';
 import { inheritsMoney, planCreateAccount } from './create-account.ts';
 import { datesOf, flatRows, planSaveInstallment, rowAdditionals } from './installments.ts';
 import { parseAmount } from './money.ts';
-import type { Additional, Installment, InstallmentRow, RepeatRule } from './schemas.ts';
+import type {
+	Additional,
+	Installment,
+	InstallmentRow,
+	RepeatRule,
+	Transaction
+} from './schemas.ts';
 import { normalizeTags, type DraftError, type TransactionDraft } from './transactions.ts';
 import type { ChartWrite } from './writes.ts';
 
@@ -45,6 +51,8 @@ export type InstallmentDraft = {
 	/** '' means Expenses › Finance charges, made or reused. */
 	interestId: string;
 	feesId: string;
+	/** The Transaction this plan is made from, when started from one. */
+	madeFrom?: string;
 };
 
 export type EvaluatedInstallment = {
@@ -333,13 +341,68 @@ export function planCreateInstallmentFromDraft(
 				rule: ev.rule!,
 				trackedFrom: ev.trackedFrom,
 				accounts,
-				rows: ev.rows
+				rows: ev.rows,
+				...(d.madeFrom ? { madeFrom: d.madeFrom } : {})
 			},
 			{ now }
 		)
 	);
 	return { writes, planId, liabilityId, historyId };
 }
+
+/** The same day one month later, or the month's last day when it is shorter. */
+function nextMonth(d: IsoDate): IsoDate {
+	const [y, m, day] = [+d.slice(0, 4), +d.slice(5, 7), +d.slice(8, 10)];
+	const [ny, nm] = m === 12 ? [y + 1, 1] : [y, m + 1];
+	const last = new Date(Date.UTC(ny, nm, 0)).getUTCDate();
+	const p = (n: number) => String(n).padStart(2, '0');
+	return `${ny}-${p(nm)}-${p(Math.min(day, last))}`;
+}
+
+/**
+ * The create form started from a Transaction. Its From Account picks the kind: an Asset gives an
+ * Internal Installment Plan repaying it; a Liability (a card) gives a lender plan whose new
+ * Liability goes under the card and is paid from it. Title, tags, purchase date and principal come
+ * from the Transaction; the first row is a month after it.
+ */
+export function installmentDraftFromTransaction(
+	chart: Chart,
+	tx: Transaction,
+	base: InstallmentDraft
+): InstallmentDraft {
+	const fromId = tx.entries.find((e) => e.amount < 0 && !e.fee)?.accountId ?? '';
+	const fromType = chart.account(fromId)?.type;
+	const principal = tx.entries
+		.filter((e) => e.amount > 0 && !e.fee)
+		.reduce((s, e) => s + e.amount, 0);
+	const d: InstallmentDraft = {
+		...structuredClone(base),
+		title: tx.description,
+		tags: [...tx.tags],
+		purchaseDate: tx.date!,
+		firstDate: nextMonth(tx.date!),
+		amount: amountText(principal),
+		madeFrom: tx.id
+	};
+	if (fromType === 'asset') return { ...d, kind: 'internal', repaidAssetId: fromId, payingId: '' };
+	if (fromType === 'liability')
+		return {
+			...d,
+			kind: 'lender',
+			liability: {
+				mode: 'new',
+				parentId: fromId,
+				name: tx.description,
+				historyName: 'Card spending'
+			},
+			payingId: fromId
+		};
+	return d;
+}
+
+/** The plan made from this Transaction, if any. */
+export const planMadeFrom = (plans: Installment[], txId: string) =>
+	plans.find((p) => p.madeFrom === txId);
 
 /** The take-on Transactions the app offers after saving a plan. All optional and never linked. */
 export type TakeOn = 'purchase' | 'move-debt' | 'card-payment';

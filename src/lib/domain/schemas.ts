@@ -236,6 +236,8 @@ export const InstallmentDoc = z.object({
 		fees: z.string().min(1).nullable()
 	}),
 	rows: z.array(InstallmentRow).min(1, 'A plan needs at least one row').max(600),
+	/** The Transaction this plan was made from, if any; it may since have been deleted. */
+	madeFrom: z.string().min(1).nullable().optional(),
 	createdAt: z.date(),
 	updatedAt: z.date()
 });

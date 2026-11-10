@@ -8,6 +8,7 @@
 		journalRow,
 		paidLinkLabel,
 		planDeleteTransaction,
+		planMadeFrom,
 		planSetStatus,
 		planUnlink,
 		type ActionCheck,
@@ -39,6 +40,13 @@
 			? paidLinkLabel(tx.pays, { scheduled: ledger.scheduled, installments: ledger.installments })
 			: null
 	);
+
+	/** The Installment Plan made from this Transaction, if any. */
+	const madeInto = $derived(planMadeFrom(ledger.installments, tx.id));
+	function makePlan() {
+		// eslint-disable-next-line svelte/no-navigation-without-resolve -- resolved path plus a query
+		goto(`${resolve('/installments/new')}?fromTx=${encodeURIComponent(tx.id)}`);
+	}
 
 	async function unlink() {
 		statusError = '';
@@ -153,16 +161,30 @@
 		</p>
 	{/if}
 
+	{#if madeInto}
+		<p class="rounded bg-violet-50 p-2 text-violet-900">
+			Repaid by
+			<a class="underline" href={resolve('/installments/[id]', { id: madeInto.id })}
+				>{madeInto.title}</a
+			>
+		</p>
+	{/if}
+
 	{#if tx.note}
 		<p class="rounded bg-yellow-50 p-3 whitespace-pre-line text-gray-700">{tx.note}</p>
 	{/if}
 
-	<div class="flex gap-2">
+	<div class="flex flex-wrap gap-2 whitespace-nowrap">
 		<a
 			href={resolve('/transactions/[id]', { id: tx.id })}
 			class="rounded border px-3 py-1 hover:bg-gray-50">Edit</a
 		>
 		<button onclick={duplicate} class="rounded border px-3 py-1 hover:bg-gray-50">Duplicate</button>
+		{#if !madeInto && tx.origin === 'normal'}
+			<button onclick={makePlan} class="rounded border px-3 py-1 hover:bg-gray-50"
+				>Make installment plan</button
+			>
+		{/if}
 		<button
 			onclick={() => (confirmDelete = true)}
 			class="rounded border px-3 py-1 text-red-700 hover:bg-red-50">Delete</button

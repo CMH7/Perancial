@@ -85,6 +85,15 @@
 				<button class="text-red-700" onclick={() => (dialog = 'delete')}>Delete</button>
 			</div>
 		</div>
+		{#if plan.madeFrom}
+			{@const source = chart.transactions().find((t) => t.id === plan.madeFrom)}
+			<p class="text-sm text-gray-500">
+				Made from
+				{#if source}<a class="underline" href={resolve('/transactions/[id]', { id: source.id })}
+						>“{source.description}”, {shortDate(source.date!)}</a
+					>{:else}a deleted Transaction{/if}
+			</p>
+		{/if}
 		<p class="mb-4 text-sm text-gray-500">
 			{plan.kind === 'internal' ? 'Repays' : 'Owed in'}
 			{name(plan.accounts.repaid)} · paid from {name(plan.accounts.paying)} · bought {shortDate(

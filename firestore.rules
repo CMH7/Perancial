@@ -21,7 +21,9 @@ service cloud.firestore {
           return ['name', 'description', 'type', 'parentId', 'system', 'archived', 'order', 'createdAt', 'updatedAt'];
         }
         function validShape(d) {
-          return d.keys().hasOnly(fields()) && d.keys().hasAll(fields())
+          return d.keys().hasOnly(fields().concat(['madeFrom'])) && d.keys().hasAll(fields())
+            && (!('madeFrom' in d) || d.madeFrom == null
+              || (d.madeFrom is string && d.madeFrom.size() >= 1))
             && d.name is string && d.description is string
             && d.type in ['asset', 'liability', 'equity', 'income', 'expense']
             && (d.parentId == null || d.parentId is string)
@@ -95,7 +97,9 @@ service cloud.firestore {
           return ['versions', 'end', 'occurrences', 'createdAt', 'updatedAt'];
         }
         function validPlan(d) {
-          return d.keys().hasOnly(fields()) && d.keys().hasAll(fields())
+          return d.keys().hasOnly(fields().concat(['madeFrom'])) && d.keys().hasAll(fields())
+            && (!('madeFrom' in d) || d.madeFrom == null
+              || (d.madeFrom is string && d.madeFrom.size() >= 1))
             && d.versions is list && d.versions.size() >= 1 && d.versions.size() <= 100
             && d.end is map && d.occurrences is map
             && d.createdAt is timestamp && d.updatedAt is timestamp;
@@ -113,7 +117,9 @@ service cloud.firestore {
             'accounts', 'rows', 'createdAt', 'updatedAt'];
         }
         function validInstallment(d) {
-          return d.keys().hasOnly(fields()) && d.keys().hasAll(fields())
+          return d.keys().hasOnly(fields().concat(['madeFrom'])) && d.keys().hasAll(fields())
+            && (!('madeFrom' in d) || d.madeFrom == null
+              || (d.madeFrom is string && d.madeFrom.size() >= 1))
             && d.kind in ['lender', 'internal']
             && d.title is string && d.title.size() >= 1 && d.title.size() <= 200
             && d.note is string && d.note.size() <= 5000

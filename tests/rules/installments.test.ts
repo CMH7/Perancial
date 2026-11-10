@@ -48,4 +48,12 @@ describe('Installment Plans', () => {
 		await assertFails(setDoc(ref(db, 'p1'), { ...visa, accounts: 'anv15' }));
 		await assertFails(setDoc(ref(db, 'p1'), { ...visa, trackedFrom: '1' }));
 	});
+
+	it('take an optional Transaction the plan was made from', async () => {
+		const db = ownerDb(env());
+		await assertSucceeds(setDoc(ref(db, 'p1'), { ...visa, madeFrom: 'tx1' }));
+		await assertSucceeds(setDoc(ref(db, 'p2'), { ...visa, madeFrom: null }));
+		await assertFails(setDoc(ref(db, 'p3'), { ...visa, madeFrom: 5 }));
+		await assertFails(setDoc(ref(db, 'p4'), { ...visa, madeFrom: '' }));
+	});
 });
