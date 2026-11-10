@@ -7,6 +7,7 @@
 	import { page } from '$app/state';
 	import AllocatePanel from '#lib/components/AllocatePanel.svelte';
 	import ForecastAddPanel from '#lib/components/ForecastAddPanel.svelte';
+	import Drawer from '#lib/components/Drawer.svelte';
 	import ForecastDrawer from '#lib/components/ForecastDrawer.svelte';
 	import {
 		buildForecast,
@@ -545,9 +546,7 @@
 	</main>
 
 	{#if adding && view}
-		<div
-			class="sticky top-0 h-screen w-[28rem] shrink-0 overflow-y-auto border-l bg-white p-6 shadow-xl"
-		>
+		<Drawer id="forecast-add" width={512}>
 			{#key adding}
 				<ForecastAddPanel
 					kind={adding}
@@ -558,11 +557,9 @@
 					onclose={() => (adding = null)}
 				/>
 			{/key}
-		</div>
+		</Drawer>
 	{:else if open && view}
-		<div
-			class="sticky top-0 h-screen w-96 shrink-0 overflow-y-auto border-l bg-white p-6 shadow-xl"
-		>
+		<Drawer id="forecast-outflow">
 			<ForecastDrawer
 				outflow={open}
 				{cutoff}
@@ -571,7 +568,7 @@
 				{name}
 				onclose={() => (openKey = null)}
 			/>
-		</div>
+		</Drawer>
 	{/if}
 </div>
 
