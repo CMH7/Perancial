@@ -6,6 +6,7 @@
 	import {
 		formatAmount,
 		journalRow,
+		paidLinkLabel,
 		planDeleteTransaction,
 		planSetStatus,
 		planUnlink,
@@ -31,22 +32,13 @@
 			.slice(1)
 			.map((a) => a.name)
 			.join(' › ') || '(deleted Account)';
-	const due = (iso: string) =>
-		new Date(`${iso}T00:00`).toLocaleDateString('en-PH', {
-			day: 'numeric',
-			month: 'short',
-			year: 'numeric'
-		});
 
-	/** What the Transaction pays, by name: "Rent, 5 Dec 2026". */
-	const paysLabel = $derived.by(() => {
-		if (!tx.pays) return '';
-		const plan = ledger.scheduled.find((p) => p.id === tx.pays!.planId);
-		const name =
-			plan?.versions.findLast((v) => v.from <= tx.pays!.due)?.description ??
-			plan?.versions[0].description;
-		return `${name ?? 'a deleted plan'}, ${due(tx.pays.due)}`;
-	});
+	/** What the Transaction pays, by name: "Rent, 5 Dec 2026" or "Claude #9, 9 Nov 2026". */
+	const paysLabel = $derived(
+		tx.pays
+			? paidLinkLabel(tx.pays, { scheduled: ledger.scheduled, installments: ledger.installments })
+			: null
+	);
 
 	async function unlink() {
 		statusError = '';
@@ -145,12 +137,16 @@
 		<p class="flex items-center justify-between gap-2 rounded bg-sky-50 p-2 text-sky-900">
 			<span>
 				Pays:
-				{#if ledger.scheduled.some((p) => p.id === tx.pays?.planId)}
+				{#if paysLabel?.kind === 'scheduled'}
 					<a class="underline" href={resolve('/scheduled/[id]', { id: tx.pays.planId })}
-						>{paysLabel}</a
+						>{paysLabel.text}</a
+					>
+				{:else if paysLabel?.kind === 'installment'}
+					<a class="underline" href={resolve('/installments/[id]', { id: tx.pays.planId })}
+						>{paysLabel.text}</a
 					>
 				{:else}
-					{paysLabel}
+					{paysLabel?.text}
 				{/if}
 			</span>
 			<button onclick={unlink} class="rounded px-2 py-0.5 text-xs hover:bg-sky-100">Unlink</button>

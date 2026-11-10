@@ -2,7 +2,7 @@
 	// Record a new Transaction. `?copy=<id>` starts from a duplicate of that Transaction;
 	// `?plan=<id>&due=<date>` records that Scheduled Transaction occurrence (Record), linked to it;
 	// `?takeOn=<installmentId>&variant=purchase|move-debt|card-payment[&to=<id>]` prefills taking on
-	// an Installment Plan (never linked).
+	// an Installment Plan (never linked); `?installment=<id>&due=<date>` records that row, linked.
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
@@ -11,6 +11,7 @@
 		addDays,
 		duplicateDraft,
 		emptyDraft,
+		installmentRecordDraft,
 		occurrencesOf,
 		occurrenceStatus,
 		recordDraft,
@@ -46,6 +47,15 @@
 		const pays: PaidLink = { plan: 'scheduled', planId: plan.id, due };
 		return { view, pays };
 	});
+	const recordingRow = $derived.by(() => {
+		const plan = ledger.installments.find((p) => p.id === params.get('installment'));
+		const due = params.get('due');
+		const row = plan?.rows.find((r) => r.due === due);
+		if (!plan || !row) return undefined;
+		const draft = installmentRecordDraft(ledger.chart, plan, row.due, { today: todayIso });
+		const pays: PaidLink = { plan: 'installment', planId: plan.id, due: row.due };
+		return { plan, row, draft, pays };
+	});
 	const takingOn = $derived.by(() => {
 		const plan = ledger.installments.find((p) => p.id === params.get('takeOn'));
 		const variant = params.get('variant') as TakeOn | null;
@@ -60,11 +70,13 @@
 	const initial = $derived(
 		round === 0 && recording
 			? recordDraft(recording.view, { today: todayIso })
-			: round === 0 && takingOn
-				? takingOn.draft
-				: round === 0 && source
-					? duplicateDraft(source, { today: todayIso })
-					: emptyDraft({ today: todayIso })
+			: round === 0 && recordingRow
+				? recordingRow.draft
+				: round === 0 && takingOn
+					? takingOn.draft
+					: round === 0 && source
+						? duplicateDraft(source, { today: todayIso })
+						: emptyDraft({ today: todayIso })
 	);
 </script>
 
@@ -88,6 +100,13 @@
 				anything before saving.
 			</p>
 		{/if}
+		{#if recordingRow && round === 0}
+			<p class="mb-4 rounded-lg bg-sky-50 p-3 text-sm text-sky-900">
+				Recording {recordingRow.plan.title} #{recordingRow.row.n}, due {shortDate(
+					recordingRow.row.date
+				)}. Change anything before saving.
+			</p>
+		{/if}
 		{#if takingOn && round === 0}
 			<p class="mb-4 rounded-lg bg-sky-50 p-3 text-sm text-sky-900">
 				Taking on {takingOn.plan.title}. Optional: change anything, or leave without saving.
@@ -96,9 +115,11 @@
 		{#key round}
 			<TransactionForm
 				{initial}
-				pays={round === 0 ? recording?.pays : undefined}
+				pays={round === 0 ? (recording?.pays ?? recordingRow?.pays) : undefined}
 				onsaved={(id) => {
 					if (recording && round === 0) return goto(resolve('/scheduled'));
+					if (recordingRow && round === 0)
+						return goto(resolve('/installments/[id]', { id: recordingRow.plan.id }));
 					savedId = id;
 					round++;
 				}}
