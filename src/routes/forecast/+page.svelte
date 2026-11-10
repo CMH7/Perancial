@@ -5,6 +5,7 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
+	import AllocatePanel from '#lib/components/AllocatePanel.svelte';
 	import ForecastDrawer from '#lib/components/ForecastDrawer.svelte';
 	import {
 		buildForecast,
@@ -167,6 +168,8 @@
 		)
 	);
 
+	let allocating = $state(false);
+
 	// Funding Accounts: pick per Cut-off.
 	let managing = $state(false);
 	let picked = $state<string[]>([]);
@@ -276,6 +279,9 @@
 			<div class="mb-3 flex flex-wrap items-center gap-2 text-sm">
 				<button class="rounded border bg-white px-2 py-1" onclick={manage}>Funding Accounts…</button
 				>
+				<button class="rounded border bg-white px-2 py-1" onclick={() => (allocating = !allocating)}
+					>Allocate early…</button
+				>
 				{#if !view.storedFunding}<span class="text-xs text-gray-500"
 						>Same as the previous Cut-off until you change them.</span
 					>{/if}
@@ -284,6 +290,16 @@
 					splits it · right-click or hold for more</span
 				>
 			</div>
+
+			{#if allocating}
+				<AllocatePanel
+					{input}
+					{cutoff}
+					lanes={view.lanes}
+					{name}
+					onclose={() => (allocating = false)}
+				/>
+			{/if}
 
 			{#if managing}
 				<div class="mb-3 max-w-xl rounded-lg border bg-white p-3 text-sm">
