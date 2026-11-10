@@ -3,6 +3,7 @@
 	// detail side panel.
 	import { resolve } from '$app/paths';
 	import { KIND } from '#lib/components/kind.ts';
+	import Drawer from '#lib/components/Drawer.svelte';
 	import TransactionPanel from '#lib/components/TransactionPanel.svelte';
 	import {
 		ACCOUNT_TYPE_GUIDE,
@@ -157,10 +158,8 @@
 	</main>
 
 	{#if open}
-		<div
-			class="sticky top-0 h-screen w-96 shrink-0 overflow-y-auto border-l bg-white p-6 shadow-xl"
-		>
+		<Drawer id="journal-transaction">
 			<TransactionPanel tx={open} onclose={() => (openId = null)} ontag={(tag) => (f.tag = tag)} />
-		</div>
+		</Drawer>
 	{/if}
 </div>

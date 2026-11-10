@@ -162,7 +162,7 @@
 	</section>
 {/snippet}
 
-<form onsubmit={submit} class="space-y-5 text-sm" novalidate>
+<form onsubmit={submit} class="@container space-y-5 text-sm" novalidate>
 	<h1 class="text-xl font-semibold">{heading}</h1>
 	{#if notice}<p class="rounded-lg bg-amber-50 p-3 text-amber-900">{notice}</p>{/if}
 
@@ -181,7 +181,8 @@
 		<SectionPicker value={draft.section} onchange={(id) => (draft.section = id)} />
 	</div>
 
-	<div class="grid gap-6 md:grid-cols-2">
+	<!-- Side by side only when the form itself is wide (it also sits in narrow drawers). -->
+	<div class="grid gap-6 @2xl:grid-cols-2">
 		{@render column('from', 'From', draft.from)}
 		{@render column('to', 'To', draft.to)}
 	</div>
