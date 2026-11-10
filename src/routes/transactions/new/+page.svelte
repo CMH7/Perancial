@@ -3,6 +3,8 @@
 	// `?plan=<id>&due=<date>` records that Scheduled Transaction occurrence (Record), linked to it;
 	// `?takeOn=<installmentId>&variant=purchase|move-debt|card-payment[&to=<id>]` prefills taking on
 	// an Installment Plan (never linked); `?installment=<id>&due=<date>` records that row, linked.
+	// From the Forecast, `&sources=<account:centavos,…>` pays those Paying sources and
+	// `&back=/forecast?…` returns there after saving.
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
@@ -11,9 +13,11 @@
 		addDays,
 		duplicateDraft,
 		emptyDraft,
+		forecastRecordDraft,
 		installmentRecordDraft,
 		occurrencesOf,
 		occurrenceStatus,
+		parsePicks,
 		recordDraft,
 		shortDate,
 		takeOnDraft,
@@ -66,12 +70,21 @@
 			draft: takeOnDraft(plan, variant, { today: todayIso, to: params.get('to') ?? '' })
 		};
 	});
+	/** Paying sources picked on the Forecast, and where to go back to. */
+	const picks = $derived(parsePicks(params.get('sources') ?? ''));
+	const back = $derived.by(() => {
+		const b = params.get('back') ?? '';
+		return b.startsWith('/forecast') ? b : null;
+	});
+	const fromForecast = (draft: ReturnType<typeof emptyDraft>) =>
+		picks.length ? forecastRecordDraft(draft, picks) : draft;
+
 	// The form copies this once when it mounts, so later changes don't reset what the user typed.
 	const initial = $derived(
 		round === 0 && recording
-			? recordDraft(recording.view, { today: todayIso })
+			? fromForecast(recordDraft(recording.view, { today: todayIso }))
 			: round === 0 && recordingRow
-				? recordingRow.draft
+				? fromForecast(recordingRow.draft)
 				: round === 0 && takingOn
 					? takingOn.draft
 					: round === 0 && source
@@ -117,6 +130,8 @@
 				{initial}
 				pays={round === 0 ? (recording?.pays ?? recordingRow?.pays) : undefined}
 				onsaved={(id) => {
+					// eslint-disable-next-line svelte/no-navigation-without-resolve -- checked /forecast path
+					if (back && round === 0 && (recording || recordingRow)) return goto(back);
 					if (recording && round === 0) return goto(resolve('/scheduled'));
 					if (recordingRow && round === 0)
 						return goto(resolve('/installments/[id]', { id: recordingRow.plan.id }));

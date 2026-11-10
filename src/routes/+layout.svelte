@@ -40,6 +40,7 @@
 			<a href={resolve('/transactions')} class="text-gray-600 hover:text-gray-900">Journal</a>
 			<a href={resolve('/scheduled')} class="text-gray-600 hover:text-gray-900">Scheduled</a>
 			<a href={resolve('/installments')} class="text-gray-600 hover:text-gray-900">Installments</a>
+			<a href={resolve('/forecast')} class="text-gray-600 hover:text-gray-900">Forecast</a>
 			<a href={resolve('/tags')} class="text-gray-600 hover:text-gray-900">Tags</a>
 			<a href={resolve('/settings')} class="text-gray-600 hover:text-gray-900">Settings</a>
 			<a

@@ -21,7 +21,8 @@
 		"test:rules": "firebase emulators:exec --only firestore --project demo-perancial \"vitest run --project rules\"",
 		"emulators": "node scripts/emulators.mjs",
 		"deploy": "bun run build && firebase deploy --only hosting,firestore",
-		"seed:emulators": "node scripts/seed-emulator.ts"
+		"seed:emulators": "node scripts/seed-emulator.ts",
+		"seed:forecast-demo": "bun scripts/seed-forecast-demo.ts"
 	},
 	"devDependencies": {
 		"@eslint/js": "^10.0.1",
