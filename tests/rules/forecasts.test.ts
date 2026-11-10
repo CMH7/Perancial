@@ -32,6 +32,13 @@ describe('Forecasts', () => {
 		await assertSucceeds(getDoc(fRef(db, '2026-11-15')));
 	});
 
+	it("accept the owner's Outflow order, as a list", async () => {
+		const db = ownerDb(env());
+		const outflowOrder = ['scheduled:water:2026-11-05'];
+		await assertSucceeds(setDoc(fRef(db, '2026-11-15'), { ...forecast, outflowOrder }));
+		await assertFails(setDoc(fRef(db, '2026-11-15'), { ...forecast, outflowOrder: 'water' }));
+	});
+
 	it('keep everyone else out', async () => {
 		await assertFails(setDoc(fRef(stranger(), '2026-11-15'), forecast));
 		await assertFails(getDoc(fRef(stranger(), '2026-11-15')));

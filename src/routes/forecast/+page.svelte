@@ -16,6 +16,8 @@
 		formatPicks,
 		moveSource,
 		parseAmount,
+		placeItem,
+		planSetOutflowOrder,
 		planSetSources,
 		recordPicks,
 		splitSource,
@@ -83,18 +85,40 @@
 	}
 	let dragging = $state<CardRef | null>(null);
 	let overLane = $state<string | null>(null);
-	function drop(lane: string) {
+	/** Where a dragged card would land: before or after this card in this lane. */
+	let dropAt = $state<{ lane: string; key: string; after: boolean } | null>(null);
+	async function drop(lane: string, at: { key: string; after: boolean } | null = null) {
 		overLane = null;
+		dropAt = null;
 		const d = dragging;
 		dragging = null;
 		const o = d && outflowOf(d.key);
-		if (!o || !d || d.from === lane) return;
+		if (!o || !d || !view) return;
+		if (d.from === lane && (!at || at.key === d.key)) return;
+		actionError = '';
 		try {
-			const next =
-				d.from === null
-					? splitSource(o.sources, null, lane, o.unfunded)
-					: moveSource(o.sources, d.from, lane);
-			saveSources(o, next);
+			const now = new Date();
+			const writes =
+				d.from === lane
+					? []
+					: planSetSources(
+							input,
+							cutoff,
+							o,
+							d.from === null
+								? splitSource(o.sources, null, lane, o.unfunded)
+								: moveSource(o.sources, d.from, lane),
+							now
+						);
+			if (at) {
+				const keys = placeItem(
+					view.outflows.map((x) => x.key),
+					d.key,
+					at.after ? { after: at.key } : { before: at.key }
+				);
+				writes.push(...planSetOutflowOrder(input, cutoff, keys, now));
+			}
+			await ledger.commit(writes);
 		} catch (err) {
 			actionError = (err as Error).message;
 		}
@@ -128,11 +152,45 @@
 	let menu = $state<{ ref: CardRef; x: number; y: number } | null>(null);
 	let onlyKey = $state<string | null>(null);
 	let pressTimer: ReturnType<typeof setTimeout> | undefined;
+	let pressAt: { x: number; y: number } | null = null;
 	function pressStart(e: PointerEvent, ref: CardRef) {
 		const { clientX: x, clientY: y } = e;
-		pressTimer = setTimeout(() => (menu = { ref, x, y }), 550);
+		pressAt = { x, y };
+		pressTimer = setTimeout(() => ((menu = { ref, x, y }), (pressAt = null)), 550);
 	}
-	const pressEnd = () => clearTimeout(pressTimer);
+	function pressEnd() {
+		clearTimeout(pressTimer);
+		pressAt = null;
+	}
+	// Moving away from where it was pressed (a drag starting) is not a hold.
+	function pressMove(e: PointerEvent) {
+		if (pressAt && Math.hypot(e.clientX - pressAt.x, e.clientY - pressAt.y) > 6) pressEnd();
+	}
+
+	// Reordering lanes: drag a Funding Account's header, or use the arrow keys on it.
+	let laneDrag = $state<string | null>(null);
+	let laneAt = $state<{ id: string; after: boolean } | null>(null);
+	function moveLane(id: string, at: { before?: string; after?: string }) {
+		const ids = view?.fundingAccounts ?? [];
+		const next = placeItem(ids, id, at);
+		if (next.join() !== ids.join()) saveFunding(next);
+	}
+	function dropLane() {
+		const id = laneDrag;
+		const at = laneAt;
+		laneDrag = null;
+		laneAt = null;
+		if (id && at && at.id !== id) moveLane(id, at.after ? { after: at.id } : { before: at.id });
+	}
+	function laneKey(e: KeyboardEvent, id: string) {
+		if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+		e.preventDefault();
+		const ids = view?.fundingAccounts ?? [];
+		const i = ids.indexOf(id);
+		const j = i + (e.key === 'ArrowLeft' ? -1 : 1);
+		if (i < 0 || j < 0 || j >= ids.length) return;
+		moveLane(id, e.key === 'ArrowLeft' ? { before: ids[j] } : { after: ids[j] });
+	}
 	function recordAll(o: ForecastOutflow) {
 		const picks = recordPicks(o, 'all');
 		if (!picks.length) return;
@@ -353,16 +411,36 @@
 				{@const movable = paid === 0 && (o.carried === undefined || o.carried === 'in')}
 				<button
 					draggable={movable}
-					ondragstart={() => (dragging = { key: o.key, from })}
-					ondragend={() => ((dragging = null), (overLane = null))}
+					ondragstart={() => (pressEnd(), (dragging = { key: o.key, from }))}
+					ondragend={() => ((dragging = null), (overLane = null), (dropAt = null))}
+					ondragover={(e) => {
+						if (!dragging || from === null || !view?.fundingAccounts.includes(from)) return;
+						e.preventDefault();
+						e.stopPropagation();
+						const r = e.currentTarget.getBoundingClientRect();
+						overLane = from;
+						dropAt = { lane: from, key: o.key, after: e.clientY > r.top + r.height / 2 };
+					}}
+					ondrop={(e) => {
+						if (!dropAt || from === null) return;
+						e.preventDefault();
+						e.stopPropagation();
+						drop(from, dropAt);
+					}}
+					onpointermove={pressMove}
+					onpointercancel={pressEnd}
 					oncontextmenu={(e) => {
 						e.preventDefault();
 						menu = { ref: { key: o.key, from }, x: e.clientX, y: e.clientY };
 					}}
 					onpointerdown={(e) => pressStart(e, { key: o.key, from })}
 					onpointerup={pressEnd}
-					class="mt-1 block w-full rounded border px-2 py-1 text-left text-sm {stripe(o)} {lit ===
-					o.key
+					class="mt-1 block w-full rounded border px-2 py-1 text-left text-sm {dropAt?.lane ===
+						from && dropAt?.key === o.key
+						? dropAt.after
+							? 'shadow-[0_3px_0_var(--color-sky-500)]'
+							: 'shadow-[0_-3px_0_var(--color-sky-500)]'
+						: ''} {stripe(o)} {lit === o.key
 						? 'border-sky-400 bg-sky-50 ring-2 ring-sky-300'
 						: 'hover:bg-gray-50'} {movable ? 'cursor-grab' : ''} {o.carried && o.carried !== 'in'
 						? 'opacity-50'
@@ -420,23 +498,54 @@
 						onkeydown={(e) => e.key === 'Enter' && lane.funding && laneClick(lane.accountId)}
 						class="w-72 shrink-0 rounded-xl border bg-white p-3 {lane.funding
 							? ''
-							: 'opacity-60'} {overLane === lane.accountId ? 'ring-2 ring-sky-400' : ''} {copied &&
-						lane.funding
+							: 'opacity-60'} {overLane === lane.accountId
+							? 'ring-2 ring-sky-400'
+							: ''} {laneAt?.id === lane.accountId
+							? laneAt.after
+								? 'shadow-[4px_0_0_var(--color-sky-500)]'
+								: 'shadow-[-4px_0_0_var(--color-sky-500)]'
+							: ''} {laneDrag === lane.accountId ? 'opacity-50' : ''} {copied && lane.funding
 							? 'cursor-copy outline-2 outline-sky-300 outline-dashed'
 							: ''}"
 						aria-label={name(lane.accountId)}
 						role="list"
 						ondragover={(e) => {
-							if (lane.funding && dragging) {
+							if (laneDrag && lane.funding) {
+								e.preventDefault();
+								const r = e.currentTarget.getBoundingClientRect();
+								laneAt = { id: lane.accountId, after: e.clientX > r.left + r.width / 2 };
+							} else if (lane.funding && dragging) {
 								e.preventDefault();
 								overLane = lane.accountId;
+								dropAt = null;
 							}
 						}}
 						ondragleave={() => (overLane = null)}
-						ondrop={() => lane.funding && drop(lane.accountId)}
+						ondrop={() => (laneDrag ? dropLane() : lane.funding && drop(lane.accountId))}
 						onclick={() => lane.funding && laneClick(lane.accountId)}
 					>
-						<h2 class="font-semibold">{name(lane.accountId)}</h2>
+						{#if lane.funding}
+							<!-- Drag the header (or arrow keys on it) to reorder the Funding Accounts. -->
+							<h2
+								class="flex cursor-grab items-center gap-1 font-semibold"
+								draggable="true"
+								ondragstart={(e) => {
+									e.stopPropagation();
+									laneDrag = lane.accountId;
+								}}
+								ondragend={() => ((laneDrag = null), (laneAt = null))}
+							>
+								<button
+									class="cursor-grab rounded px-0.5 text-gray-400 hover:bg-gray-100"
+									aria-label="Move {name(lane.accountId)} (arrow keys)"
+									title="Drag to reorder, or use the arrow keys"
+									onclick={(e) => e.stopPropagation()}
+									onkeydown={(e) => laneKey(e, lane.accountId)}>⠿</button
+								>{name(lane.accountId)}
+							</h2>
+						{:else}
+							<h2 class="font-semibold">{name(lane.accountId)}</h2>
+						{/if}
 						<p class="text-xs text-gray-500">Balance today {formatAmount(lane.balanceToday)}</p>
 						{#if !lane.funding}
 							<button
