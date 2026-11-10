@@ -402,6 +402,21 @@ describe('Carry-over', () => {
 	});
 });
 
+describe('A card payment whose amount varies', () => {
+	it('is Paid once its Transactions reach what was charged', () => {
+		const payment: Transaction = {
+			...tx('cardpaid', '2026-11-24', [
+				['card', 174_800],
+				['everyday', -174_800]
+			]),
+			pays: { plan: 'scheduled', planId: 'cardpay', due: '2026-11-25' }
+		};
+		const chart = buildChart(accounts, [buffet, loanPayment, groceries, payment]);
+		const f = buildForecast(input({ chart }), '2026-11-15');
+		expect(f.outflows.find((o) => o.key === 'scheduled:cardpay:2026-11-25')!.status).toBe('paid');
+	});
+});
+
 describe('Bill with next payment', () => {
 	it('moves a recorded charge to the following card payment', () => {
 		const later = { ...buffet, billOn: '2026-11-26' };

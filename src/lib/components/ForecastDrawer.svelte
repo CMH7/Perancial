@@ -8,11 +8,13 @@
 		formatAmount,
 		formatPicks,
 		parseAmount,
+		planBillLater,
 		planSetSources,
 		planUndoAllocation,
 		recordPicks,
 		shortDate,
 		sourceEditErrors,
+		type Charge,
 		type ForecastInput,
 		type ForecastOutflow,
 		type Lane
@@ -66,6 +68,17 @@
 		if (!accountId) return;
 		rows.push({ accountId, amount: text(Math.max(0, o.total - covered)), paid: 0 });
 	}
+	// "Bill with next payment": the charge moves to the following payment of this Liability.
+	let billError = $state('');
+	async function billLater(c: Charge) {
+		billError = '';
+		try {
+			await ledger.commit(planBillLater(input, c, o.date, new Date()));
+		} catch (err) {
+			billError = (err as Error).message;
+		}
+	}
+
 	// Undo an Early allocation, from the transfer or from its target.
 	const transfer = $derived(
 		o.ealloc
@@ -185,9 +198,17 @@
 							})}</span
 						></span
 					>
-					<span class="tabular-nums">{formatAmount(c.amount)}</span>
+					<span class="flex items-center gap-2">
+						<span class="tabular-nums">{formatAmount(c.amount)}</span>
+						<button
+							class="text-xs text-gray-500 underline"
+							title="Bill it with the following payment instead"
+							onclick={() => billLater(c)}>Bill with next payment</button
+						>
+					</span>
 				</div>
 			{:else}<p class="text-xs text-gray-400">No charges since the last payment.</p>{/each}
+			{#if billError}<p class="text-xs text-red-600">{billError}</p>{/if}
 		</div>
 	{/if}
 

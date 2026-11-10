@@ -5,7 +5,7 @@ import type { AccountUser } from './account-actions.ts';
 import type { Chart, IsoDate } from './chart.ts';
 import { cutoffOf } from './installment-views.ts';
 import { rowStatuses, rowTotal } from './installments.ts';
-import { paymentsFor, txTotal, type PaidStatus } from './payable.ts';
+import { paidStatus, paymentsFor, txTotal, type PaidStatus } from './payable.ts';
 import { addDays, occurrenceStatus, occurrencesOf, type Occurrence } from './scheduled.ts';
 import type {
 	Account,
@@ -421,7 +421,10 @@ function outflowFromOccurrence(ctx: Ctx, plan: Scheduled, occ: Occurrence): Fore
 		total = charges.reduce((s, c) => s + c.amount, 0) + additional;
 	const varies = occ.total === null && !(charges && charges.length);
 
-	const status = occurrenceStatus(chart, occ, { today: ctx.input.today });
+	// Judged against the expected total, so a card payment whose amount varies can still be Paid.
+	const status = varies
+		? occurrenceStatus(chart, occ, { today: ctx.input.today })
+		: paidStatus(chart, link, { ...occ, total }, { today: ctx.input.today });
 	const from = lines.flatMap((l, k) => (l.side === 'from' ? [{ l, amount: occ.amounts[k] }] : []));
 	const defaults: PayingSource[] =
 		from.length === 1

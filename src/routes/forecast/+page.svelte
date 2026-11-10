@@ -6,6 +6,7 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import AllocatePanel from '#lib/components/AllocatePanel.svelte';
+	import ForecastAddPanel from '#lib/components/ForecastAddPanel.svelte';
 	import ForecastDrawer from '#lib/components/ForecastDrawer.svelte';
 	import {
 		buildForecast,
@@ -169,6 +170,7 @@
 	);
 
 	let allocating = $state(false);
+	let adding = $state<'outflow' | 'inflow' | null>(null);
 
 	// Funding Accounts: pick per Cut-off.
 	let managing = $state(false);
@@ -282,6 +284,14 @@
 				<button class="rounded border bg-white px-2 py-1" onclick={() => (allocating = !allocating)}
 					>Allocate early…</button
 				>
+				<button
+					class="rounded border bg-white px-2 py-1"
+					onclick={() => ((adding = 'outflow'), (openKey = null))}>+ Outflow</button
+				>
+				<button
+					class="rounded border bg-white px-2 py-1"
+					onclick={() => ((adding = 'inflow'), (openKey = null))}>+ Inflow</button
+				>
 				{#if !view.storedFunding}<span class="text-xs text-gray-500"
 						>Same as the previous Cut-off until you change them.</span
 					>{/if}
@@ -360,7 +370,7 @@
 						e.stopPropagation();
 						selected = { key: o.key, from };
 					}}
-					ondblclick={() => (openKey = o.key)}
+					ondblclick={() => ((openKey = o.key), (adding = null))}
 					onmouseenter={() => (hovered = o.key)}
 					onmouseleave={() => {
 						hovered = null;
@@ -534,7 +544,22 @@
 		{/if}
 	</main>
 
-	{#if open && view}
+	{#if adding && view}
+		<div
+			class="sticky top-0 h-screen w-[28rem] shrink-0 overflow-y-auto border-l bg-white p-6 shadow-xl"
+		>
+			{#key adding}
+				<ForecastAddPanel
+					kind={adding}
+					{input}
+					{cutoff}
+					lanes={view.lanes}
+					{name}
+					onclose={() => (adding = null)}
+				/>
+			{/key}
+		</div>
+	{:else if open && view}
 		<div
 			class="sticky top-0 h-screen w-96 shrink-0 overflow-y-auto border-l bg-white p-6 shadow-xl"
 		>
@@ -558,6 +583,7 @@
 		if (e.key === 'Escape') {
 			selected = null;
 			openKey = null;
+			adding = null;
 			copied = null;
 			menu = null;
 			paste = null;
@@ -581,7 +607,7 @@
 			>
 			<button
 				class="block w-full px-3 py-1.5 text-left hover:bg-gray-100"
-				onclick={() => ((openKey = mo.key), (menu = null))}>Open</button
+				onclick={() => ((openKey = mo.key), (adding = null), (menu = null))}>Open</button
 			>
 			<button
 				class="block w-full px-3 py-1.5 text-left hover:bg-gray-100"
