@@ -156,6 +156,7 @@ export function planAllocateEarly(
 			id: targetCutoff,
 			data: {
 				fundingAccounts: [...funding, reserveId],
+				...(existing?.outflowOrder ? { outflowOrder: existing.outflowOrder } : {}),
 				createdAt: existing?.createdAt ?? now,
 				updatedAt: now
 			}

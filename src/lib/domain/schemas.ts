@@ -282,6 +282,8 @@ export const ForecastDoc = z.object({
 		.array(z.string().min(1))
 		.max(50)
 		.refine((ids) => new Set(ids).size === ids.length, 'Funding Accounts must not repeat'),
+	/** The owner's order of this Cut-off's Outflows (keys); the rest follow by due date. */
+	outflowOrder: z.array(z.string().min(1).max(300)).max(500).optional(),
 	createdAt: z.date(),
 	updatedAt: z.date()
 });

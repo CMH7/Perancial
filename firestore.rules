@@ -149,9 +149,10 @@ service cloud.firestore {
       match /forecasts/{cutoff} {
         function validForecast(d) {
           return cutoff.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
-            && d.keys().hasOnly(['fundingAccounts', 'createdAt', 'updatedAt'])
+            && d.keys().hasOnly(['fundingAccounts', 'outflowOrder', 'createdAt', 'updatedAt'])
             && d.keys().hasAll(['fundingAccounts', 'createdAt', 'updatedAt'])
             && d.fundingAccounts is list && d.fundingAccounts.size() <= 50
+            && (!('outflowOrder' in d) || (d.outflowOrder is list && d.outflowOrder.size() <= 500))
             && d.createdAt is timestamp && d.updatedAt is timestamp;
         }
 

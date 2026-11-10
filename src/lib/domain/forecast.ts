@@ -695,6 +695,11 @@ export function buildForecast(input: ForecastInput, cutoff: IsoDate): ForecastVi
 		for (const o of outflowsIn(ctx, earlier)) if (isOpen(o)) outflows.push(carriedIn(o));
 	}
 	outflows.sort((a, b) => a.date.localeCompare(b.date) || a.label.localeCompare(b.label));
+	// The owner's order for this Cut-off goes first; the rest keep due-date order.
+	const order = input.forecasts.find((f) => f.id === cutoff)?.outflowOrder ?? [];
+	const rank = new Map(order.map((k, i) => [k, i]));
+	const at = (o: ForecastOutflow) => rank.get(o.key) ?? order.length;
+	outflows.sort((a, b) => at(a) - at(b));
 
 	const lanes = buildLanes(ctx, fundingAccounts, inflows, outflows, funded);
 	const sections = groupSections(input, outflows);
@@ -878,7 +883,12 @@ export function planSetFundingAccounts(
 		{
 			op: 'setForecast',
 			id: cutoff,
-			data: { fundingAccounts: [...keep], createdAt: existing?.createdAt ?? now, updatedAt: now }
+			data: {
+				fundingAccounts: [...keep],
+				...(existing?.outflowOrder ? { outflowOrder: existing.outflowOrder } : {}),
+				createdAt: existing?.createdAt ?? now,
+				updatedAt: now
+			}
 		}
 	];
 }

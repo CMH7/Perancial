@@ -10,7 +10,7 @@ A Forecast is the plan for one Cut-off: its Inflows, the Outflows they fund, and
 ## Decision
 
 - **Paying sources are stored on the item they fund**: an optional `sources: [{ accountId, amount }]` on a Scheduled plan's `occurrences[due]` change, and on each Installment Plan Row. With none set, the plan's default Accounts apply.
-- **The per-Cut-off document is minimal**: `users/{uid}/forecasts/{cutoffDate}` holds only `fundingAccounts`. It is written only when the owner changes the list; a Cut-off without one inherits the latest earlier list.
+- **The per-Cut-off document is minimal**: `users/{uid}/forecasts/{cutoffDate}` holds only `fundingAccounts`. It is written only when the owner changes the list; a Cut-off without one inherits the latest earlier list. Its list order is the lanes' order. It may also hold `outflowOrder`, the owner's order of that Cut-off's Outflow keys (added later for drag-and-drop ordering); it is not inherited, and Outflows missing from it follow by due date.
 - **Other Forecast data sits where it belongs**: Section ids on the plans, the Section lists in `users/{uid}/settings/forecast`, the Early allocation link as `allocates: { plan, planId, due }` on the transfer plan (the same shape as the paid link, ADR 0003), and `billOn` on a recorded card charge.
 - Nothing derived is stored.
 
