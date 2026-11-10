@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { buildChart } from './chart.ts';
 import {
+	installmentDraftFromTransaction,
 	evaluateInstallmentDraft,
 	planCreateInstallmentFromDraft,
+	planMadeFrom,
 	takeOnDraft,
 	type InstallmentDraft
 } from './installment-create.ts';
@@ -303,5 +305,87 @@ describe('takeOnDraft', () => {
 			from: [{ accountId: 'loan-money', amount: '45999.00' }],
 			to: [{ accountId: '', amount: '' }]
 		});
+	});
+});
+
+describe('making a plan from a Transaction', () => {
+	/** The Nitro 5 bought with Personal Loan money, repaid later from BPI. */
+	const laptop = {
+		...tx('laptop', '2026-01-31', [
+			['gadgets', peso(52000)],
+			['loan-money', -peso(52000)]
+		]),
+		description: 'Nitro 5',
+		tags: ['nitro-5']
+	};
+	const withLaptop = buildChart(accounts, [opening('bpi', 1000000), spending, laptop]);
+	const create = (d: InstallmentDraft, plans: Installment[] = []) =>
+		planCreateInstallmentFromDraft(withLaptop, plans, d, {
+			today,
+			startedOn,
+			now: new Date('2026-11-10T00:00:00Z'),
+			planId: 'plan',
+			newId: () => 'leaf'
+		}).writes.at(-1)!;
+
+	it('paid from an Asset: an Internal Installment Plan repaying that Asset, first row a month on', () => {
+		expect(installmentDraftFromTransaction(withLaptop, laptop, jcb)).toMatchObject({
+			kind: 'internal',
+			title: 'Nitro 5',
+			tags: ['nitro-5'],
+			purchaseDate: '2026-01-31',
+			firstDate: '2026-02-28',
+			amount: '52000.00',
+			repaidAssetId: 'loan-money',
+			payingId: '',
+			madeFrom: 'laptop'
+		});
+	});
+
+	it('paid on a card: a lender plan whose new Liability goes under the card and is paid from it', () => {
+		expect(installmentDraftFromTransaction(withLaptop, spending, jcb)).toMatchObject({
+			kind: 'lender',
+			title: 'lunch',
+			purchaseDate: '2026-11-01',
+			firstDate: '2026-12-01',
+			amount: '500.00',
+			liability: { mode: 'new', parentId: 'rcbc-jcb', name: 'lunch', historyName: 'Card spending' },
+			payingId: 'rcbc-jcb',
+			madeFrom: 'lunch'
+		});
+	});
+
+	it('saves the source on the plan, and one Transaction makes one plan', () => {
+		const d = {
+			...installmentDraftFromTransaction(withLaptop, laptop, jcb),
+			firstDate: '2026-12-15',
+			payingId: 'bpi'
+		};
+		const w = create(d);
+		if (w.op !== 'setInstallment') throw new Error('expected the plan');
+		expect(w.data.madeFrom).toBe('laptop');
+		const plan = { id: 'plan', ...w.data };
+		expect(planMadeFrom([plan], 'laptop')).toBe(plan);
+		expect(planMadeFrom([plan], 'lunch')).toBeUndefined();
+		expect(() =>
+			planCreateInstallmentFromDraft(withLaptop, [plan], d, {
+				today,
+				startedOn,
+				now: new Date(),
+				planId: 'other',
+				newId: () => 'leaf2'
+			})
+		).toThrow('"Nitro 5" was already made from that Transaction');
+		expect(() => create({ ...d, madeFrom: 'gone' })).toThrow('That Transaction no longer exists');
+	});
+
+	it('leaves the source off a plan made from scratch', () => {
+		const w = create({
+			...jcb,
+			firstDate: '2026-11-15',
+			liability: { mode: 'pick', accountId: 'ub' }
+		});
+		if (w.op !== 'setInstallment') throw new Error('expected the plan');
+		expect('madeFrom' in w.data).toBe(false);
 	});
 });

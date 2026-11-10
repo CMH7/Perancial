@@ -2,9 +2,12 @@
 	// A new Installment Plan. After saving, offers the take-on Transactions that apply, prefilled.
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
+	import { page } from '$app/state';
 	import InstallmentForm from '#lib/components/InstallmentForm.svelte';
 	import {
+		installmentDraftFromTransaction,
 		planCreateInstallmentFromDraft,
+		planMadeFrom,
 		today,
 		type InstallmentDraft,
 		type TakeOn
@@ -23,7 +26,7 @@
 		return `${first.getFullYear()}-${p(first.getMonth() + 1)}-${p(first.getDate())}`;
 	});
 
-	const initial: InstallmentDraft = {
+	const blank: InstallmentDraft = {
 		kind: 'lender',
 		title: '',
 		note: '',
@@ -47,6 +50,15 @@
 		interestId: '',
 		feesId: ''
 	};
+
+	/** Started from a Transaction's "Make installment plan". */
+	const fromTx = $derived(
+		ledger.chart.transactions().find((t) => t.id === page.url.searchParams.get('fromTx'))
+	);
+	const madeAlready = $derived(fromTx && planMadeFrom(ledger.installments, fromTx.id));
+	const initial = $derived(
+		fromTx ? installmentDraftFromTransaction(ledger.chart, fromTx, blank) : blank
+	);
 
 	type Saved = {
 		planId: string;
@@ -80,7 +92,16 @@
 		const cardIsLiability = chart.account(card)?.type === 'liability';
 		const offers: Saved['offers'] = [];
 		let note: string | undefined;
-		if (draft.kind === 'internal')
+		if (draft.madeFrom) {
+			// The Transaction already records the purchase; only a card's debt may need moving.
+			if (draft.kind === 'lender' && cardIsLiability)
+				offers.push({
+					variant: 'move-debt',
+					to: card,
+					label: 'Move the debt off the card',
+					hint: 'Moves it from the card to this plan.'
+				});
+		} else if (draft.kind === 'internal')
 			offers.push({
 				variant: 'card-payment',
 				label: 'Record the card payment',
@@ -122,6 +143,14 @@
 		<p class="text-sm text-gray-500">Loading your accounts…</p>
 	{:else}
 		<h1 class="mb-4 text-2xl font-semibold">New Installment Plan</h1>
+		{#if fromTx && !saved}
+			<p class="mb-4 text-sm text-gray-600">
+				From the Transaction
+				<a class="underline" href={resolve('/transactions/[id]', { id: fromTx.id })}
+					>“{fromTx.description}”, {fromTx.date}</a
+				>.
+			</p>
+		{/if}
 		{#if saved}
 			<div class="mb-6 rounded-lg bg-emerald-50 p-4 text-sm text-emerald-900">
 				<p class="font-medium">Saved "{saved.title}".</p>
@@ -139,8 +168,22 @@
 				{/if}
 			</div>
 		{/if}
-		{#key round}
-			<InstallmentForm {initial} today={todayIso} {startedOn} onsubmit={create} />
-		{/key}
+		{#if madeAlready && !saved}
+			<p class="rounded-lg bg-amber-50 p-4 text-sm text-amber-900">
+				This Transaction is already repaid by
+				<a class="underline" href={resolve('/installments/[id]', { id: madeAlready.id })}
+					>{madeAlready.title}</a
+				>.
+			</p>
+		{:else}
+			{#key round}
+				<InstallmentForm
+					initial={round ? blank : initial}
+					today={todayIso}
+					{startedOn}
+					onsubmit={create}
+				/>
+			{/key}
+		{/if}
 	{/if}
 </main>

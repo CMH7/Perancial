@@ -186,6 +186,12 @@ function assertValid(chart: Chart, plans: Installment[], id: string, plan: Insta
 	if (!plan.rows.some((r) => r.principal > 0)) throw new Error('A plan needs some principal');
 
 	const before = plans.find((p) => p.id === id);
+	if (plan.madeFrom && plan.madeFrom !== before?.madeFrom) {
+		if (!chart.transactions().some((t) => t.id === plan.madeFrom))
+			throw new Error('That Transaction no longer exists');
+		const other = plans.find((p) => p.id !== id && p.madeFrom === plan.madeFrom);
+		if (other) throw new Error(`"${other.title}" was already made from that Transaction`);
+	}
 	for (const row of before?.rows ?? [])
 		if (
 			!dues.has(row.due) &&
