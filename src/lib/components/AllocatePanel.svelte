@@ -12,6 +12,8 @@
 		type ForecastInput,
 		type Lane
 	} from '#lib/domain/index.ts';
+	import { accountItems } from '#lib/account-items.svelte.ts';
+	import AccountPicker from './AccountPicker.svelte';
 	import { ledger } from '#lib/ledger.svelte.ts';
 
 	let {
@@ -120,20 +122,26 @@
 	<div class="mt-3 grid gap-2 sm:grid-cols-2">
 		<label class="block"
 			>Pay from
-			<select class="mt-1 w-full rounded border-gray-300 py-1 text-xs" bind:value={fromId}>
-				{#each funding as l (l.accountId)}
-					<option value={l.accountId}
-						>{name(l.accountId)} — left {formatAmount(l.plannedLeft)}</option
-					>
-				{/each}
-			</select>
+			<AccountPicker
+				bind:value={fromId}
+				items={accountItems.for(funding.map((l) => l.accountId))}
+				label="Pay from"
+				note={(id) => {
+					const l = funding.find((x) => x.accountId === id);
+					return l && `left ${formatAmount(l.plannedLeft)}`;
+				}}
+				class="mt-1 w-full text-xs"
+			/>
 		</label>
 		<label class="block"
 			>Into the reserve
-			<select class="mt-1 w-full rounded border-gray-300 py-1 text-xs" bind:value={reserveId}>
-				<option value="" disabled>Pick an Account</option>
-				{#each reserves as r (r.id)}<option value={r.id}>{r.label}</option>{/each}
-			</select>
+			<AccountPicker
+				bind:value={reserveId}
+				items={accountItems.for(reserves.map((r) => r.id))}
+				label="Into the reserve"
+				placeholder="Pick an Account"
+				class="mt-1 w-full text-xs"
+			/>
 		</label>
 	</div>
 	{#if error}<p class="mt-2 text-red-600">{error}</p>{/if}

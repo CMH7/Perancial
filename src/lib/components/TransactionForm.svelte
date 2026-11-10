@@ -16,7 +16,9 @@
 		type Transaction,
 		type TransactionDraft
 	} from '#lib/domain/index.ts';
+	import { accountItems } from '#lib/account-items.svelte.ts';
 	import { ledger } from '#lib/ledger.svelte.ts';
+	import AccountPicker from './AccountPicker.svelte';
 	import { KIND } from './kind.ts';
 	import { SvelteSet } from 'svelte/reactivity';
 
@@ -64,7 +66,10 @@
 			options: accountChoices(chart, g.type, { today: todayIso, kept })
 		}))
 	);
-	const expenseGroup = $derived(groups.filter((g) => g.type === 'expense'));
+	const itemsOf = (list: typeof groups) =>
+		accountItems.for(list.flatMap((g) => g.options.map((o) => o.id)));
+	const allItems = $derived(itemsOf(groups));
+	const expenseItems = $derived(itemsOf(groups.filter((g) => g.type === 'expense')));
 
 	const pastTransactions = $derived(
 		ledger.transactions
@@ -120,22 +125,13 @@
 	}
 </script>
 
-{#snippet accountSelect(side: LineSide, index: number, line: DraftLine, options = groups)}
-	<select
+{#snippet accountSelect(side: LineSide, index: number, line: DraftLine, items = allItems)}
+	<AccountPicker
 		bind:value={line.accountId}
+		{items}
 		onchange={() => touch(`${side}.${index}`)}
-		class="min-w-0 flex-1 rounded border-gray-300 py-1 text-sm"
-		aria-label="Account"
-	>
-		<option value="">Choose Account…</option>
-		{#each options as g (g.type)}
-			<optgroup label={g.label}>
-				{#each g.options as o (o.id)}<option value={o.id}
-						>{o.label} · {formatAmount(o.balance)}</option
-					>{/each}
-			</optgroup>
-		{/each}
-	</select>
+		class="flex-1"
+	/>
 {/snippet}
 
 {#snippet amountInput(side: LineSide, index: number, line: DraftLine)}
@@ -254,7 +250,7 @@
 					<option value="additional">Additional (on top of From)</option>
 					<option value="less">Less (taken out of To)</option>
 				</select>
-				{@render accountSelect('fees', i, fee, expenseGroup)}
+				{@render accountSelect('fees', i, fee, expenseItems)}
 				{@render amountInput('fees', i, fee)}
 				<button
 					type="button"

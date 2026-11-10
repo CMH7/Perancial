@@ -14,6 +14,8 @@
 		type Lane,
 		type PlanDraft
 	} from '#lib/domain/index.ts';
+	import { accountItems } from '#lib/account-items.svelte.ts';
+	import AccountPicker from './AccountPicker.svelte';
 	import { ledger } from '#lib/ledger.svelte.ts';
 	import PlanEditor from './PlanEditor.svelte';
 	import SectionPicker from './SectionPicker.svelte';
@@ -136,19 +138,25 @@
 			>
 			<label class="block"
 				>{kind === 'outflow' ? 'Paid from' : 'Lands in'}
-				<select class={field} bind:value={f.accountId}>
-					<option value="" disabled>Pick an Account</option>
-					{#each mineOptions as o (o.id)}<option value={o.id}>{o.label}</option>{/each}
-				</select>
+				<AccountPicker
+					bind:value={f.accountId}
+					items={accountItems.for(mineOptions.map((o) => o.id))}
+					label={kind === 'outflow' ? 'Paid from' : 'Lands in'}
+					placeholder="Pick an Account"
+					class="mt-1 w-full"
+				/>
 			</label>
 			<label class="block"
 				>{kind === 'outflow' ? 'To' : 'From'}
-				<select class={field} bind:value={f.otherId}>
-					<option value="" disabled>Pick an Account</option>
-					{#each otherOptions.filter((o) => o.id !== f.accountId) as o (o.id)}<option value={o.id}
-							>{o.label}</option
-						>{/each}
-				</select>
+				<AccountPicker
+					bind:value={f.otherId}
+					items={accountItems.for(
+						otherOptions.filter((o) => o.id !== f.accountId).map((o) => o.id)
+					)}
+					label={kind === 'outflow' ? 'To' : 'From'}
+					placeholder="Pick an Account"
+					class="mt-1 w-full"
+				/>
 			</label>
 			<SectionPicker value={f.section} onchange={(id) => (f.section = id)} />
 			{#if tried && errors.length}<p class="text-red-600">{errors[0].message}</p>{/if}

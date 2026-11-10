@@ -1,6 +1,8 @@
 <script lang="ts">
 	// Move an Account (and everything under it) to another parent of the same type.
 	import { moveTargets, planMoveAccount } from '#lib/domain/index.ts';
+	import { accountItems } from '#lib/account-items.svelte.ts';
+	import AccountPicker from './AccountPicker.svelte';
 	import { ledger } from '#lib/ledger.svelte.ts';
 
 	let { accountId, onclose }: { accountId: string; onclose: () => void } = $props();
@@ -49,11 +51,14 @@
 	{:else}
 		<label class="block">
 			<span class="text-gray-600">New parent</span>
-			<select bind:value={destId} class="mt-1 w-full rounded border-gray-300 text-sm">
-				{#each targets as target (target.id)}
-					<option value={target.id}>{target.label}</option>
-				{/each}
-			</select>
+			<AccountPicker
+				bind:value={destId}
+				items={accountItems.for(targets.map((t) => t.id))}
+				label="New parent"
+				placeholder="Choose a Group…"
+				showBalance={false}
+				class="mt-1 w-full"
+			/>
 		</label>
 		<p class="text-xs text-gray-500">
 			Everything inside {account?.name} moves with it. Accounts holding money directly aren't offered.

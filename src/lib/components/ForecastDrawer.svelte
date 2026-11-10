@@ -19,6 +19,8 @@
 		type ForecastOutflow,
 		type Lane
 	} from '#lib/domain/index.ts';
+	import { accountItems } from '#lib/account-items.svelte.ts';
+	import AccountPicker from './AccountPicker.svelte';
 	import { ledger } from '#lib/ledger.svelte.ts';
 
 	let {
@@ -221,20 +223,19 @@
 					{#if r.paid > 0}
 						<span class="min-w-0 flex-1 truncate text-xs">{name(r.accountId)}</span>
 					{:else}
-						<select
-							class="min-w-0 flex-1 rounded border-gray-300 py-0.5 text-xs"
+						<AccountPicker
 							bind:value={r.accountId}
-							aria-label="Paying source Account"
-						>
-							{#if !fundingLanes.some((l) => l.accountId === r.accountId)}
-								<option value={r.accountId}>{name(r.accountId)} (not funding)</option>
-							{/if}
-							{#each fundingLanes as l (l.accountId)}
-								<option value={l.accountId}
-									>{name(l.accountId)} — left {formatAmount(l.plannedLeft)}</option
-								>
-							{/each}
-						</select>
+							items={accountItems.for([
+								...fundingLanes.map((l) => l.accountId),
+								...(fundingLanes.some((l) => l.accountId === r.accountId) ? [] : [r.accountId])
+							])}
+							label="Paying source Account"
+							note={(id) => {
+								const l = fundingLanes.find((x) => x.accountId === id);
+								return l ? `left ${formatAmount(l.plannedLeft)}` : 'not funding';
+							}}
+							class="flex-1 py-0.5 text-xs"
+						/>
 					{/if}
 					<input
 						class="w-24 rounded border-gray-300 py-0.5 text-right text-xs tabular-nums"

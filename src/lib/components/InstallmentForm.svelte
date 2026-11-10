@@ -10,6 +10,8 @@
 		type InstallmentDraft
 	} from '#lib/domain/index.ts';
 	import { ledger } from '#lib/ledger.svelte.ts';
+	import { accountItems } from '#lib/account-items.svelte.ts';
+	import AccountPicker from './AccountPicker.svelte';
 	import SectionPicker from './SectionPicker.svelte';
 	import { SvelteSet } from 'svelte/reactivity';
 
@@ -116,10 +118,13 @@
 	set: (v: string) => void,
 	placeholder: string
 )}
-	<select class={field} {value} onchange={(e) => set(e.currentTarget.value)}>
-		<option value="">{placeholder}</option>
-		{#each options as o (o.id)}<option value={o.id}>{o.label}</option>{/each}
-	</select>
+	<AccountPicker
+		{value}
+		items={accountItems.for(options.map((o) => o.id))}
+		{placeholder}
+		onchange={set}
+		class="mt-1 w-full"
+	/>
 {/snippet}
 
 <form class="grid gap-6 md:grid-cols-2" onsubmit={submit}>

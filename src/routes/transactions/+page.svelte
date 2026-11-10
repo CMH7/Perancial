@@ -13,6 +13,8 @@
 		noFilters,
 		type TransactionKind
 	} from '#lib/domain/index.ts';
+	import { accountItems } from '#lib/account-items.svelte.ts';
+	import AccountPicker from '#lib/components/AccountPicker.svelte';
 	import { ledger } from '#lib/ledger.svelte.ts';
 
 	let f = $state(noFilters());
@@ -70,14 +72,12 @@
 					aria-label="To date"
 					class="rounded border-gray-300 text-sm"
 				/>
-				<select
+				<AccountPicker
 					bind:value={f.accountId}
-					aria-label="Account"
-					class="max-w-56 rounded border-gray-300 text-sm"
-				>
-					<option value="">Any Account</option>
-					{#each accounts as a (a.id)}<option value={a.id}>{a.label}</option>{/each}
-				</select>
+					items={accountItems.for(accounts.map((a) => a.id))}
+					emptyLabel="Any Account"
+					class="w-56"
+				/>
 				<select bind:value={f.kind} aria-label="Kind" class="rounded border-gray-300 text-sm">
 					<option value="">Any kind</option>
 					{#each kinds as [key, k] (key)}<option value={key}>{k.label}</option>{/each}
