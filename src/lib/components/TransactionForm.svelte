@@ -3,6 +3,7 @@
 	// module; this component only shows them and collects input.
 	import {
 		ACCOUNT_TYPE_GUIDE,
+		accountChoices,
 		duplicateDraft,
 		evaluateDraft,
 		formatAmount,
@@ -54,29 +55,13 @@
 			: undefined;
 	};
 
-	// Leaf Accounts by Account Type, as full paths. Archived ones only when this Transaction uses them.
+	// Leaf Accounts by Account Type, as full paths with today's Balance. Archived ones only when
+	// this Transaction uses them.
 	const kept = $derived(new Set(existing?.entries.map((e) => e.accountId)));
 	const groups = $derived(
 		ACCOUNT_TYPE_GUIDE.filter((g) => g.type !== 'equity').map((g) => ({
 			...g,
-			options: ledger.accounts
-				.filter(
-					(a) =>
-						a.type === g.type &&
-						!a.system &&
-						!chart.isGroup(a.id) &&
-						(!a.archived || kept.has(a.id))
-				)
-				.map((a) => ({
-					id: a.id,
-					label:
-						chart
-							.path(a.id)
-							.slice(1)
-							.map((p) => p.name)
-							.join(' › ') + (a.archived ? ' (archived)' : '')
-				}))
-				.sort((a, b) => a.label.localeCompare(b.label))
+			options: accountChoices(chart, g.type, { today: todayIso, kept })
 		}))
 	);
 	const expenseGroup = $derived(groups.filter((g) => g.type === 'expense'));
@@ -145,7 +130,9 @@
 		<option value="">Choose Account…</option>
 		{#each options as g (g.type)}
 			<optgroup label={g.label}>
-				{#each g.options as o (o.id)}<option value={o.id}>{o.label}</option>{/each}
+				{#each g.options as o (o.id)}<option value={o.id}
+						>{o.label} · {formatAmount(o.balance)}</option
+					>{/each}
 			</optgroup>
 		{/each}
 	</select>
@@ -289,6 +276,15 @@
 		<p class="text-xs">Leave one amount blank and it fills with what is left (amber).</p>
 		<p class="tabular-nums">
 			From {formatAmount(ev.fromTotal)} · To {formatAmount(ev.toTotal)}
+			{#if ev.uncovered > 0}
+				<span class="block text-right text-xs text-amber-700"
+					>{formatAmount(ev.uncovered)} not covered by From yet</span
+				>
+			{:else if ev.uncovered < 0}
+				<span class="block text-right text-xs text-amber-700"
+					>From is {formatAmount(-ev.uncovered)} more than To</span
+				>
+			{/if}
 			{#if errorAt.get('total') && (touched.size > 0 || existing)}
 				<span class="block text-right text-xs text-red-600">{errorAt.get('total')}</span>
 			{/if}

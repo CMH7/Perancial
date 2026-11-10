@@ -2,7 +2,7 @@
 // edit, duplicate, and delete. Pure TypeScript, no Firebase imports.
 import { toStorage, type Chart, type IsoDate } from './chart.ts';
 import { parseAmount } from './money.ts';
-import type { Entry, PaidLink, Transaction } from './schemas.ts';
+import type { AccountType, Entry, PaidLink, Transaction } from './schemas.ts';
 import { clearSettledWithLastPayment, type PayablePlan } from './payable.ts';
 import type { ChartWrite } from './writes.ts';
 
@@ -74,6 +74,8 @@ export type EvaluatedDraft = {
 	fromTotal: number;
 	/** To lines plus fees. */
 	toTotal: number;
+	/** What the From lines still have to cover: `toTotal − fromTotal`. Negative when From is more. */
+	uncovered: number;
 	kind: TransactionKind | null;
 	/** Storage-sign Entries in form order: From (negative), To, then fees (positive). */
 	entries: Entry[];
@@ -160,7 +162,46 @@ export function evaluateDraft(
 		known.some((e) => e.amount < 0) && known.some((e) => e.amount > 0)
 			? kindOf(chart, known)
 			: null;
-	return { amounts, filled, fromTotal, toTotal, kind, entries, errors };
+	return {
+		amounts,
+		filled,
+		fromTotal,
+		toTotal,
+		uncovered: toTotal - fromTotal,
+		kind,
+		entries,
+		errors
+	};
+}
+
+/** A Leaf Account the form offers: its full path below the Root Account, and its Balance. */
+export type AccountChoice = { id: string; label: string; balance: number };
+
+/**
+ * The Leaf Accounts of one Account Type a line can use, sorted by path, each with its Balance as
+ * of `today` (display sign, Pending counts). System Accounts never; Archived ones only when `kept`.
+ */
+export function accountChoices(
+	chart: Chart,
+	type: AccountType,
+	{ today, kept = new Set() }: { today: IsoDate; kept?: ReadonlySet<string> }
+): AccountChoice[] {
+	return chart
+		.all()
+		.filter(
+			(a) => a.type === type && !a.system && !chart.isGroup(a.id) && (!a.archived || kept.has(a.id))
+		)
+		.map((a) => ({
+			id: a.id,
+			label:
+				chart
+					.path(a.id)
+					.slice(1)
+					.map((p) => p.name)
+					.join(' › ') + (a.archived ? ' (archived)' : ''),
+			balance: chart.balance(a.id, today)
+		}))
+		.sort((a, b) => a.label.localeCompare(b.label));
 }
 
 /**

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildChart } from './chart.ts';
 import {
+	accountChoices,
 	draftFromTransaction,
 	duplicateDraft,
 	evaluateDraft,
@@ -203,6 +204,85 @@ describe('evaluateDraft', () => {
 		expect(at(draft({ description: 'x'.repeat(201) }))).toEqual(['description']);
 		expect(at(draft({ note: 'x'.repeat(5001) }))).toEqual(['note']);
 		expect(at(draft({ date: today }))).toEqual([]);
+	});
+});
+
+describe('evaluateDraft: uncovered', () => {
+	const uncovered = (d: TransactionDraft) => evaluateDraft(chart, d, { today }).uncovered;
+
+	it('is what the From lines still have to cover: To plus fees, less From', () => {
+		expect(
+			uncovered(
+				draft({
+					from: [{ accountId: 'gcash', amount: '1,200' }],
+					fees: [{ accountId: 'bank-fees', amount: '15', mode: 'additional' }]
+				})
+			)
+		).toBe(381500);
+	});
+
+	it('is zero once covered, including by a blank From line that fills with the rest', () => {
+		expect(uncovered(draft())).toBe(0);
+		expect(
+			uncovered(
+				draft({
+					from: [
+						{ accountId: 'gcash', amount: '1,200' },
+						{ accountId: 'bpi', amount: '' }
+					]
+				})
+			)
+		).toBe(0);
+	});
+
+	it('is negative when From is more than To', () => {
+		expect(uncovered(draft({ from: [{ accountId: 'bpi', amount: '6,000' }] }))).toBe(-100000);
+	});
+});
+
+describe('accountChoices', () => {
+	it('lists the Leaf Accounts of a type by full path, with each Balance as of today', () => {
+		expect(accountChoices(chart, 'asset', { today })).toEqual([
+			{ id: 'bpi', label: 'banks › bpi', balance: 4100000 },
+			{ id: 'cash', label: 'cash', balance: 80000 },
+			{ id: 'gcash', label: 'gcash', balance: 120000 }
+		]);
+	});
+
+	it('leaves out Entries dated after the as-of date', () => {
+		const cash = accountChoices(chart, 'asset', { today: '2026-11-02' }).find(
+			(c) => c.id === 'cash'
+		);
+		expect(cash?.balance).toBe(100000);
+	});
+
+	it('shows the friendly sign per Account Type, and Abnormal Balances as negative', () => {
+		const owing = buildChart(
+			[...roots, account('cc', 'liability', 'liability'), account('ewallet', 'asset', 'asset')],
+			[
+				opening('cc', -500000),
+				tx('overdraw', '2026-11-01', [
+					['ewallet', -2000],
+					['cc', 2000]
+				])
+			]
+		);
+		expect(accountChoices(owing, 'liability', { today })).toEqual([
+			{ id: 'cc', label: 'cc', balance: 498000 }
+		]);
+		expect(accountChoices(owing, 'asset', { today })).toEqual([
+			{ id: 'ewallet', label: 'ewallet', balance: -2000 }
+		]);
+	});
+
+	it('includes an Archived Account only when kept, and never system Accounts', () => {
+		expect(accountChoices(chart, 'asset', { today }).map((c) => c.id)).not.toContain('old-wallet');
+		expect(
+			accountChoices(chart, 'asset', { today, kept: new Set(['old-wallet']) }).find(
+				(c) => c.id === 'old-wallet'
+			)
+		).toEqual({ id: 'old-wallet', label: 'old-wallet (archived)', balance: 0 });
+		expect(accountChoices(chart, 'equity', { today })).toEqual([]);
 	});
 });
 
