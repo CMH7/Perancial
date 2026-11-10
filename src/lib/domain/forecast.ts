@@ -53,11 +53,11 @@ export function cutoffWindow(cutoff: IsoDate): DateRange {
 		: { from: iso(y, m, 16), to: iso(y, m, lastDay(y, m)) };
 }
 
-/** The days a Cut-off's pay funds: from the day after it until the next Cut-off. */
-export const fundedWindow = (cutoff: IsoDate): DateRange => cutoffWindow(nextCutoff(cutoff));
+/** The days a Cut-off's pay funds: its own window (the Funding rule). */
+export const fundedWindow = (cutoff: IsoDate): DateRange => cutoffWindow(cutoff);
 
-/** The Cut-off whose pay funds an Outflow due on this date. */
-export const fundingCutoffOf = (date: IsoDate): IsoDate => previousCutoff(cutoffOf(date));
+/** The Cut-off whose pay funds an Outflow due on this date: the one whose window holds it. */
+export const fundingCutoffOf = (date: IsoDate): IsoDate => cutoffOf(date);
 
 /** The Forecast that opens by default: the next Cut-off on or after today. */
 export const openingCutoff = (today: IsoDate): IsoDate => cutoffOf(today);

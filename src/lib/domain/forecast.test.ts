@@ -69,9 +69,9 @@ function plan(
 const pay = plan(
 	'pay',
 	'Pay',
-	{ type: 'cutoff', start: '2026-11-15' },
+	{ type: 'cutoff', start: '2026-11-30' },
 	[line('salary', 'from', null), line('payroll', 'to', null)],
-	{ occurrences: { '2026-11-15': { amounts: [2_000_000, 2_000_000] } } }
+	{ occurrences: { '2026-11-30': { amounts: [2_000_000, 2_000_000] } } }
 );
 const move = plan(
 	'move',
@@ -103,7 +103,7 @@ const music = plan('music', 'Music', { type: 'monthly', day: 12, start: '2026-10
 	line('card', 'from', 15_000),
 	line('food', 'to', 15_000)
 ]);
-const repayment = plan('repay', 'Repayment from a friend', { type: 'once', date: '2026-11-14' }, [
+const repayment = plan('repay', 'Repayment from a friend', { type: 'once', date: '2026-11-24' }, [
 	line('friend', 'from', 120_000),
 	line('ewallet', 'to', 120_000)
 ]);
@@ -178,7 +178,7 @@ const groceries = tx('groceries', '2026-11-17', [
 
 const forecasts: Forecast[] = [
 	{
-		id: '2026-11-15',
+		id: '2026-11-30',
 		fundingAccounts: ['payroll', 'everyday', 'reserve', 'savings'],
 		createdAt: now,
 		updatedAt: now
@@ -214,12 +214,12 @@ describe('Cut-off windows', () => {
 		expect(cutoffWindow('2027-02-28')).toEqual({ from: '2027-02-16', to: '2027-02-28' });
 	});
 
-	it("fund the next window with this Cut-off's pay", () => {
-		expect(fundedWindow('2026-11-15')).toEqual({ from: '2026-11-16', to: '2026-11-30' });
-		expect(fundedWindow('2026-11-30')).toEqual({ from: '2026-12-01', to: '2026-12-15' });
-		expect(fundingCutoffOf('2026-12-05')).toBe('2026-11-30');
-		expect(fundingCutoffOf('2026-12-31')).toBe('2026-12-15');
-		expect(fundingCutoffOf('2027-03-01')).toBe('2027-02-28');
+	it("fund their own window with this Cut-off's pay", () => {
+		expect(fundedWindow('2026-11-15')).toEqual({ from: '2026-11-01', to: '2026-11-15' });
+		expect(fundedWindow('2026-11-30')).toEqual({ from: '2026-11-16', to: '2026-11-30' });
+		expect(fundingCutoffOf('2026-12-05')).toBe('2026-12-15');
+		expect(fundingCutoffOf('2026-12-31')).toBe('2026-12-30');
+		expect(fundingCutoffOf('2027-03-01')).toBe('2027-03-15');
 	});
 
 	it('step between Cut-offs across months and years', () => {
@@ -232,16 +232,16 @@ describe('Cut-off windows', () => {
 
 describe('Funding Accounts', () => {
 	it('come from the Cut-off document, else the latest earlier one', () => {
-		expect(fundingAccountsFor(input(), '2026-11-15')).toEqual({
+		expect(fundingAccountsFor(input(), '2026-11-30')).toEqual({
 			ids: ['payroll', 'everyday', 'reserve', 'savings'],
 			stored: true
 		});
-		expect(fundingAccountsFor(input(), '2026-11-30').stored).toBe(false);
-		expect(fundingAccountsFor(input(), '2026-11-30').ids).toContain('reserve');
+		expect(fundingAccountsFor(input(), '2026-12-15').stored).toBe(false);
+		expect(fundingAccountsFor(input(), '2026-12-15').ids).toContain('reserve');
 	});
 
 	it("start from the plans' default Asset Accounts before any document exists", () => {
-		const ids = fundingAccountsFor(input({ forecasts: [] }), '2026-11-15').ids;
+		const ids = fundingAccountsFor(input({ forecasts: [] }), '2026-11-30').ids;
 		expect(ids).toEqual(expect.arrayContaining(['payroll', 'everyday']));
 		expect(ids).not.toContain('friend');
 		expect(ids).not.toContain('card');
@@ -249,22 +249,22 @@ describe('Funding Accounts', () => {
 
 	it('save only Asset Leaf Accounts, and keep one still used as a source', () => {
 		expect(() =>
-			planSetFundingAccounts(input(), '2026-11-15', ['everyday', 'card'], now)
+			planSetFundingAccounts(input(), '2026-11-30', ['everyday', 'card'], now)
 		).toThrow();
 		expect(() =>
-			planSetFundingAccounts(input(), '2026-11-15', ['payroll', 'reserve', 'savings'], now)
+			planSetFundingAccounts(input(), '2026-11-30', ['payroll', 'reserve', 'savings'], now)
 		).toThrow(/source/);
 		expect(
 			planSetFundingAccounts(
 				input(),
-				'2026-11-15',
+				'2026-11-30',
 				['payroll', 'everyday', 'reserve', 'savings', 'ewallet'],
 				now
 			)
 		).toEqual([
 			{
 				op: 'setForecast',
-				id: '2026-11-15',
+				id: '2026-11-30',
 				data: {
 					fundingAccounts: ['payroll', 'everyday', 'reserve', 'savings', 'ewallet'],
 					createdAt: now,
@@ -276,19 +276,19 @@ describe('Funding Accounts', () => {
 });
 
 describe('A Forecast', () => {
-	const f = buildForecast(input(), '2026-11-15');
+	const f = buildForecast(input(), '2026-11-30');
 	const out = (key: string) => f.outflows.find((o) => o.key === key)!;
 	const lane = (id: string) => f.lanes.find((l) => l.accountId === id)!;
 
 	it('counts Inflows in its own window by expected date, and a Late one from before', () => {
 		expect(f.inflows.map((i) => [i.key, i.accountId, i.total, i.late])).toEqual([
 			['scheduled:late:2026-10-28', 'everyday', 200_000, true],
-			['scheduled:repay:2026-11-14', 'ewallet', 120_000, false],
-			['scheduled:pay:2026-11-15', 'payroll', 2_000_000, false]
+			['scheduled:repay:2026-11-24', 'ewallet', 120_000, false],
+			['scheduled:pay:2026-11-30', 'payroll', 2_000_000, false]
 		]);
 	});
 
-	it('funds the Outflows due in the next window, plus Carried-over ones', () => {
+	it('funds the Outflows due in its own window, plus Carried-over ones', () => {
 		expect(f.outflows.map((o) => o.key).sort()).toEqual([
 			'installment:gadget:2026-11-28',
 			'scheduled:cardpay:2026-11-25',
@@ -371,15 +371,15 @@ describe('A Forecast', () => {
 
 describe('Early allocation', () => {
 	it('marks the transfer E.Alloc and its target "Allocated in" the earlier Cut-off', () => {
-		const a = buildForecast(input(), '2026-11-15');
+		const a = buildForecast(input(), '2026-11-30');
 		expect(a.outflows.find((o) => o.key === 'scheduled:ealloc:2026-11-16')!.ealloc).toEqual({
 			plan: 'scheduled',
 			planId: 'ins',
 			due: '2026-12-05'
 		});
-		const b = buildForecast(input(), '2026-11-30');
+		const b = buildForecast(input(), '2026-12-15');
 		const target = b.outflows.find((o) => o.key === 'scheduled:ins:2026-12-05')!;
-		expect(target.allocatedIn).toBe('2026-11-15');
+		expect(target.allocatedIn).toBe('2026-11-30');
 		expect(target.sources).toEqual([
 			{ accountId: 'reserve', amount: 250_000, paid: 0, valid: true }
 		]);
@@ -395,9 +395,9 @@ describe('Early allocation', () => {
 
 describe('Carry-over', () => {
 	it('greys an unpaid Outflow in its own Forecast once its window has ended', () => {
-		const old = buildForecast(input(), '2026-10-30');
+		const old = buildForecast(input(), '2026-11-15');
 		const net = old.outflows.find((o) => o.key === 'scheduled:internet:2026-11-08')!;
-		expect(net.carried).toBe('2026-11-15');
+		expect(net.carried).toBe('2026-11-30');
 		expect(old.totals.outflows).toBe(0);
 	});
 });
@@ -412,7 +412,7 @@ describe('A card payment whose amount varies', () => {
 			pays: { plan: 'scheduled', planId: 'cardpay', due: '2026-11-25' }
 		};
 		const chart = buildChart(accounts, [buffet, loanPayment, groceries, payment]);
-		const f = buildForecast(input({ chart }), '2026-11-15');
+		const f = buildForecast(input({ chart }), '2026-11-30');
 		expect(f.outflows.find((o) => o.key === 'scheduled:cardpay:2026-11-25')!.status).toBe('paid');
 	});
 });
@@ -421,7 +421,7 @@ describe('Bill with next payment', () => {
 	it('moves a recorded charge to the following card payment', () => {
 		const later = { ...buffet, billOn: '2026-11-26' };
 		const chart = buildChart(accounts, [later, loanPayment, groceries]);
-		const f = buildForecast(input({ chart }), '2026-11-15');
+		const f = buildForecast(input({ chart }), '2026-11-30');
 		const card = f.outflows.find((o) => o.key === 'scheduled:cardpay:2026-11-25')!;
 		expect(card.charges!.map((c) => c.label)).toEqual(['Music']);
 		expect(card.total).toBe(15_000);
@@ -433,7 +433,7 @@ describe('Sections', () => {
 		const scheduled = input().scheduled.map((p) =>
 			p.id === 'move' ? { ...p, section: 'important' } : p
 		);
-		const f = buildForecast(input({ scheduled }), '2026-11-15');
+		const f = buildForecast(input({ scheduled }), '2026-11-30');
 		expect(f.outflows.find((o) => o.key === 'scheduled:move:2026-11-16')!.section.name).toBe(
 			'Important'
 		);
@@ -444,14 +444,14 @@ describe('Sections', () => {
 			),
 			updatedAt: now
 		};
-		const g = buildForecast(input({ scheduled, settings }), '2026-11-15');
+		const g = buildForecast(input({ scheduled, settings }), '2026-11-30');
 		expect(g.outflows.find((o) => o.key === 'scheduled:move:2026-11-16')!.section.name).toBe(
 			'Internal Transfers'
 		);
 	});
 
 	it('derive Inflow Sections from where the money comes from', () => {
-		const f = buildForecast(input(), '2026-11-15');
+		const f = buildForecast(input(), '2026-11-30');
 		expect(f.inflows.map((i) => i.section.name)).toEqual(['Repayments', 'Repayments', 'Pay']);
 	});
 });

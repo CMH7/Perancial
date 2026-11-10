@@ -44,23 +44,23 @@ function input(over: Partial<ForecastInput> = {}): ForecastInput {
 		scheduled: [insurance],
 		installments: [],
 		forecasts: [
-			{ id: '2026-11-15', fundingAccounts: ['everyday'], createdAt: now, updatedAt: now }
+			{ id: '2026-11-30', fundingAccounts: ['everyday'], createdAt: now, updatedAt: now }
 		],
 		settings: null,
-		today: '2026-11-10',
+		today: '2026-11-20',
 		...over
 	};
 }
 
 const target = (i: ForecastInput) =>
-	buildForecast(i, '2026-11-30').outflows.find((o) => o.key === 'scheduled:ins:2026-12-05')!;
+	buildForecast(i, '2026-12-15').outflows.find((o) => o.key === 'scheduled:ins:2026-12-05')!;
 
 describe('Allocate early', () => {
 	it("offers the next Cut-off's open Outflows, then later ones", () => {
-		expect(allocationCandidates(input(), '2026-11-15').map((o) => o.key)).toEqual([
+		expect(allocationCandidates(input(), '2026-11-30').map((o) => o.key)).toEqual([
 			'scheduled:ins:2026-12-05'
 		]);
-		expect(allocationCandidates(input(), '2026-11-15', { cutoffs: 3 }).map((o) => o.key)).toEqual([
+		expect(allocationCandidates(input(), '2026-11-30', { cutoffs: 3 }).map((o) => o.key)).toEqual([
 			'scheduled:ins:2026-12-05',
 			'scheduled:ins:2027-01-05'
 		]);
@@ -68,7 +68,7 @@ describe('Allocate early', () => {
 
 	it('writes the transfer, the target sources and the reserve as the target Funding Account', () => {
 		const writes = planAllocateEarly(input(), {
-			cutoff: '2026-11-15',
+			cutoff: '2026-11-30',
 			target: target(input()),
 			reserveId: 'reserve',
 			fromId: 'everyday',
@@ -82,7 +82,7 @@ describe('Allocate early', () => {
 				data: {
 					versions: [
 						{
-							from: '2026-11-16',
+							from: '2026-11-30',
 							description: 'Reserve for Insurance',
 							note: '',
 							tags: [],
@@ -90,7 +90,7 @@ describe('Allocate early', () => {
 								{ accountId: 'everyday', side: 'from', amount: 250_000 },
 								{ accountId: 'reserve', side: 'to', amount: 250_000 }
 							],
-							rule: { type: 'once', date: '2026-11-16' }
+							rule: { type: 'once', date: '2026-11-30' }
 						}
 					],
 					end: { type: 'never' },
@@ -109,26 +109,35 @@ describe('Allocate early', () => {
 			}),
 			{
 				op: 'setForecast',
-				id: '2026-11-30',
+				id: '2026-12-15',
 				data: { fundingAccounts: ['everyday', 'reserve'], createdAt: now, updatedAt: now }
 			}
 		]);
 	});
 
-	it('dates the transfer in the funded window, even after a 31st', () => {
-		const dec = planAllocateEarly(input({ forecasts: [] }), {
-			cutoff: '2026-12-30',
-			target: { ...target(input()), link: { plan: 'scheduled', planId: 'ins', due: '2027-01-05' } },
-			reserveId: 'reserve',
-			fromId: 'everyday',
-			transferId: 'ea2',
-			now
+	it('dates the transfer on the Cut-off date, when its pay lands, or today when later', () => {
+		const at = (cutoff: string) =>
+			planAllocateEarly(input({ forecasts: [] }), {
+				cutoff,
+				target: {
+					...target(input()),
+					link: { plan: 'scheduled', planId: 'ins', due: '2027-01-05' }
+				},
+				reserveId: 'reserve',
+				fromId: 'everyday',
+				transferId: 'ea2',
+				now
+			})[0];
+		expect(at('2026-12-30')).toMatchObject({
+			data: { versions: [{ rule: { date: '2026-12-30' } }] }
 		});
-		expect(dec[0]).toMatchObject({ data: { versions: [{ rule: { date: '2027-01-01' } }] } });
+		expect(at('2026-11-15')).toMatchObject({
+			data: { versions: [{ rule: { date: '2026-11-20' } }] }
+		});
 	});
 
 	it('refuses a reserve that is not an Asset Leaf, or paying from outside the Funding Accounts', () => {
-		const base = { cutoff: '2026-11-15', target: target(input()), transferId: 'x', now };
+		const base = { cutoff: '2026-11-30', target: target(input()), transferId: 'x', now };
 		expect(() =>
 			planAllocateEarly(input(), { ...base, reserveId: 'card', fromId: 'everyday' })
 		).toThrow(/reserve/);
@@ -139,7 +148,7 @@ describe('Allocate early', () => {
 
 	it('remembers the last reserve used', () => {
 		const [transfer] = planAllocateEarly(input(), {
-			cutoff: '2026-11-15',
+			cutoff: '2026-11-30',
 			target: target(input()),
 			reserveId: 'reserve',
 			fromId: 'everyday',
@@ -155,7 +164,7 @@ describe('Allocate early', () => {
 describe('Undo allocation', () => {
 	const allocated = () => {
 		const writes = planAllocateEarly(input(), {
-			cutoff: '2026-11-15',
+			cutoff: '2026-11-30',
 			target: target(input()),
 			reserveId: 'reserve',
 			fromId: 'everyday',
@@ -178,11 +187,11 @@ describe('Undo allocation', () => {
 		const scheduled = allocated();
 		const transfer = scheduled.find((p) => p.id === 'ea1')!;
 		const paid: Transaction = {
-			...tx('move', '2026-11-16', [
+			...tx('move', '2026-11-30', [
 				['reserve', 250_000],
 				['everyday', -250_000]
 			]),
-			pays: { plan: 'scheduled', planId: 'ea1', due: '2026-11-16' }
+			pays: { plan: 'scheduled', planId: 'ea1', due: '2026-11-30' }
 		};
 		expect(() =>
 			planUndoAllocation(input({ scheduled, chart: buildChart(accounts, [paid]) }), transfer, now)

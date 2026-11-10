@@ -135,7 +135,7 @@ An Occurrence or Installment Plan payment that has at least one paying Transacti
 An Occurrence whose date has passed without being Paid or skipped. It stays overdue until the user records or skips it.
 
 **Cut-off**
-One of the two pay dates in a month, the 15th and the 30th (the last day of February). Each Cut-off covers the days since the previous one: the 15th covers days 1–15, the 30th covers day 16 to the month's end. The pay received in the days up to a Cut-off funds the expenses due from the next day until the next Cut-off. Planning and forecasting are grouped by cut-off.
+One of the two pay dates in a month, the 15th and the 30th (the last day of February). Each Cut-off covers the days since the previous one: the 15th covers days 1–15, the 30th covers day 16 to the month's end. A Cut-off's pay funds the expenses due in the same days it covers: the 15th's pay funds what is due on days 1–15, the 30th's funds what is due from the 16th to the month's end. Pay counts in the Cut-off whose days hold its date, even when an employer pays work days late. Planning and forecasting are grouped by cut-off.
 
 **Forecast**
 The plan for one Cut-off: its Inflows, the Outflows they fund, and which Accounts pay each one.
