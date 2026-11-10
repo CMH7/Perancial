@@ -227,17 +227,28 @@ function rowIndex(plan: Installment, due: IsoDate): number {
 	return i;
 }
 
-/** Edits one row (date, principal, interest, additionals); the plan becomes varied. */
+const dayNumber = (d: IsoDate) =>
+	Date.UTC(+d.slice(0, 4), +d.slice(5, 7) - 1, +d.slice(8, 10)) / 864e5;
+
+/**
+ * Edits one row (date, principal, interest, additionals); the plan becomes varied. With
+ * `moveFollowing`, a new date also moves every later row by the same number of days, so paying a
+ * few days before each due date takes one edit.
+ */
 export function planEditRow(
 	chart: Chart,
 	plans: Installment[],
 	plan: Installment,
 	due: IsoDate,
 	patch: Partial<Pick<InstallmentRow, 'date' | 'principal' | 'interest' | 'additionals'>>,
-	{ now }: { now: Date }
+	{ now, moveFollowing = false }: { now: Date; moveFollowing?: boolean }
 ): ChartWrite[] {
 	const i = rowIndex(plan, due);
-	const rows = plan.rows.with(i, { ...plan.rows[i], ...patch });
+	let rows = plan.rows.with(i, { ...plan.rows[i], ...patch });
+	if (moveFollowing && patch.date) {
+		const days = dayNumber(patch.date) - dayNumber(plan.rows[i].date);
+		rows = rows.map((r, k) => (k > i ? { ...r, date: addDays(r.date, days) } : r));
+	}
 	return planSaveInstallment(
 		chart,
 		plans,
