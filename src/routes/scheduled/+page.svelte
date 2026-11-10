@@ -47,15 +47,28 @@
 	};
 
 	const todayIso = today();
-	const tab = $derived(page.url.searchParams.get('tab') === 'plans' ? 'plans' : 'upcoming');
-	function show(next: 'upcoming' | 'plans') {
+	type Tab = 'upcoming' | 'overdue' | 'plans';
+	const tab = $derived.by((): Tab => {
+		const t = page.url.searchParams.get('tab');
+		return t === 'plans' || t === 'overdue' ? t : 'upcoming';
+	});
+	function show(next: Tab) {
 		// eslint-disable-next-line svelte/no-navigation-without-resolve -- resolved path plus a query
-		goto(`${resolve('/scheduled')}${next === 'plans' ? '?tab=plans' : ''}`, { replaceState: true });
+		goto(`${resolve('/scheduled')}${next === 'upcoming' ? '' : `?tab=${next}`}`, {
+			replaceState: true
+		});
 	}
 
 	const chart = $derived(ledger.chart);
 	const allUpcoming = $derived(upcoming(chart, ledger.scheduled, { today: todayIso }));
-	const list = $derived(filterUpcoming(chart, allUpcoming, f));
+	// Overdue (oldest first) gets its own tab; Upcoming keeps today and the next 30 days.
+	const allOverdue = $derived(allUpcoming.filter((v) => v.status.overdue));
+	const allDue = $derived(allUpcoming.filter((v) => !v.status.overdue));
+	const list = $derived(filterUpcoming(chart, tab === 'overdue' ? allOverdue : allDue, f));
+	const listTotal = $derived(tab === 'overdue' ? allOverdue.length : allDue.length);
+	const listWhat = $derived(
+		tab === 'overdue' ? 'overdue' : `due today or in the next ${UPCOMING_DAYS} days`
+	);
 	const rows = $derived(planRows(chart, ledger.scheduled, f, { today: todayIso, sort }));
 	const groups = $derived(groupPlans(rows, group));
 
@@ -108,14 +121,17 @@
 		</div>
 
 		<div class="mb-4 flex gap-1 border-b text-sm">
-			{#each [['upcoming', 'Upcoming', allUpcoming.length], ['plans', 'Plans', ledger.scheduled.length]] as const as [key, label, count] (key)}
+			{#each [['upcoming', 'Upcoming', allDue.length], ['overdue', 'Overdue', allOverdue.length], ['plans', 'Plans', ledger.scheduled.length]] as const as [key, label, count] (key)}
 				<button
 					class="-mb-px border-b-2 px-3 py-2 {tab === key
 						? 'border-gray-900 font-medium'
 						: 'border-transparent text-gray-500 hover:text-gray-900'}"
 					onclick={() => show(key)}
 					>{label}
-					<span class="ml-1 rounded-full bg-gray-100 px-1.5 text-xs text-gray-600">{count}</span
+					<span
+						class="ml-1 rounded-full px-1.5 text-xs {key === 'overdue' && count
+							? 'bg-amber-100 text-amber-800'
+							: 'bg-gray-100 text-gray-600'}">{count}</span
 					></button
 				>
 			{/each}
@@ -178,13 +194,11 @@
 				{/if}
 			</div>
 
-			{#if tab === 'upcoming'}
-				<p class="mb-3 text-xs text-gray-500">
-					{list.length} of {allUpcoming.length} overdue or due in the next {UPCOMING_DAYS} days
-				</p>
-				{#if allUpcoming.length === 0}
+			{#if tab !== 'plans'}
+				<p class="mb-3 text-xs text-gray-500">{list.length} of {listTotal} {listWhat}</p>
+				{#if listTotal === 0}
 					<p class="rounded-xl border bg-white px-5 py-6 text-center text-sm text-gray-500">
-						Nothing overdue or due in the next {UPCOMING_DAYS} days.
+						Nothing {listWhat}.
 					</p>
 				{:else if list.length === 0}
 					<p class="rounded-xl border bg-white px-5 py-6 text-center text-sm text-gray-500">
