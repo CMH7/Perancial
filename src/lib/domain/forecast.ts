@@ -156,6 +156,8 @@ export type ResolvedSource = PayingSource & {
 	paid: number;
 	/** False when the Account isn't one of this Cut-off's Funding Accounts: it counts as Unfunded. */
 	valid: boolean;
+	/** Carried over: what this source had paid before, not part of `amount` here. */
+	priorPaid?: number;
 };
 
 export type Charge = {
@@ -715,9 +717,13 @@ function carriedOut(o: ForecastOutflow, to: IsoDate): ForecastOutflow {
 
 /** In today's Forecast, it brings only what is left, under Overdue. */
 function carriedIn(o: ForecastOutflow): ForecastOutflow {
-	const sources = o.sources
-		.map((s) => ({ ...s, amount: s.amount - s.paid, paid: 0 }))
-		.filter((s) => s.amount > 0);
+	// Fully paid sources stay (amount 0) so editing keeps them; screens skip them.
+	const sources = o.sources.map((s) => ({
+		...s,
+		amount: s.amount - s.paid,
+		paid: 0,
+		priorPaid: s.paid
+	}));
 	const covered = sources.reduce((s, x) => s + (x.valid ? x.amount : 0), 0);
 	return {
 		...o,

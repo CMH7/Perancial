@@ -7,22 +7,75 @@
 	import {
 		formatAmount,
 		formatPicks,
+		parseAmount,
+		planSetSources,
 		recordPicks,
 		shortDate,
-		type ForecastOutflow
+		sourceEditErrors,
+		type ForecastInput,
+		type ForecastOutflow,
+		type Lane
 	} from '#lib/domain/index.ts';
+	import { ledger } from '#lib/ledger.svelte.ts';
 
 	let {
 		outflow: o,
 		cutoff,
+		input,
+		lanes,
 		name,
 		onclose
 	}: {
 		outflow: ForecastOutflow;
 		cutoff: string;
+		input: ForecastInput;
+		lanes: Lane[];
 		name: (id: string) => string;
 		onclose: () => void;
 	} = $props();
+
+	// Editing the Paying sources: amounts as typed text, saved on the Occurrence or Row.
+	type Row = { accountId: string; amount: string; paid: number };
+	const text = (c: number) => `${Math.floor(c / 100)}.${String(c % 100).padStart(2, '0')}`;
+	const fromOutflow = (): Row[] =>
+		o.sources
+			.filter((s) => s.amount > 0 || s.paid > 0)
+			.map((s) => ({ accountId: s.accountId, amount: text(s.amount), paid: s.paid }));
+	let rows = $state<Row[]>([]);
+	let editedKey = $state('');
+	// Start over whenever another Outflow opens or the saved sources change.
+	const savedKey = $derived(`${o.key}|${JSON.stringify(o.sources)}`);
+	$effect(() => {
+		if (savedKey !== editedKey) {
+			rows = fromOutflow();
+			editedKey = savedKey;
+		}
+	});
+	const cents = (t: string) => parseAmount(t) ?? NaN;
+	const typed = $derived(rows.map((r) => ({ accountId: r.accountId, amount: cents(r.amount) })));
+	const errors = $derived(
+		new Map(sourceEditErrors(input, cutoff, typed).map((e) => [e.at, e.message]))
+	);
+	const dirty = $derived(JSON.stringify(rows) !== JSON.stringify(fromOutflow()));
+	const covered = $derived(typed.reduce((t, s) => t + (Number.isNaN(s.amount) ? 0 : s.amount), 0));
+	const fundingLanes = $derived(lanes.filter((l) => l.funding));
+	let saveError = $state('');
+	let saving = $state(false);
+	function addSource(accountId: string) {
+		if (!accountId) return;
+		rows.push({ accountId, amount: text(Math.max(0, o.total - covered)), paid: 0 });
+	}
+	async function saveSources() {
+		saveError = '';
+		saving = true;
+		try {
+			await ledger.commit(planSetSources(input, cutoff, o, typed, new Date()));
+		} catch (err) {
+			saveError = (err as Error).message;
+		} finally {
+			saving = false;
+		}
+	}
 
 	const all = $derived(recordPicks(o, 'all'));
 	const planHref = $derived(
@@ -113,30 +166,98 @@
 
 	<div>
 		<p class="mb-1 text-xs font-semibold text-gray-500 uppercase">Paying sources</p>
-		{#each o.sources as s (s.accountId)}
-			<div class="flex items-center justify-between gap-2 py-1">
-				<span class={s.valid ? '' : 'text-amber-700'}
-					>{name(s.accountId)}{#if !s.valid}<span class="block text-xs"
-							>Not a Funding Account this Cut-off</span
-						>{/if}</span
-				>
-				<span class="flex items-center gap-2">
-					<span class="tabular-nums">{formatAmount(s.amount)}</span>
-					{#if s.amount > 0 && s.paid >= s.amount}<span class="text-emerald-700">Paid</span
-						>{:else if s.valid}<button class="underline" onclick={() => record(s.accountId)}
-							>Record</button
-						>{/if}
-				</span>
+		{#each rows as r, i (i)}
+			{@const saved = o.sources.find((s) => s.accountId === r.accountId)}
+			<div class="py-1">
+				<div class="flex items-center gap-1">
+					{#if r.paid > 0}
+						<span class="min-w-0 flex-1 truncate text-xs">{name(r.accountId)}</span>
+					{:else}
+						<select
+							class="min-w-0 flex-1 rounded border-gray-300 py-0.5 text-xs"
+							bind:value={r.accountId}
+							aria-label="Paying source Account"
+						>
+							{#if !fundingLanes.some((l) => l.accountId === r.accountId)}
+								<option value={r.accountId}>{name(r.accountId)} (not funding)</option>
+							{/if}
+							{#each fundingLanes as l (l.accountId)}
+								<option value={l.accountId}
+									>{name(l.accountId)} — left {formatAmount(l.plannedLeft)}</option
+								>
+							{/each}
+						</select>
+					{/if}
+					<input
+						class="w-24 rounded border-gray-300 py-0.5 text-right text-xs tabular-nums"
+						bind:value={r.amount}
+						inputmode="decimal"
+						aria-label="Amount from {name(r.accountId)}"
+					/>
+					{#if saved && saved.amount > 0 && saved.paid >= saved.amount}
+						<span class="text-xs text-emerald-700">Paid</span>
+					{:else if saved?.valid && !dirty}
+						<button class="text-xs underline" onclick={() => record(r.accountId)}>Record</button>
+					{/if}
+					{#if r.paid === 0}
+						<button
+							class="px-1 text-gray-400 hover:text-red-700"
+							aria-label="Remove {name(r.accountId)}"
+							onclick={() => rows.splice(i, 1)}>✕</button
+						>
+					{/if}
+				</div>
+				{#if errors.get(`sources.${i}.account`) || errors.get(`sources.${i}.amount`)}
+					<p class="text-xs text-red-600">
+						{errors.get(`sources.${i}.account`) ?? errors.get(`sources.${i}.amount`)}
+					</p>
+				{:else if r.paid > 0}
+					<p class="text-xs text-gray-500">{formatAmount(r.paid)} paid; the Account stays.</p>
+				{/if}
 			</div>
 		{:else}<p class="text-xs text-gray-400">No Paying source yet.</p>{/each}
-		{#if o.unfunded}<p class="mt-1 text-amber-700">Unfunded {formatAmount(o.unfunded)}</p>{/if}
+		<div class="mt-2 flex items-center gap-2">
+			<select
+				class="rounded border-gray-300 py-0.5 text-xs"
+				aria-label="Add a paying source"
+				value=""
+				onchange={(e) => {
+					addSource(e.currentTarget.value);
+					e.currentTarget.value = '';
+				}}
+			>
+				<option value="">+ Add paying source…</option>
+				{#each fundingLanes.filter((l) => !rows.some((r) => r.accountId === l.accountId)) as l (l.accountId)}
+					<option value={l.accountId}
+						>{name(l.accountId)} — left {formatAmount(l.plannedLeft)}</option
+					>
+				{/each}
+			</select>
+			<span class="text-xs text-gray-500"
+				>sources {formatAmount(covered)} of {formatAmount(o.total)}</span
+			>
+		</div>
+		{#if dirty}
+			<div class="mt-2 flex items-center gap-2">
+				<button
+					class="rounded bg-gray-900 px-3 py-1 text-xs text-white disabled:opacity-40"
+					disabled={saving || errors.size > 0}
+					onclick={saveSources}>{saving ? 'Saving…' : 'Save sources'}</button
+				>
+				<button class="text-xs underline" onclick={() => (rows = fromOutflow())}>Discard</button>
+				{#if saveError}<span class="text-xs text-red-600">{saveError}</span>{/if}
+			</div>
+		{/if}
+		{#if o.unfunded && !dirty}<p class="mt-1 text-amber-700">
+				Unfunded {formatAmount(o.unfunded)}
+			</p>{/if}
 		{#if o.usualAccounts.length}<p class="text-xs text-gray-500">
 				Usually paid from {o.usualAccounts.map(name).join(', ')}.
 			</p>{/if}
 	</div>
 
 	<div class="flex flex-wrap gap-2">
-		{#if all.length}
+		{#if all.length && !dirty}
 			<button class="rounded bg-gray-900 px-3 py-1.5 text-white" onclick={() => record('all')}
 				>Record all</button
 			>

@@ -10,6 +10,12 @@
 		buildForecast,
 		cutoffOf,
 		formatAmount,
+		formatPicks,
+		moveSource,
+		parseAmount,
+		planSetSources,
+		recordPicks,
+		splitSource,
 		fundingCandidates,
 		nextCutoff,
 		openingCutoff,
@@ -53,10 +59,90 @@
 	const day = (d: string) => shortDate(d, { year: false });
 
 	// Selecting, hovering and opening an Outflow: every card of it lights up in every lane.
-	let selected = $state<string | null>(null);
+	// A card is one Paying source of an Outflow (`from`), or its Unfunded part (`from` null).
+	type CardRef = { key: string; from: string | null };
+	let selected = $state<CardRef | null>(null);
 	let hovered = $state<string | null>(null);
 	let openKey = $state<string | null>(null);
-	const lit = $derived(hovered ?? selected ?? openKey);
+	const lit = $derived(hovered ?? selected?.key ?? openKey);
+	const outflowOf = (key: string) => view?.outflows.find((o) => o.key === key);
+
+	// Editing sources from the lanes: drag a card to another lane (moves that source), or
+	// Ctrl+C a selected card and click a lane (splits off an amount). Both save the same `sources`.
+	let actionError = $state('');
+	async function saveSources(o: ForecastOutflow, sources: { accountId: string; amount: number }[]) {
+		actionError = '';
+		try {
+			await ledger.commit(planSetSources(input, cutoff, o, sources, new Date()));
+		} catch (err) {
+			actionError = (err as Error).message;
+		}
+	}
+	let dragging = $state<CardRef | null>(null);
+	let overLane = $state<string | null>(null);
+	function drop(lane: string) {
+		overLane = null;
+		const d = dragging;
+		dragging = null;
+		const o = d && outflowOf(d.key);
+		if (!o || !d || d.from === lane) return;
+		try {
+			const next =
+				d.from === null
+					? splitSource(o.sources, null, lane, o.unfunded)
+					: moveSource(o.sources, d.from, lane);
+			saveSources(o, next);
+		} catch (err) {
+			actionError = (err as Error).message;
+		}
+	}
+	let copied = $state<CardRef | null>(null);
+	let paste = $state<{ ref: CardRef; lane: string; amount: string } | null>(null);
+	const text = (c: number) => `${Math.floor(c / 100)}.${String(c % 100).padStart(2, '0')}`;
+	function laneClick(lane: string) {
+		const o = copied && outflowOf(copied.key);
+		if (!o || !copied || copied.from === lane) return;
+		const src = o.sources.find((s) => s.accountId === copied!.from);
+		const amount = src ? src.amount - src.paid : o.unfunded;
+		paste = { ref: copied, lane, amount: text(amount) };
+	}
+	function confirmPaste() {
+		const p = paste;
+		const o = p && outflowOf(p.ref.key);
+		const cents = p ? parseAmount(p.amount) : null;
+		paste = null;
+		copied = null;
+		if (!o || !p || !cents || cents <= 0) return;
+		try {
+			saveSources(o, splitSource(o.sources, p.ref.from, p.lane, cents));
+		} catch (err) {
+			actionError = (err as Error).message;
+		}
+	}
+
+	// Right-click or hold a card: a menu. "Show in all Funding Accounts" filters every lane to
+	// that Outflow's cards; nothing is removed.
+	let menu = $state<{ ref: CardRef; x: number; y: number } | null>(null);
+	let onlyKey = $state<string | null>(null);
+	let pressTimer: ReturnType<typeof setTimeout> | undefined;
+	function pressStart(e: PointerEvent, ref: CardRef) {
+		const { clientX: x, clientY: y } = e;
+		pressTimer = setTimeout(() => (menu = { ref, x, y }), 550);
+	}
+	const pressEnd = () => clearTimeout(pressTimer);
+	function recordAll(o: ForecastOutflow) {
+		const picks = recordPicks(o, 'all');
+		if (!picks.length) return;
+		const key = o.link.plan === 'scheduled' ? 'plan' : 'installment';
+		const back = encodeURIComponent(`/forecast?cutoff=${cutoff}`);
+		const url = `${resolve('/transactions/new')}?${key}=${encodeURIComponent(o.link.planId)}&due=${o.link.due}&sources=${formatPicks(picks)}&back=${back}`;
+		// eslint-disable-next-line svelte/no-navigation-without-resolve -- resolved path plus a query
+		goto(url);
+	}
+	const planHref = (o: ForecastOutflow) =>
+		o.link.plan === 'scheduled'
+			? resolve('/scheduled/[id]', { id: o.link.planId })
+			: resolve('/installments/[id]', { id: o.link.planId });
 	const open = $derived(view?.outflows.find((o) => o.key === openKey) ?? null);
 	const STRIPES = [
 		'border-l-sky-500',
@@ -173,6 +259,20 @@
 				</div>
 			</div>
 
+			{#if copied || onlyKey || actionError}
+				<div
+					class="mb-2 flex flex-wrap items-center gap-3 rounded-lg bg-sky-50 px-3 py-1.5 text-sm text-sky-900"
+				>
+					{#if copied}<span
+							>Copied <b>{outflowOf(copied.key)?.label}</b>: click a Funding Account's lane to add
+							it there. Esc cancels.</span
+						>{/if}
+					{#if onlyKey}<span>Showing only <b>{outflowOf(onlyKey)?.label}</b>.</span>
+						<button class="underline" onclick={() => (onlyKey = null)}>Show all</button>{/if}
+					{#if actionError}<span class="text-red-700">{actionError}</span>{/if}
+				</div>
+			{/if}
+
 			<div class="mb-3 flex flex-wrap items-center gap-2 text-sm">
 				<button class="rounded border bg-white px-2 py-1" onclick={manage}>Funding Accounts…</button
 				>
@@ -180,7 +280,8 @@
 						>Same as the previous Cut-off until you change them.</span
 					>{/if}
 				<span class="text-xs text-gray-400"
-					>Click selects · double-click opens · hover lights up every part of an Outflow</span
+					>Click selects · double-click opens · drag moves a source · Ctrl+C then click a lane
+					splits it · right-click or hold for more</span
 				>
 			</div>
 
@@ -215,19 +316,40 @@
 				</div>
 			{/if}
 
-			{#snippet card(o: ForecastOutflow, amount: number, paid: number, sourceNote: string)}
+			{#snippet card(
+				o: ForecastOutflow,
+				from: string | null,
+				amount: number,
+				paid: number,
+				sourceNote: string
+			)}
+				{@const movable = paid === 0 && (o.carried === undefined || o.carried === 'in')}
 				<button
+					draggable={movable}
+					ondragstart={() => (dragging = { key: o.key, from })}
+					ondragend={() => ((dragging = null), (overLane = null))}
+					oncontextmenu={(e) => {
+						e.preventDefault();
+						menu = { ref: { key: o.key, from }, x: e.clientX, y: e.clientY };
+					}}
+					onpointerdown={(e) => pressStart(e, { key: o.key, from })}
+					onpointerup={pressEnd}
 					class="mt-1 block w-full rounded border px-2 py-1 text-left text-sm {stripe(o)} {lit ===
 					o.key
 						? 'border-sky-400 bg-sky-50 ring-2 ring-sky-300'
-						: 'hover:bg-gray-50'} {o.carried && o.carried !== 'in' ? 'opacity-50' : ''} {paid >=
-						amount && amount > 0
-						? 'text-gray-400'
-						: ''}"
-					onclick={() => (selected = o.key)}
+						: 'hover:bg-gray-50'} {movable ? 'cursor-grab' : ''} {o.carried && o.carried !== 'in'
+						? 'opacity-50'
+						: ''} {paid >= amount && amount > 0 ? 'text-gray-400' : ''}"
+					onclick={(e) => {
+						e.stopPropagation();
+						selected = { key: o.key, from };
+					}}
 					ondblclick={() => (openKey = o.key)}
 					onmouseenter={() => (hovered = o.key)}
-					onmouseleave={() => (hovered = null)}
+					onmouseleave={() => {
+						hovered = null;
+						pressEnd();
+					}}
 				>
 					<span class="mr-1 text-xs text-gray-400">{paid >= amount && amount > 0 ? '✓' : '○'}</span
 					>{o.label}
@@ -254,8 +376,8 @@
 					>
 						<h2 class="font-semibold text-amber-900">Unfunded</h2>
 						<p class="mb-2 text-xs text-amber-800">No Funding Account pays these yet</p>
-						{#each unfundedItems as o (o.key)}
-							{@render card(o, o.unfunded, 0, '')}
+						{#each unfundedItems.filter((o) => !onlyKey || o.key === onlyKey) as o (o.key)}
+							{@render card(o, null, o.unfunded, 0, '')}
 							{#if o.usualAccounts.length}<p class="text-xs text-gray-500">
 									usually {o.usualAccounts.map(name).join(', ')}
 								</p>{/if}
@@ -264,9 +386,28 @@
 				{/if}
 
 				{#each view.lanes as lane (lane.accountId)}
+					<!-- A lane is a drop and paste target; Enter on a focused lane pastes too. -->
+					<!-- svelte-ignore a11y_no_noninteractive_element_interactions, a11y_no_noninteractive_tabindex -->
 					<section
-						class="w-72 shrink-0 rounded-xl border bg-white p-3 {lane.funding ? '' : 'opacity-60'}"
+						tabindex={copied && lane.funding ? 0 : -1}
+						onkeydown={(e) => e.key === 'Enter' && lane.funding && laneClick(lane.accountId)}
+						class="w-72 shrink-0 rounded-xl border bg-white p-3 {lane.funding
+							? ''
+							: 'opacity-60'} {overLane === lane.accountId ? 'ring-2 ring-sky-400' : ''} {copied &&
+						lane.funding
+							? 'cursor-copy outline-2 outline-sky-300 outline-dashed'
+							: ''}"
 						aria-label={name(lane.accountId)}
+						role="list"
+						ondragover={(e) => {
+							if (lane.funding && dragging) {
+								e.preventDefault();
+								overLane = lane.accountId;
+							}
+						}}
+						ondragleave={() => (overLane = null)}
+						ondrop={() => lane.funding && drop(lane.accountId)}
+						onclick={() => lane.funding && laneClick(lane.accountId)}
 					>
 						<h2 class="font-semibold">{name(lane.accountId)}</h2>
 						<p class="text-xs text-gray-500">Balance today {formatAmount(lane.balanceToday)}</p>
@@ -331,10 +472,12 @@
 						{#if lane.funding}
 							<h3 class="mt-3 text-xs font-medium text-gray-500 uppercase">Out</h3>
 							{#each view.outflows.flatMap((o) => o.sources
-									.filter((s) => s.accountId === lane.accountId && s.valid)
+									.filter((s) => s.accountId === lane.accountId && s.valid && s.amount > 0)
+									.filter(() => !onlyKey || o.key === onlyKey)
 									.map((s) => ({ o, s }))) as { o, s }, k (o.key + k)}
 								{@render card(
 									o,
+									s.accountId,
 									s.amount,
 									s.paid,
 									o.sources.length > 1
@@ -379,16 +522,102 @@
 		<div
 			class="sticky top-0 h-screen w-96 shrink-0 overflow-y-auto border-l bg-white p-6 shadow-xl"
 		>
-			<ForecastDrawer outflow={open} {cutoff} {name} onclose={() => (openKey = null)} />
+			<ForecastDrawer
+				outflow={open}
+				{cutoff}
+				{input}
+				lanes={view.lanes}
+				{name}
+				onclose={() => (openKey = null)}
+			/>
 		</div>
 	{/if}
 </div>
 
 <svelte:window
 	onkeydown={(e) => {
+		const t = e.target as HTMLElement;
+		if (t.closest('input, textarea, select, [contenteditable]')) return;
+		if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c' && selected) copied = selected;
 		if (e.key === 'Escape') {
 			selected = null;
 			openKey = null;
+			copied = null;
+			menu = null;
+			paste = null;
 		}
 	}}
+	onclick={() => (menu = null)}
 />
+
+{#if menu}
+	{@const mo = outflowOf(menu.ref.key)}
+	{#if mo}
+		<div
+			class="fixed z-50 w-64 rounded-lg border bg-white py-1 text-sm shadow-xl"
+			style="left: {menu.x}px; top: {menu.y}px"
+			role="menu"
+		>
+			<p class="px-3 py-1 text-xs text-gray-500">{mo.label}</p>
+			<button
+				class="block w-full px-3 py-1.5 text-left hover:bg-gray-100"
+				onclick={() => ((onlyKey = mo.key), (menu = null))}>Show in all Funding Accounts</button
+			>
+			<button
+				class="block w-full px-3 py-1.5 text-left hover:bg-gray-100"
+				onclick={() => ((openKey = mo.key), (menu = null))}>Open</button
+			>
+			<button
+				class="block w-full px-3 py-1.5 text-left hover:bg-gray-100"
+				onclick={() => ((selected = copied = menu!.ref), (menu = null))}
+				>Copy to another Funding Account <span class="float-right text-xs text-gray-400"
+					>Ctrl+C</span
+				></button
+			>
+			{#if recordPicks(mo, 'all').length}
+				<button
+					class="block w-full px-3 py-1.5 text-left hover:bg-gray-100"
+					onclick={() => recordAll(mo)}>Record all</button
+				>
+			{/if}
+			<a class="block w-full px-3 py-1.5 text-left hover:bg-gray-100" href={planHref(mo)}
+				>Open plan ↗</a
+			>
+		</div>
+	{/if}
+{/if}
+
+{#if paste}
+	{@const po = outflowOf(paste.ref.key)}
+	<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/20">
+		<form
+			class="w-80 rounded-xl bg-white p-4 text-sm shadow-2xl"
+			onsubmit={(e) => {
+				e.preventDefault();
+				confirmPaste();
+			}}
+		>
+			<h2 class="font-semibold">Add a Paying source</h2>
+			<p class="text-gray-500">
+				{po?.label} from <b>{name(paste.lane)}</b>{paste.ref.from
+					? `, moved out of ${name(paste.ref.from)}`
+					: ''}.
+			</p>
+			<label class="mt-3 block"
+				>Amount <input
+					class="mt-1 w-full rounded border-gray-300 py-1"
+					inputmode="decimal"
+					bind:value={paste.amount}
+				/></label
+			>
+			<div class="mt-3 flex justify-end gap-2">
+				<button
+					type="button"
+					class="rounded border px-3 py-1"
+					onclick={() => ((paste = null), (copied = null))}>Cancel</button
+				>
+				<button class="rounded bg-gray-900 px-3 py-1 text-white">Add</button>
+			</div>
+		</form>
+	</div>
+{/if}

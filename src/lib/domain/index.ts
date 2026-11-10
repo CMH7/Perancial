@@ -22,3 +22,4 @@ export * from './installment-paying.ts';
 export * from './forecast.ts';
 export * from './forecast-settings.ts';
 export * from './forecast-record.ts';
+export * from './forecast-sources.ts';
