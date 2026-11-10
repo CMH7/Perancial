@@ -161,6 +161,7 @@ function assertLeaf(chart: Chart, id: string | null, label: string, type?: strin
 /** The bookkeeping checks every save runs (rules only check the shape). */
 function assertValid(chart: Chart, plans: Installment[], id: string, plan: InstallmentTerms) {
 	const { accounts: acc } = plan;
+	if (!plan.title.trim()) throw new Error('Add a title');
 	if (plan.kind === 'lender') {
 		assertLeaf(chart, acc.repaid, "plan's Liability", 'liability');
 		assertLeaf(chart, acc.interest, 'Interest Account', 'expense');
@@ -304,4 +305,75 @@ export function planDeleteInstallment(chart: Chart, planId: string): ChartWrite[
 	if (planHasPayments(chart, 'installment', planId))
 		throw new Error('Transactions pay this plan: unlink or delete them first');
 	return [{ op: 'deleteInstallment', id: planId }];
+}
+
+/**
+ * For a lender plan: the Liability's Balance and what it should hold (tracked principal less what
+ * paying Transactions put on the Liability), when they differ. Shown as a hint; never fixed for you.
+ */
+export function liabilityHint(
+	chart: Chart,
+	plan: Installment
+): { balance: number; expected: number } | null {
+	if (plan.kind !== 'lender') return null;
+	const repaid = plan.accounts.repaid;
+	const tracked = plan.rows.filter((r) => r.n >= plan.trackedFrom);
+	const paidIn = tracked
+		.flatMap((r) => paymentsFor(chart, { plan: 'installment', planId: plan.id, due: r.due }))
+		.flatMap((tx) => tx.entries)
+		.filter((e) => e.accountId === repaid && e.amount > 0)
+		.reduce((s, e) => s + e.amount, 0);
+	const expected = tracked.reduce((s, r) => s + r.principal, 0) - paidIn;
+	const balance = chart.balance(repaid, '9999-12-31') + 0; // never -0
+	return balance === expected ? null : { balance, expected };
+}
+
+/** "Archive Liability Account" is offered once every tracked row is Paid and the Liability is at zero. */
+export function archiveOffer(
+	chart: Chart,
+	plan: Installment,
+	{ today }: { today: IsoDate }
+): boolean {
+	if (plan.kind !== 'lender') return false;
+	const liability = chart.account(plan.accounts.repaid);
+	if (!liability || liability.archived) return false;
+	const done = rowStatuses(chart, plan, { today }).every(
+		(r) => r.state === 'paid' || r.state === 'before'
+	);
+	return done && chart.balance(liability.id, '9999-12-31') === 0;
+}
+
+/** The plan terms that can change after creation; rows change one at a time instead. */
+export type TermsPatch = Partial<
+	Pick<InstallmentTerms, 'title' | 'tags' | 'note' | 'purchaseDate' | 'accounts'>
+>;
+
+/** Edits a plan's terms. Existing Transactions are never rewritten. */
+export function planEditTerms(
+	chart: Chart,
+	plans: Installment[],
+	plan: Installment,
+	patch: TermsPatch,
+	{ now }: { now: Date }
+): ChartWrite[] {
+	const terms = { ...termsOf(plan), ...patch };
+	return planSaveInstallment(
+		chart,
+		plans,
+		plan.id,
+		{ ...terms, title: terms.title.trim() },
+		{ now }
+	);
+}
+
+/** Moves the "tracked from" row. Rows before it become Before tracking; links stay. */
+export function planMoveTrackedFrom(
+	chart: Chart,
+	plans: Installment[],
+	plan: Installment,
+	n: number,
+	{ now }: { now: Date }
+): ChartWrite[] {
+	if (!plan.rows.some((r) => r.n === n)) throw new Error(`There is no row ${n}`);
+	return planSaveInstallment(chart, plans, plan.id, { ...termsOf(plan), trackedFrom: n }, { now });
 }
