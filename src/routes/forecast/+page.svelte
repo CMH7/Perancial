@@ -264,7 +264,8 @@
 </script>
 
 <div class="flex">
-	<main class="min-w-0 flex-1 px-4 py-6">
+	<!-- Fills the window under the nav bar: the header stays put and only the lanes area scrolls. -->
+	<main class="flex h-[calc(100dvh-var(--nav-h,0px))] min-w-0 flex-1 flex-col px-4 pt-6">
 		{#if ledger.error}
 			<p class="rounded-lg bg-red-50 p-4 text-sm text-red-800">{ledger.error}</p>
 		{:else if !view}
@@ -473,7 +474,15 @@
 				</button>
 			{/snippet}
 
-			<div class="flex gap-3 overflow-x-auto pb-4">
+			{#if view.outflows.length === 0 && view.inflows.length === 0}
+				<p class="text-sm text-gray-500">
+					Nothing is planned for this Cut-off. Outflows and Inflows come from your
+					<a class="underline" href={resolve('/scheduled')}>Scheduled Transactions</a> and
+					<a class="underline" href={resolve('/installments')}>Installment Plans</a>.
+				</p>
+			{/if}
+
+			<div class="flex min-h-0 flex-1 items-start gap-3 overflow-auto pb-4">
 				{#if unfundedItems.length}
 					<section
 						class="w-64 shrink-0 rounded-xl border-2 border-dashed border-amber-300 bg-amber-50 p-3"
@@ -643,14 +652,6 @@
 					</p>
 				{/each}
 			</div>
-
-			{#if view.outflows.length === 0 && view.inflows.length === 0}
-				<p class="text-sm text-gray-500">
-					Nothing is planned for this Cut-off. Outflows and Inflows come from your
-					<a class="underline" href={resolve('/scheduled')}>Scheduled Transactions</a> and
-					<a class="underline" href={resolve('/installments')}>Installment Plans</a>.
-				</p>
-			{/if}
 		{/if}
 	</main>
 

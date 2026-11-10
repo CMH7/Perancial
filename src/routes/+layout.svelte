@@ -12,6 +12,13 @@
 
 	let { data, children }: LayoutProps = $props();
 
+	// The nav bar sticks to the top; pages that fill the window (Forecast) size themselves to
+	// the space under it with `var(--nav-h)`.
+	let navHeight = $state(0);
+	$effect(() => {
+		document.documentElement.style.setProperty('--nav-h', `${navHeight}px`);
+	});
+
 	// Live Accounts and Transactions while the owner is signed in. Keyed on the UID alone:
 	// `data` is a new object on every navigation, which must not restart the listeners.
 	const ownerUid = $derived(data.owner ? data.user?.uid : undefined);
@@ -33,7 +40,10 @@
 </svelte:head>
 
 {#if data.owner}
-	<header class="flex items-center justify-between border-b bg-white px-6 py-3 text-sm">
+	<header
+		bind:offsetHeight={navHeight}
+		class="sticky top-0 z-30 flex items-center justify-between border-b bg-white px-6 py-3 text-sm"
+	>
 		<nav class="flex items-center gap-4">
 			<a href={resolve('/')} class="font-semibold">Perancial</a>
 			<a href={resolve('/')} class="text-gray-600 hover:text-gray-900">Accounts</a>
