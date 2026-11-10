@@ -104,6 +104,32 @@ service cloud.firestore {
         allow read, delete: if isOwner(uid);
         allow create, update: if isOwner(uid) && validPlan(request.resource.data);
       }
+
+      // Installment Plans (ADR 0004). Shape only at the top level; rows, Accounts and
+      // bookkeeping are checked by the domain module and its Zod schema before every write.
+      match /installments/{planId} {
+        function fields() {
+          return ['kind', 'title', 'note', 'tags', 'purchaseDate', 'entry', 'rule', 'trackedFrom',
+            'accounts', 'rows', 'createdAt', 'updatedAt'];
+        }
+        function validInstallment(d) {
+          return d.keys().hasOnly(fields()) && d.keys().hasAll(fields())
+            && d.kind in ['lender', 'internal']
+            && d.title is string && d.title.size() >= 1 && d.title.size() <= 200
+            && d.note is string && d.note.size() <= 5000
+            && d.tags is list && d.tags.size() <= 50
+            && d.purchaseDate is string
+            && d.entry in ['flat', 'varied']
+            && d.rule is map
+            && d.trackedFrom is int
+            && d.accounts is map
+            && d.rows is list && d.rows.size() >= 1 && d.rows.size() <= 600
+            && d.createdAt is timestamp && d.updatedAt is timestamp;
+        }
+
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid) && validInstallment(request.resource.data);
+      }
     }
 
     // Everything else falls through to deny.

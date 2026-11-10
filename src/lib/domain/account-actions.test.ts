@@ -227,4 +227,17 @@ describe('delete', () => {
 		]);
 		expect(() => planDeleteAccount(chart, 'cash')).toThrow(/Archive it instead/);
 	});
+
+	it('is blocked while an Installment Plan uses the Account or anything inside it', () => {
+		const plan = {
+			title: 'Laptop',
+			accounts: { repaid: 'travel', paying: 'x', interest: null, fees: null }
+		};
+		expect(deleteCheck(chart, 'maribank', [plan])).toEqual({
+			allowed: false,
+			reason: 'The Installment Plan "Laptop" uses it. Delete the plan or change its Accounts first.'
+		});
+		expect(() => planDeleteAccount(chart, 'travel', [plan])).toThrow(/Laptop/);
+		expect(deleteCheck(chart, 'savings', [plan]).allowed).toBe(true);
+	});
 });

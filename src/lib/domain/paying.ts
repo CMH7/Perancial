@@ -1,8 +1,9 @@
 // Paying occurrences: the Record form's starting draft, Transactions that could be linked after the
 // fact, and setting or clearing a Transaction's paid link. Pure TypeScript, no Firebase imports.
 import type { Chart, IsoDate } from './chart.ts';
-import type { PaidLink, PlanLine, Scheduled, Transaction } from './schemas.ts';
-import { addDays, clearSettledWithLastPayment } from './scheduled.ts';
+import { clearSettledWithLastPayment, type PayablePlan } from './payable.ts';
+import type { PaidLink, PlanLine, Transaction } from './schemas.ts';
+import { addDays } from './scheduled.ts';
 import type { OccurrenceView } from './scheduled-views.ts';
 import type { DraftLine, TransactionDraft } from './transactions.ts';
 import type { ChartWrite } from './writes.ts';
@@ -85,7 +86,10 @@ export function planLink(
 	{ now }: { now: Date }
 ): ChartWrite[] {
 	const current = chart.transaction(txId)?.pays;
-	if (current && (current.planId !== link.planId || current.due !== link.due))
+	if (
+		current &&
+		(current.plan !== link.plan || current.planId !== link.planId || current.due !== link.due)
+	)
 		throw new Error('This Transaction already pays another occurrence: unlink it first');
 	return setPays(chart, txId, link, now);
 }
@@ -97,7 +101,7 @@ export function planLink(
 export function planUnlink(
 	chart: Chart,
 	txId: string,
-	{ now, plans = [] }: { now: Date; plans?: Scheduled[] }
+	{ now, plans = [] }: { now: Date; plans?: PayablePlan[] }
 ): ChartWrite[] {
 	const writes = setPays(chart, txId, null, now);
 	return [...writes, ...clearSettledWithLastPayment(chart, chart.transaction(txId)!, plans, now)];

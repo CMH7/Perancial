@@ -2,8 +2,8 @@
 // edit, duplicate, and delete. Pure TypeScript, no Firebase imports.
 import { toStorage, type Chart, type IsoDate } from './chart.ts';
 import { parseAmount } from './money.ts';
-import type { Entry, PaidLink, Scheduled, Transaction } from './schemas.ts';
-import { clearSettledWithLastPayment } from './scheduled.ts';
+import type { Entry, PaidLink, Transaction } from './schemas.ts';
+import { clearSettledWithLastPayment, type PayablePlan } from './payable.ts';
 import type { ChartWrite } from './writes.ts';
 
 /** Derived from Account Types, never chosen or stored. */
@@ -270,7 +270,7 @@ export function planSaveTransaction(
 export function planDeleteTransaction(
 	chart: Chart,
 	id: string,
-	{ now = new Date(), plans = [] }: { now?: Date; plans?: Scheduled[] } = {}
+	{ now = new Date(), plans = [] }: { now?: Date; plans?: PayablePlan[] } = {}
 ): ChartWrite[] {
 	const tx = chart.transaction(id);
 	if (!tx) throw new Error('This Transaction no longer exists');

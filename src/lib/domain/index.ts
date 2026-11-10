@@ -11,6 +11,8 @@ export * from './transactions.ts';
 export * from './journal.ts';
 export * from './register.ts';
 export * from './tags.ts';
+export * from './payable.ts';
 export * from './scheduled.ts';
 export * from './scheduled-views.ts';
 export * from './paying.ts';
+export * from './installments.ts';

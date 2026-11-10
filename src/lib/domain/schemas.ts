@@ -183,3 +183,65 @@ export type Scheduled = ScheduledDoc & { id: string };
 export function parseScheduled(id: string, data: unknown): Scheduled {
 	return { id, ...ScheduledDoc.parse(data) };
 }
+
+/** A charge billed with an Installment Plan row, such as a processing fee. */
+export const Additional = z.object({
+	description: z.string().min(1, 'Describe the additional').max(200),
+	/** Positive integer centavos. */
+	amount: z.int().positive()
+});
+export type Additional = z.infer<typeof Additional>;
+
+/** One scheduled payment of an Installment Plan (ADR 0004). */
+export const InstallmentRow = z.object({
+	/** Row number as shown: 0 for an interest/fee-only first row, otherwise from 1. */
+	n: z.int().min(0),
+	/** The row's identity, set at creation and never changed (the `due` in a paid link). */
+	due: z.iso.date(),
+	/** Where the row falls now; differs from `due` once moved. */
+	date: z.iso.date(),
+	/** Non-negative integer centavos. */
+	principal: z.int().min(0),
+	interest: z.int().min(0),
+	additionals: z.array(Additional).max(20),
+	/** "Mark paid": settled by hand after at least one paying Transaction. */
+	settled: z.boolean().optional()
+});
+export type InstallmentRow = z.infer<typeof InstallmentRow>;
+
+/** `users/{uid}/installments/{planId}`: an Installment Plan with explicit rows (ADR 0004). */
+export const InstallmentDoc = z.object({
+	/** Owed to a lender (a Liability), or an Internal Installment Plan repaying an Asset. */
+	kind: z.enum(['lender', 'internal']),
+	title: z.string().min(1, 'Title is required').max(200, 'Title is at most 200 characters'),
+	note: z.string().max(5000).default(''),
+	tags: z
+		.array(z.string().regex(TAG_PATTERN, 'Tags use lowercase letters, digits and hyphens'))
+		.max(50)
+		.refine((tags) => new Set(tags).size === tags.length, 'Tags must not repeat')
+		.default([]),
+	purchaseDate: z.iso.date(),
+	/** Flat until any row is edited by itself. */
+	entry: z.enum(['flat', 'varied']),
+	/** Generates dates at creation and continues them for a row added at the end. */
+	rule: RepeatRule,
+	/** Rows numbered below this are Before tracking. */
+	trackedFrom: z.int().min(0),
+	accounts: z.object({
+		/** The plan's Liability Leaf (lender) or the Asset it repays (internal). */
+		repaid: z.string().min(1),
+		paying: z.string().min(1),
+		/** Expense Leaves; null for an Internal Installment Plan. */
+		interest: z.string().min(1).nullable(),
+		fees: z.string().min(1).nullable()
+	}),
+	rows: z.array(InstallmentRow).min(1, 'A plan needs at least one row').max(600),
+	createdAt: z.date(),
+	updatedAt: z.date()
+});
+export type InstallmentDoc = z.infer<typeof InstallmentDoc>;
+export type Installment = InstallmentDoc & { id: string };
+
+export function parseInstallment(id: string, data: unknown): Installment {
+	return { id, ...InstallmentDoc.parse(data) };
+}
