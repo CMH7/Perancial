@@ -264,7 +264,7 @@
 </script>
 
 <div class="flex">
-	<!-- Fills the window under the nav bar: the header stays put and only the lanes scroll. -->
+	<!-- Fills the window under the nav bar: the header stays put and only the lanes area scrolls. -->
 	<main class="flex h-[calc(100dvh-var(--nav-h,0px))] min-w-0 flex-1 flex-col px-4 pt-6">
 		{#if ledger.error}
 			<p class="rounded-lg bg-red-50 p-4 text-sm text-red-800">{ledger.error}</p>
@@ -482,10 +482,10 @@
 				</p>
 			{/if}
 
-			<div class="flex min-h-0 flex-1 items-start gap-3 overflow-x-auto pb-4">
+			<div class="flex min-h-0 flex-1 items-start gap-3 overflow-auto pb-4">
 				{#if unfundedItems.length}
 					<section
-						class="max-h-full w-64 shrink-0 overflow-y-auto rounded-xl border-2 border-dashed border-amber-300 bg-amber-50 p-3"
+						class="w-64 shrink-0 rounded-xl border-2 border-dashed border-amber-300 bg-amber-50 p-3"
 						aria-label="Unfunded"
 					>
 						<h2 class="font-semibold text-amber-900">Unfunded</h2>
@@ -505,7 +505,7 @@
 					<section
 						tabindex={copied && lane.funding ? 0 : -1}
 						onkeydown={(e) => e.key === 'Enter' && lane.funding && laneClick(lane.accountId)}
-						class="max-h-full w-72 shrink-0 overflow-y-auto rounded-xl border bg-white p-3 {lane.funding
+						class="w-72 shrink-0 rounded-xl border bg-white p-3 {lane.funding
 							? ''
 							: 'opacity-60'} {overLane === lane.accountId
 							? 'ring-2 ring-sky-400'
