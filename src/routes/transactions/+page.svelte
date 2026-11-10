@@ -3,7 +3,9 @@
 	// detail side panel. Checkboxes select rows for bulk clear and date changes.
 	import { resolve } from '$app/paths';
 	import { KIND } from '#lib/components/kind.ts';
+	import ConfirmAction from '#lib/components/ConfirmAction.svelte';
 	import Drawer from '#lib/components/Drawer.svelte';
+	import Modal from '#lib/components/Modal.svelte';
 	import TransactionPanel from '#lib/components/TransactionPanel.svelte';
 	import {
 		ACCOUNT_TYPE_GUIDE,
@@ -11,9 +13,11 @@
 		journal,
 		journalRow,
 		noFilters,
+		planDeleteTransactions,
 		planQuickChange,
 		selectionAfterFilter,
 		today,
+		type ActionCheck,
 		type QuickChange,
 		type TransactionKind
 	} from '#lib/domain/index.ts';
@@ -80,6 +84,33 @@
 	function pickAll(on: boolean) {
 		picked = on ? new Set(visibleIds) : new Set();
 		lastPicked = null;
+	}
+
+	// Bulk delete: checked against the whole selection, so it deletes all or none.
+	let confirmDelete = $state(false);
+	const plans = $derived([...ledger.scheduled, ...ledger.installments]);
+	const deleteCheck = $derived.by((): ActionCheck => {
+		try {
+			planDeleteTransactions(chart, [...selected], { plans });
+			return { allowed: true, inside: 0 };
+		} catch (err) {
+			return { allowed: false, reason: (err as Error).message };
+		}
+	});
+	const selectedPaying = $derived(rows.filter((r) => selected.has(r.id) && r.pays).length);
+	const deleteQuestion = $derived(
+		`Delete ${selected.size} Transaction${selected.size === 1 ? '' : 's'}?` +
+			(selectedPaying
+				? ` ${selectedPaying} of them pay${selectedPaying === 1 ? 's' : ''} a Scheduled Transaction or Installment Plan, which becomes unpaid or partly paid.`
+				: '') +
+			" This can't be undone."
+	);
+	async function bulkDelete() {
+		const ids = [...selected];
+		await ledger.commit(planDeleteTransactions(chart, ids, { now: new Date(), plans }));
+		if (openId && ids.includes(openId)) openId = null;
+		confirmDelete = false;
+		pickAll(false);
 	}
 
 	async function bulk(change: QuickChange) {
@@ -186,6 +217,11 @@
 							onclick={() => bulk({ status: 'cleared', date: bulkDate })}>Clear on this date</button
 						>
 					</span>
+					<button
+						class="rounded border border-red-300 bg-white px-3 py-1 text-red-700 hover:bg-red-50 disabled:opacity-50"
+						disabled={busy}
+						onclick={() => (confirmDelete = true)}>Delete</button
+					>
 					<button class="ml-auto text-sky-700 hover:underline" onclick={() => pickAll(false)}
 						>Deselect</button
 					>
@@ -275,6 +311,20 @@
 			{/if}
 		{/if}
 	</main>
+
+	{#if confirmDelete}
+		<Modal onclose={() => (confirmDelete = false)}>
+			<ConfirmAction
+				title="Delete Transactions"
+				check={deleteCheck}
+				question={deleteQuestion}
+				confirmLabel="Delete {selected.size}"
+				danger
+				onclose={() => (confirmDelete = false)}
+				onconfirm={bulkDelete}
+			/>
+		</Modal>
+	{/if}
 
 	{#if open}
 		<Drawer id="journal-transaction">

@@ -3,7 +3,7 @@
 import type { Chart, IsoDate } from './chart.ts';
 import type { Transaction } from './schemas.ts';
 import { kindOf, type TransactionKind } from './transactions.ts';
-import type { ChartWrite } from './writes.ts';
+import { MAX_BULK, type ChartWrite } from './writes.ts';
 
 export type JournalFilters = {
 	/** Search over Description, Note, tags and Account names. */
@@ -90,9 +90,6 @@ export function planSetStatus(
 	const { id: _id, ...data } = tx;
 	return [{ op: 'setTransaction', id, data: { ...data, status, updatedAt: now } }];
 }
-
-/** A Firestore batch holds at most 500 writes, and a bulk change commits as one batch. */
-export const MAX_BULK = 500;
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 

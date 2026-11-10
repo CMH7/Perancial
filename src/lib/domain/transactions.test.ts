@@ -7,6 +7,7 @@ import {
 	evaluateDraft,
 	kindOf,
 	planDeleteTransaction,
+	planDeleteTransactions,
 	planSaveTransaction,
 	normalizeTag,
 	normalizeTags,
@@ -383,6 +384,45 @@ describe('planDeleteTransaction', () => {
 		expect(() => planDeleteTransaction(chart, 'opening_bpi')).toThrow(/Opening Balance/);
 		expect(() => planDeleteTransaction(chart, 'wallet-out')).toThrow(/archived/i);
 		expect(() => planDeleteTransaction(chart, 'wallet-in')).toThrow(/archived/i);
+	});
+});
+
+describe('planDeleteTransactions', () => {
+	it('deletes several Transactions in one change, skipping repeated ids', () => {
+		expect(planDeleteTransactions(chart, ['lunch', 'lunch'])).toEqual([
+			{ op: 'deleteTransaction', id: 'lunch' }
+		]);
+	});
+
+	it('checks Archived Accounts against the whole change', () => {
+		// Each alone leaves the archived wallet holding money; together they keep it at zero.
+		expect(planDeleteTransactions(chart, ['wallet-in', 'wallet-out'])).toEqual([
+			{ op: 'deleteTransaction', id: 'wallet-in' },
+			{ op: 'deleteTransaction', id: 'wallet-out' }
+		]);
+		expect(() => planDeleteTransactions(chart, ['lunch', 'wallet-in'])).toThrow(/archived/i);
+	});
+
+	it('refuses Opening Balances, missing Transactions and more than one batch holds', () => {
+		expect(() => planDeleteTransactions(chart, ['lunch', 'opening_bpi'])).toThrow(
+			/Opening Balance/
+		);
+		expect(() => planDeleteTransactions(chart, ['gone'])).toThrow(/no longer exists/);
+		const many = buildChart(
+			chart.all(),
+			Array.from({ length: 501 }, (_, i) =>
+				tx(`t${i}`, '2026-11-01', [
+					['cash', -100],
+					['food', 100]
+				])
+			)
+		);
+		expect(() =>
+			planDeleteTransactions(
+				many,
+				many.transactions().map((t) => t.id)
+			)
+		).toThrow(/at most 500/);
 	});
 });
 

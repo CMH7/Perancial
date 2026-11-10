@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildChart } from './chart.ts';
-import { clearSettledWithLastPayment, paymentsFor } from './payable.ts';
+import { clearSettledWhenGone, clearSettledWithLastPayment, paymentsFor } from './payable.ts';
 import type { Installment, PaidLink, Transaction } from './schemas.ts';
 import { account, now, roots, tx } from './test-fixtures.ts';
 
@@ -66,5 +66,40 @@ describe('clearSettledWithLastPayment for Installment Plan rows', () => {
 		expect(
 			clearSettledWithLastPayment(buildChart(accounts, [only, other]), only, [visa], now)
 		).toEqual([]);
+	});
+});
+
+describe('clearSettledWhenGone (several Transactions deleted together)', () => {
+	const a = pay('a', { plan: 'installment', planId: 'visa', due });
+	const b = pay('b', { plan: 'installment', planId: 'visa', due });
+
+	it('clears Mark paid once when every payment of the row goes in the same change', () => {
+		const chart = buildChart(accounts, [a, b]);
+		const writes = clearSettledWhenGone(chart, [a, b], [visa], now);
+		expect(writes).toHaveLength(1);
+		const w = writes[0];
+		expect(w.op === 'setInstallment' && w.data.rows[0].settled).toBeFalsy();
+	});
+
+	it('keeps it while a payment outside the change remains', () => {
+		const chart = buildChart(accounts, [a, b]);
+		expect(clearSettledWhenGone(chart, [a], [visa], now)).toEqual([]);
+	});
+
+	it('writes one plan once, with every row it clears', () => {
+		const second = '2026-12-15';
+		const both: Installment = {
+			...visa,
+			rows: [visa.rows[0], { ...visa.rows[1], settled: true }]
+		};
+		const c = pay('c', { plan: 'installment', planId: 'visa', due: second });
+		const chart = buildChart(accounts, [a, c]);
+		const writes = clearSettledWhenGone(chart, [a, c], [both], now);
+		expect(writes).toHaveLength(1);
+		const w = writes[0];
+		expect(w.op === 'setInstallment' && w.data.rows.map((r) => r.settled ?? false)).toEqual([
+			false,
+			false
+		]);
 	});
 });

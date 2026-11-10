@@ -3,8 +3,8 @@
 import { toStorage, type Chart, type IsoDate } from './chart.ts';
 import { parseAmount } from './money.ts';
 import type { AccountType, Entry, PaidLink, Transaction } from './schemas.ts';
-import { clearSettledWithLastPayment, type PayablePlan } from './payable.ts';
-import type { ChartWrite } from './writes.ts';
+import { clearSettledWhenGone, clearSettledWithLastPayment, type PayablePlan } from './payable.ts';
+import { MAX_BULK, type ChartWrite } from './writes.ts';
 
 /** Derived from Account Types, never chosen or stored. */
 export type TransactionKind = 'expense' | 'income' | 'transfer' | 'income-and-expense';
@@ -320,6 +320,36 @@ export function planDeleteTransaction(
 	assertArchivedStayEmpty(chart, tx.entries, []);
 	// With `plans`, a "Mark paid" left without any payment is cleared in the same write.
 	return [{ op: 'deleteTransaction', id }, ...clearSettledWithLastPayment(chart, tx, plans, now)];
+}
+
+/**
+ * Deletes several Transactions as one change, for the Journal's bulk delete. Archived Accounts are
+ * checked against the whole change, and "Mark paid" goes from an occurrence or row only when all
+ * its payments go. Throws when any can't be deleted, so it deletes all or none.
+ */
+export function planDeleteTransactions(
+	chart: Chart,
+	ids: string[],
+	{ now = new Date(), plans = [] }: { now?: Date; plans?: PayablePlan[] } = {}
+): ChartWrite[] {
+	const gone = [...new Set(ids)].map((id) => {
+		const tx = chart.transaction(id);
+		if (!tx) throw new Error('This Transaction no longer exists');
+		assertNotOpening(tx);
+		return tx;
+	});
+	assertArchivedStayEmpty(
+		chart,
+		gone.flatMap((tx) => tx.entries),
+		[]
+	);
+	const writes: ChartWrite[] = [
+		...gone.map((tx): ChartWrite => ({ op: 'deleteTransaction', id: tx.id })),
+		...clearSettledWhenGone(chart, gone, plans, now)
+	];
+	if (writes.length > MAX_BULK)
+		throw new Error(`Change at most ${MAX_BULK} Transactions at a time`);
+	return writes;
 }
 
 /** Centavos as plain text the form can parse back exactly: 501500 → "5015.00". */

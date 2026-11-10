@@ -75,39 +75,68 @@ export function paidStatus(
 
 const isInstallment = (p: PayablePlan): p is Installment => 'rows' in p;
 
+/** The plan with Mark paid taken off one occurrence or row, or null when it wasn't marked. */
+function unsettled(plan: PayablePlan, due: IsoDate, now: Date): PayablePlan | null {
+	if (isInstallment(plan)) {
+		const i = plan.rows.findIndex((r) => r.due === due);
+		if (i < 0 || !plan.rows[i].settled) return null;
+		const { settled: _settled, ...row } = plan.rows[i];
+		return { ...plan, rows: plan.rows.with(i, row), updatedAt: now };
+	}
+	const change = plan.occurrences[due];
+	if (!change?.settled) return null;
+	const { settled: _settled, ...rest } = change;
+	const occurrences = { ...plan.occurrences };
+	if (Object.keys(rest).length) occurrences[due] = rest;
+	else delete occurrences[due];
+	return { ...plan, occurrences, updatedAt: now };
+}
+
+const planWrite = (plan: PayablePlan): ChartWrite => {
+	if (isInstallment(plan)) {
+		const { id, ...data } = plan;
+		return { op: 'setInstallment', id, data };
+	}
+	const { id, ...data } = plan;
+	return { op: 'setScheduled', id, data };
+};
+
 /**
- * "Mark paid" settles the payments made so far. When the last paying Transaction of an occurrence
- * or row is unlinked or deleted, the mark goes too, so a later payment starts from partly paid.
+ * "Mark paid" settles the payments made so far. When the last paying Transactions of an occurrence
+ * or row are unlinked or deleted (`gone`, together in one change), the mark goes too, so a later
+ * payment starts from partly paid. Each plan is written at most once.
  */
+export function clearSettledWhenGone(
+	chart: Chart,
+	gone: Transaction[],
+	plans: PayablePlan[],
+	now: Date
+): ChartWrite[] {
+	const goneIds = new Set(gone.map((tx) => tx.id));
+	const working = new Map(plans.map((p) => [`${isInstallment(p)}:${p.id}`, p]));
+	const changed = new Set<string>();
+	const seen: PaidLink[] = [];
+	for (const { pays: link } of gone) {
+		if (!link || seen.some((l) => sameLink(l, link))) continue;
+		seen.push(link);
+		if (paymentsFor(chart, link).some((p) => !goneIds.has(p.id))) continue;
+		const key = `${link.plan === 'installment'}:${link.planId}`;
+		const plan = working.get(key);
+		if (!plan) continue;
+		const next = unsettled(plan, link.due, now);
+		if (!next) continue;
+		working.set(key, next);
+		changed.add(key);
+	}
+	return [...changed].map((key) => planWrite(working.get(key)!));
+}
+
+/** One Transaction unlinked or deleted: see `clearSettledWhenGone`. */
 export function clearSettledWithLastPayment(
 	chart: Chart,
 	tx: Transaction,
 	plans: PayablePlan[],
 	now: Date
 ): ChartWrite[] {
-	const link = tx.pays;
-	if (!link) return [];
-	if (paymentsFor(chart, link).some((p) => p.id !== tx.id)) return [];
-	const plan = plans.find(
-		(p) => p.id === link.planId && isInstallment(p) === (link.plan === 'installment')
-	);
-	if (!plan) return [];
-
-	if (isInstallment(plan)) {
-		const i = plan.rows.findIndex((r) => r.due === link.due);
-		if (i < 0 || !plan.rows[i].settled) return [];
-		const { settled: _settled, ...row } = plan.rows[i];
-		const { id, ...data } = plan;
-		const rows = plan.rows.with(i, row);
-		return [{ op: 'setInstallment', id, data: { ...data, rows, updatedAt: now } }];
-	}
-
-	const change = plan.occurrences[link.due];
-	if (!change?.settled) return [];
-	const { settled: _settled, ...rest } = change;
-	const occurrences = { ...plan.occurrences };
-	if (Object.keys(rest).length) occurrences[link.due] = rest;
-	else delete occurrences[link.due];
-	const { id, ...data } = plan;
-	return [{ op: 'setScheduled', id, data: { ...data, occurrences, updatedAt: now } }];
+	return clearSettledWhenGone(chart, [tx], plans, now);
 }
