@@ -75,6 +75,10 @@ _Avoid_: journal entry (accounting term for the same thing)
 One line of a Transaction: an amount added to or taken from one Leaf Account.
 _Avoid_: posting, split, leg
 
+**Fee**
+A charge on a Transaction that goes to an Expense Account, such as an ATM or transfer fee. An **additional** fee is paid on top, so more leaves the From Accounts than the To Accounts receive. A **less** fee is taken out along the way, so the To Accounts receive less than was sent. A fee someone else must pay back is not a Fee: it is added to the Asset Account that tracks what they owe.
+_Avoid_: charge (as a separate term)
+
 **Double-entry**
 The bookkeeping method Perancial uses: every Transaction has at least two Entries that cancel out, so money is never created or lost, only moved between Accounts.
 
@@ -84,6 +88,10 @@ A Transaction seen from one Group Account whose Entries all sit on Accounts insi
 **Installment Plan**
 A purchase or loan paid back in scheduled payments. When a lender is owed, the principal still owed is a Liability, held in the plan's own Liability Leaf Account; interest and fees charged on it are Expenses, counted as each payment is made. A scheduled payment counts as paid only when a Transaction pays it.
 _Avoid_: installment (alone, when the whole plan is meant)
+
+**Row**
+One scheduled payment of an Installment Plan: its number, payment date, principal, interest and any additionals (charges such as a processing or late fee). A row is known by the date it was first due, even after its payment date moves. It is unpaid, Partly Paid, Paid or Before tracking, depending on the Transactions that pay it.
+_Avoid_: installment, amortization (for one payment)
 
 **Internal Installment Plan**
 An Installment Plan that pays back one of the owner's own Asset Accounts, such as savings used to clear a card in one go. Nothing is owed to anyone, so there is no Liability and Net Worth does not change; each payment moves money back into that Asset, interest included.
