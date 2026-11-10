@@ -174,7 +174,7 @@
 		<p class="rounded bg-yellow-50 p-3 whitespace-pre-line text-gray-700">{tx.note}</p>
 	{/if}
 
-	<div class="flex gap-2">
+	<div class="flex flex-wrap gap-2 whitespace-nowrap">
 		<a
 			href={resolve('/transactions/[id]', { id: tx.id })}
 			class="rounded border px-3 py-1 hover:bg-gray-50">Edit</a
