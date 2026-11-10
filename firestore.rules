@@ -12,6 +12,14 @@ service cloud.firestore {
     }
 
     match /users/{uid} {
+      // Optional Forecast fields on plans (ADR 0005): a Section id and the Early allocation link.
+      function optionalId(d, key) {
+        return !(key in d) || d[key] == null || (d[key] is string && d[key].size() >= 1);
+      }
+      function optionalMap(d, key) {
+        return !(key in d) || d[key] == null || d[key] is map;
+      }
+
       function accountPath(id) {
         return /databases/$(database)/documents/users/$(uid)/accounts/$(id);
       }
@@ -66,7 +74,7 @@ service cloud.firestore {
         }
         // Added in v2; optional so documents written before them stay valid.
         function optional() {
-          return ['note', 'status', 'tags', 'pays'];
+          return ['note', 'status', 'tags', 'pays', 'billOn'];
         }
         function validTags(d) {
           return !('tags' in d) || (d.tags is list && d.tags.size() <= 50
@@ -83,6 +91,7 @@ service cloud.firestore {
             && (!('status' in d) || d.status in ['cleared', 'pending'])
             && validTags(d)
             && (!('pays' in d) || d.pays == null || d.pays is map)
+            && (!('billOn' in d) || d.billOn == null || d.billOn is string)
             && d.createdAt is timestamp && d.updatedAt is timestamp;
         }
 
@@ -97,9 +106,9 @@ service cloud.firestore {
           return ['versions', 'end', 'occurrences', 'createdAt', 'updatedAt'];
         }
         function validPlan(d) {
-          return d.keys().hasOnly(fields().concat(['madeFrom'])) && d.keys().hasAll(fields())
-            && (!('madeFrom' in d) || d.madeFrom == null
-              || (d.madeFrom is string && d.madeFrom.size() >= 1))
+          return d.keys().hasOnly(fields().concat(['madeFrom', 'section', 'allocates']))
+            && d.keys().hasAll(fields())
+            && optionalId(d, 'madeFrom') && optionalId(d, 'section') && optionalMap(d, 'allocates')
             && d.versions is list && d.versions.size() >= 1 && d.versions.size() <= 100
             && d.end is map && d.occurrences is map
             && d.createdAt is timestamp && d.updatedAt is timestamp;
@@ -117,9 +126,8 @@ service cloud.firestore {
             'accounts', 'rows', 'createdAt', 'updatedAt'];
         }
         function validInstallment(d) {
-          return d.keys().hasOnly(fields().concat(['madeFrom'])) && d.keys().hasAll(fields())
-            && (!('madeFrom' in d) || d.madeFrom == null
-              || (d.madeFrom is string && d.madeFrom.size() >= 1))
+          return d.keys().hasOnly(fields().concat(['madeFrom', 'section'])) && d.keys().hasAll(fields())
+            && optionalId(d, 'madeFrom') && optionalId(d, 'section')
             && d.kind in ['lender', 'internal']
             && d.title is string && d.title.size() >= 1 && d.title.size() <= 200
             && d.note is string && d.note.size() <= 5000
@@ -135,6 +143,35 @@ service cloud.firestore {
 
         allow read, delete: if isOwner(uid);
         allow create, update: if isOwner(uid) && validInstallment(request.resource.data);
+      }
+
+      // One Forecast per Cut-off, keyed by its date; only the Funding Accounts are stored (ADR 0005).
+      match /forecasts/{cutoff} {
+        function validForecast(d) {
+          return cutoff.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+            && d.keys().hasOnly(['fundingAccounts', 'createdAt', 'updatedAt'])
+            && d.keys().hasAll(['fundingAccounts', 'createdAt', 'updatedAt'])
+            && d.fundingAccounts is list && d.fundingAccounts.size() <= 50
+            && d.createdAt is timestamp && d.updatedAt is timestamp;
+        }
+
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid) && validForecast(request.resource.data);
+      }
+
+      // Settings, one document per area. Only `forecast` (the Section lists) exists so far.
+      match /settings/{area} {
+        function validForecastSettings(d) {
+          return d.keys().hasOnly(['inflowSections', 'outflowSections', 'updatedAt'])
+            && d.keys().hasAll(['inflowSections', 'outflowSections', 'updatedAt'])
+            && d.inflowSections is list && d.inflowSections.size() <= 50
+            && d.outflowSections is list && d.outflowSections.size() <= 50
+            && d.updatedAt is timestamp;
+        }
+
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid) && area == 'forecast'
+          && validForecastSettings(request.resource.data);
       }
     }
 

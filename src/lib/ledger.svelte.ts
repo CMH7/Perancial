@@ -3,6 +3,8 @@ import {
 	buildChart,
 	type Account,
 	type ChartWrite,
+	type Forecast,
+	type ForecastSettingsDoc,
 	type Installment,
 	type Scheduled,
 	type Transaction
@@ -25,6 +27,9 @@ class Ledger {
 	transactions = $state.raw<Transaction[]>([]);
 	scheduled = $state.raw<Scheduled[]>([]);
 	installments = $state.raw<Installment[]>([]);
+	forecasts = $state.raw<Forecast[]>([]);
+	/** The owner's Forecast Section lists; null until first saved (defaults apply). */
+	forecastSettings = $state.raw<ForecastSettingsDoc | null>(null);
 	/** True once both collections have loaded at least once. */
 	ready = $state(false);
 	/** Set when seeding fails or a document can't be parsed; data is not trusted then. */
@@ -83,11 +88,13 @@ class Ledger {
 		this.#stop = subscribeLedger(
 			db,
 			uid,
-			({ accounts, transactions, scheduled, installments }) => {
+			({ accounts, transactions, scheduled, installments, forecasts, forecastSettings }) => {
 				this.accounts = accounts;
 				this.transactions = transactions;
 				this.scheduled = scheduled;
 				this.installments = installments;
+				this.forecasts = forecasts;
+				this.forecastSettings = forecastSettings;
 				this.ready = true;
 			},
 			(err) => {
@@ -105,6 +112,8 @@ class Ledger {
 		this.transactions = [];
 		this.scheduled = [];
 		this.installments = [];
+		this.forecasts = [];
+		this.forecastSettings = null;
 		this.ready = false;
 	}
 }

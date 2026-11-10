@@ -240,4 +240,12 @@ describe('delete', () => {
 		expect(() => planDeleteAccount(chart, 'travel', [plan])).toThrow(/Laptop/);
 		expect(deleteCheck(chart, 'savings', [plan]).allowed).toBe(true);
 	});
+
+	it('is blocked while a Forecast names the Account as a Funding Account or Paying source', () => {
+		const forecast = { what: 'The Forecast for', title: '15 Nov 2026', accounts: { 0: 'travel' } };
+		expect(deleteCheck(chart, 'maribank', [forecast])).toEqual({
+			allowed: false,
+			reason: 'The Forecast for "15 Nov 2026" uses it. Remove it there first.'
+		});
+	});
 });
