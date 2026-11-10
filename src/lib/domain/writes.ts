@@ -24,3 +24,6 @@ export type ChartWrite =
 
 /** ID of an Account's Opening Balance Transaction (at most one per Account). */
 export const openingTransactionId = (accountId: string) => `opening_${accountId}`;
+
+/** A Firestore batch holds at most 500 writes; a bulk change commits as one batch. */
+export const MAX_BULK = 500;
