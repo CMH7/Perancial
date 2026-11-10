@@ -126,7 +126,13 @@
 	<tbody>
 		{#each rows as s (s.row.due)}
 			{@const [label, style] = badge(s)}
-			<tr class="border-b align-top {s.state === 'before' ? 'text-gray-400' : ''}">
+			<!-- Centred, except while editing: the additional inputs stack and read best from the top. -->
+			<tr
+				class="border-b {edit?.due === s.row.due ? 'align-top' : 'align-middle'} {s.state ===
+				'before'
+					? 'text-gray-400'
+					: ''}"
+			>
 				<td class="py-1.5 pr-2 font-mono">{s.row.n}</td>
 				{#if edit?.due === s.row.due}
 					<td class="pr-2"
