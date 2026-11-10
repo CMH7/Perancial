@@ -1,6 +1,8 @@
 <script lang="ts">
 	// Record a new Transaction. `?copy=<id>` starts from a duplicate of that Transaction;
-	// `?plan=<id>&due=<date>` records that Scheduled Transaction occurrence (Record), linked to it.
+	// `?plan=<id>&due=<date>` records that Scheduled Transaction occurrence (Record), linked to it;
+	// `?takeOn=<installmentId>&variant=purchase|move-debt|card-payment[&to=<id>]` prefills taking on
+	// an Installment Plan (never linked).
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
@@ -13,8 +15,10 @@
 		occurrenceStatus,
 		recordDraft,
 		shortDate,
+		takeOnDraft,
 		today,
-		type PaidLink
+		type PaidLink,
+		type TakeOn
 	} from '#lib/domain/index.ts';
 	import { ledger } from '#lib/ledger.svelte.ts';
 
@@ -42,13 +46,25 @@
 		const pays: PaidLink = { plan: 'scheduled', planId: plan.id, due };
 		return { view, pays };
 	});
+	const takingOn = $derived.by(() => {
+		const plan = ledger.installments.find((p) => p.id === params.get('takeOn'));
+		const variant = params.get('variant') as TakeOn | null;
+		if (!plan || !variant || !['purchase', 'move-debt', 'card-payment'].includes(variant))
+			return undefined;
+		return {
+			plan,
+			draft: takeOnDraft(plan, variant, { today: todayIso, to: params.get('to') ?? '' })
+		};
+	});
 	// The form copies this once when it mounts, so later changes don't reset what the user typed.
 	const initial = $derived(
 		round === 0 && recording
 			? recordDraft(recording.view, { today: todayIso })
-			: round === 0 && source
-				? duplicateDraft(source, { today: todayIso })
-				: emptyDraft({ today: todayIso })
+			: round === 0 && takingOn
+				? takingOn.draft
+				: round === 0 && source
+					? duplicateDraft(source, { today: todayIso })
+					: emptyDraft({ today: todayIso })
 	);
 </script>
 
@@ -70,6 +86,11 @@
 					recording.view.occurrence.due
 				)}{#if recording.view.status.status === 'partly-paid'}: only what is left{/if}. Change
 				anything before saving.
+			</p>
+		{/if}
+		{#if takingOn && round === 0}
+			<p class="mb-4 rounded-lg bg-sky-50 p-3 text-sm text-sky-900">
+				Taking on {takingOn.plan.title}. Optional: change anything, or leave without saving.
 			</p>
 		{/if}
 		{#key round}

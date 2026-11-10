@@ -7,7 +7,7 @@ import type { ChartWrite } from './writes.ts';
 import { addDays, ruleDates } from './scheduled.ts';
 
 /** The first `count` dates of a repeat rule. */
-function datesOf(rule: RepeatRule, count: number): IsoDate[] {
+export function datesOf(rule: RepeatRule, count: number): IsoDate[] {
 	const start = rule.type === 'once' ? rule.date : rule.start;
 	const out: IsoDate[] = [];
 	for (const d of ruleDates(rule, addDays(start, 366 * 60))) {
