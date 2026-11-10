@@ -14,6 +14,7 @@ export * from './tags.ts';
 export * from './payable.ts';
 export * from './scheduled.ts';
 export * from './scheduled-views.ts';
+export * from './scheduled-browse.ts';
 export * from './paying.ts';
 export * from './installments.ts';
 export * from './installment-create.ts';
