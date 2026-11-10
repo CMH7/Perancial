@@ -10,7 +10,9 @@
 		type PlanDraft,
 		type RepeatRule
 	} from '#lib/domain/index.ts';
+	import { accountItems } from '#lib/account-items.svelte.ts';
 	import { ledger } from '#lib/ledger.svelte.ts';
+	import AccountPicker from './AccountPicker.svelte';
 	import SectionPicker from './SectionPicker.svelte';
 
 	let {
@@ -67,7 +69,10 @@
 				.sort((a, b) => a.label.localeCompare(b.label))
 		}))
 	);
-	const expenseGroups = $derived(groups.filter((g) => g.type === 'expense'));
+	const itemsOf = (list: typeof groups) =>
+		accountItems.for(list.flatMap((g) => g.options.map((o) => o.id)));
+	const allItems = $derived(itemsOf(groups));
+	const expenseItems = $derived(itemsOf(groups.filter((g) => g.type === 'expense')));
 	const blank = (): DraftLine => ({ accountId: '', amount: '' });
 
 	// Switching the rule type keeps the start date where it can.
@@ -107,19 +112,8 @@
 	}
 </script>
 
-{#snippet accountSelect(line: DraftLine, options = groups)}
-	<select
-		bind:value={line.accountId}
-		aria-label="Account"
-		class="min-w-0 flex-1 rounded border-gray-300 py-1 text-sm"
-	>
-		<option value="">Choose Account…</option>
-		{#each options as g (g.type)}
-			<optgroup label={g.label}>
-				{#each g.options as o (o.id)}<option value={o.id}>{o.label}</option>{/each}
-			</optgroup>
-		{/each}
-	</select>
+{#snippet accountSelect(line: DraftLine, items = allItems)}
+	<AccountPicker bind:value={line.accountId} {items} class="flex-1" />
 {/snippet}
 
 {#snippet lineErrors(side: LineSide, index: number)}
@@ -198,7 +192,7 @@
 					<option value="additional">Additional (on top of From)</option>
 					<option value="less">Less (taken out of To)</option>
 				</select>
-				{@render accountSelect(fee, expenseGroups)}
+				{@render accountSelect(fee, expenseItems)}
 				<input
 					bind:value={fee.amount}
 					inputmode="decimal"

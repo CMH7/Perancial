@@ -8,6 +8,8 @@
 		type TermsPatch
 	} from '#lib/domain/index.ts';
 	import { ledger } from '#lib/ledger.svelte.ts';
+	import { accountItems } from '#lib/account-items.svelte.ts';
+	import AccountPicker from './AccountPicker.svelte';
 	import SectionPicker from './SectionPicker.svelte';
 
 	let { plan, onclose }: { plan: Installment; onclose: () => void } = $props();
@@ -83,9 +85,12 @@
 	options: { id: string; label: string }[],
 	set: (v: string) => void
 )}
-	<select class={field} value={value ?? ''} onchange={(e) => set(e.currentTarget.value)}>
-		{#each options as o (o.id)}<option value={o.id}>{o.label}</option>{/each}
-	</select>
+	<AccountPicker
+		value={value ?? ''}
+		items={accountItems.for(options.map((o) => o.id))}
+		onchange={set}
+		class="mt-1 w-full"
+	/>
 {/snippet}
 
 <form class="space-y-3 text-sm" onsubmit={save}>

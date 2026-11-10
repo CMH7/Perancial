@@ -8,6 +8,8 @@
 		parseAmount,
 		planCreateAccount
 	} from '#lib/domain/index.ts';
+	import { accountItems } from '#lib/account-items.svelte.ts';
+	import AccountPicker from './AccountPicker.svelte';
 	import { ledger } from '#lib/ledger.svelte.ts';
 
 	let {
@@ -89,11 +91,14 @@
 
 	<label class="block">
 		<span class="text-gray-600">Parent</span>
-		<select bind:value={parentId} class="mt-1 w-full rounded border-gray-300 text-sm">
-			{#each parentOptions as option (option.id)}
-				<option value={option.id}>{option.label}</option>
-			{/each}
-		</select>
+		<AccountPicker
+			bind:value={parentId}
+			items={accountItems.for(parentOptions.map((o) => o.id))}
+			label="Parent"
+			placeholder="Choose a Group…"
+			showBalance={false}
+			class="mt-1 w-full"
+		/>
 		{#if guide}
 			<span class="mt-1 block text-xs text-gray-500"
 				>{guide.label}: {guide.what} e.g. {guide.examples}</span
