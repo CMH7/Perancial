@@ -1,13 +1,18 @@
 <script lang="ts">
 	// An Installment Plan's row table: status, paying Transactions, and editing one row at a time.
 	// Rules live in the domain module; this component shows them and collects input.
+	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import {
 		formatAmount,
+		installmentLinkCandidates,
 		parseAmount,
 		planAddRow,
 		planEditRow,
+		planLink,
+		planMarkRowPaid,
 		planRemoveRow,
+		planUnlink,
 		rowAdditionals,
 		shortDate,
 		type Installment,
@@ -25,6 +30,18 @@
 		additionals: { description: string; amount: string }[];
 	};
 	let edit = $state<Edit | null>(null);
+	/** The row whose "Link existing" list is open. */
+	let linking = $state<string | null>(null);
+	const candidates = $derived(
+		linking ? installmentLinkCandidates(ledger.chart, plan, linking) : []
+	);
+	const now = () => ({ now: new Date() });
+	const allPlans = () => [...ledger.scheduled, ...ledger.installments];
+
+	function record(due: string) {
+		// eslint-disable-next-line svelte/no-navigation-without-resolve -- resolved path plus a query
+		goto(`${resolve('/transactions/new')}?installment=${encodeURIComponent(plan.id)}&due=${due}`);
+	}
 	let error = $state('');
 	const text = (c: number) => `${Math.floor(c / 100)}.${String(c % 100).padStart(2, '0')}`;
 
@@ -169,21 +186,96 @@
 					<td class="pr-2 text-right tabular-nums">
 						{#if s.state === 'unpaid' || s.state === 'partly-paid'}{peso(s.remaining)}{/if}
 					</td>
-					<td class="text-right">
-						<button class="text-xs text-gray-600 hover:text-gray-900" onclick={() => start(s)}
+					<td class="text-right whitespace-nowrap">
+						{#if s.state === 'unpaid' || s.state === 'partly-paid'}
+							<button
+								class="rounded bg-gray-900 px-2 py-0.5 text-xs text-white"
+								onclick={() => record(s.row.due)}>Record</button
+							>
+							<button
+								class="ml-1 text-xs text-gray-600 hover:text-gray-900"
+								onclick={() => (linking = linking === s.row.due ? null : s.row.due)}>Link</button
+							>
+						{/if}
+						{#if s.state === 'partly-paid'}
+							<button
+								class="ml-1 text-xs text-gray-600 hover:text-gray-900"
+								onclick={() =>
+									run(() =>
+										planMarkRowPaid(ledger.chart, ledger.installments, plan, s.row.due, true, now())
+									)}>Mark paid</button
+							>
+						{:else if s.state === 'paid' && s.row.settled}
+							<button
+								class="ml-1 text-xs text-gray-600 hover:text-gray-900"
+								onclick={() =>
+									run(() =>
+										planMarkRowPaid(
+											ledger.chart,
+											ledger.installments,
+											plan,
+											s.row.due,
+											false,
+											now()
+										)
+									)}>Mark unpaid</button
+							>
+						{/if}
+						<button class="ml-1 text-xs text-gray-600 hover:text-gray-900" onclick={() => start(s)}
 							>Edit</button
 						>
 					</td>
 				{/if}
 			</tr>
+			{#if linking === s.row.due}
+				<tr class="bg-gray-50 text-xs">
+					<td></td>
+					<td colspan="8" class="py-2">
+						{#if candidates.length === 0}
+							<span class="text-gray-500"
+								>No unlinked Transaction on this plan's Account within 31 days of the row.</span
+							>
+						{:else}
+							<ul class="space-y-1">
+								{#each candidates as tx (tx.id)}
+									<li class="flex items-center gap-3">
+										<span class="w-24 text-gray-500">{shortDate(tx.date!)}</span>
+										<span class="flex-1">{tx.description}</span>
+										<button
+											class="text-blue-700"
+											onclick={() =>
+												run(() =>
+													planLink(
+														ledger.chart,
+														tx.id,
+														{ plan: 'installment', planId: plan.id, due: s.row.due },
+														now()
+													)
+												).then(() => (linking = null))}>Link</button
+										>
+									</li>
+								{/each}
+							</ul>
+						{/if}
+					</td>
+				</tr>
+			{/if}
 			{#if s.payments.length}
 				<tr class="text-xs text-gray-500">
 					<td></td>
 					<td colspan="8" class="pb-1.5">
 						{#each s.payments as tx (tx.id)}
-							<a class="mr-3 hover:underline" href={resolve('/transactions/[id]', { id: tx.id })}
-								>Paid by “{tx.description}”, {shortDate(tx.date!)}</a
-							>
+							<span class="mr-3">
+								<a class="hover:underline" href={resolve('/transactions/[id]', { id: tx.id })}
+									>Paid by “{tx.description}”, {shortDate(tx.date!)}</a
+								>
+								<button
+									class="ml-1 underline"
+									onclick={() =>
+										run(() => planUnlink(ledger.chart, tx.id, { ...now(), plans: allPlans() }))}
+									>Unlink</button
+								>
+							</span>
 						{/each}
 						({peso(s.paid)} of {peso(s.total)}{rowAdditionals(s.row)
 							? ', additionals included'

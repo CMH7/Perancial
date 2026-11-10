@@ -38,6 +38,10 @@
 		// eslint-disable-next-line svelte/no-navigation-without-resolve -- resolved path plus a query
 		goto(`${resolve('/installments')}${next === 'due' ? '?tab=due' : ''}`, { replaceState: true });
 	}
+	function record(id: string, due: string) {
+		// eslint-disable-next-line svelte/no-navigation-without-resolve -- resolved path plus a query
+		goto(`${resolve('/transactions/new')}?installment=${encodeURIComponent(id)}&due=${due}`);
+	}
 	const peso = (c: number) => formatAmount(c);
 </script>
 
@@ -154,6 +158,10 @@
 										>{/if}
 								</a>
 								<span class="w-32 text-right tabular-nums">{peso(status.remaining)}</span>
+								<button
+									class="rounded bg-gray-900 px-2 py-0.5 text-xs text-white"
+									onclick={() => record(plan.id, status.row.due)}>Record</button
+								>
 							</li>
 						{/each}
 					</ul>
