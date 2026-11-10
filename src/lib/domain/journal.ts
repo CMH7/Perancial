@@ -90,3 +90,63 @@ export function planSetStatus(
 	const { id: _id, ...data } = tx;
 	return [{ op: 'setTransaction', id, data: { ...data, status, updatedAt: now } }];
 }
+
+/** A Firestore batch holds at most 500 writes, and a bulk change commits as one batch. */
+export const MAX_BULK = 500;
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** What the drawer's Mark cleared and the Journal's bulk actions may change. */
+export type QuickChange = { status?: Transaction['status']; date?: IsoDate };
+
+/**
+ * Sets the status and/or date of each Transaction, nothing else: entries, links (`pays`, `billOn`)
+ * and the creation time stay. Transactions already as asked are skipped. A moved date follows the
+ * form's rule: on or before today. Throws when any Transaction can't take the change, so a bulk
+ * change applies to all or none.
+ */
+export function planQuickChange(
+	chart: Chart,
+	ids: string[],
+	change: QuickChange,
+	{ now, today }: { now: Date; today: IsoDate }
+): ChartWrite[] {
+	if (change.date !== undefined) {
+		if (!ISO_DATE.test(change.date)) throw new Error('Choose a date');
+		if (change.date > today)
+			throw new Error('Record it on the day, or use a Scheduled Transaction');
+	}
+	const writes: ChartWrite[] = [];
+	for (const id of new Set(ids)) {
+		const tx = chart.transaction(id);
+		if (!tx) throw new Error('This Transaction no longer exists');
+		if (tx.origin === 'opening') throw new Error('An Opening Balance is always cleared');
+		const status = change.status ?? tx.status;
+		const date = change.date ?? tx.date;
+		if (status === tx.status && date === tx.date) continue;
+		const { id: _id, ...data } = tx;
+		writes.push({ op: 'setTransaction', id, data: { ...data, status, date, updatedAt: now } });
+	}
+	if (writes.length > MAX_BULK)
+		throw new Error(`Change at most ${MAX_BULK} Transactions at a time`);
+	return writes;
+}
+
+/** The drawer's Mark cleared: clears one Transaction, optionally moving it to `date`. */
+export function planClear(
+	chart: Chart,
+	id: string,
+	{ date, now, today }: { date?: IsoDate; now: Date; today: IsoDate }
+): ChartWrite[] {
+	return planQuickChange(
+		chart,
+		[id],
+		{ status: 'cleared', ...(date ? { date } : {}) },
+		{ now, today }
+	);
+}
+
+/** The selection after the visible rows change: only ids still shown stay selected. */
+export function selectionAfterFilter(selected: Set<string>, visible: string[]): Set<string> {
+	return new Set(visible.filter((id) => selected.has(id)));
+}

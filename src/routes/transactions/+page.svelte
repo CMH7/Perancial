@@ -1,6 +1,6 @@
 <script lang="ts">
 	// The Journal: every Transaction, newest first, with filters and search. A row opens the
-	// detail side panel.
+	// detail side panel. Checkboxes select rows for bulk clear and date changes.
 	import { resolve } from '$app/paths';
 	import { KIND } from '#lib/components/kind.ts';
 	import Drawer from '#lib/components/Drawer.svelte';
@@ -11,6 +11,10 @@
 		journal,
 		journalRow,
 		noFilters,
+		planQuickChange,
+		selectionAfterFilter,
+		today,
+		type QuickChange,
 		type TransactionKind
 	} from '#lib/domain/index.ts';
 	import { accountItems } from '#lib/account-items.svelte.ts';
@@ -42,6 +46,56 @@
 	);
 	const kinds = Object.entries(KIND) as [TransactionKind, (typeof KIND)[TransactionKind]][];
 	const filtering = $derived(Object.values(f).some(Boolean));
+
+	// Multi-select: only rows still shown count, so a filter change never acts on hidden rows.
+	let picked = $state(new Set<string>());
+	let lastPicked = $state<number | null>(null);
+	let bulkDate = $state(today());
+	let bulkError = $state('');
+	let busy = $state(false);
+	const visibleIds = $derived(rows.map((r) => r.id));
+	const selected = $derived(selectionAfterFilter(picked, visibleIds));
+	const allSelected = $derived(rows.length > 0 && selected.size === rows.length);
+	const selectedPending = $derived(
+		rows.filter((r) => selected.has(r.id) && r.status === 'pending')
+	);
+
+	/** Ticks or unticks one row; with Shift, every row between it and the last one ticked. */
+	function pick(index: number, on: boolean, range: boolean) {
+		// A plain Set: it is built here and assigned whole, never mutated while reactive.
+		// eslint-disable-next-line svelte/prefer-svelte-reactivity
+		const next = new Set(selected);
+		const [a, b] =
+			range && lastPicked !== null
+				? [Math.min(lastPicked, index), Math.max(lastPicked, index)]
+				: [index, index];
+		for (const id of visibleIds.slice(a, b + 1)) {
+			if (on) next.add(id);
+			else next.delete(id);
+		}
+		picked = next;
+		lastPicked = index;
+	}
+
+	function pickAll(on: boolean) {
+		picked = on ? new Set(visibleIds) : new Set();
+		lastPicked = null;
+	}
+
+	async function bulk(change: QuickChange) {
+		bulkError = '';
+		busy = true;
+		try {
+			await ledger.commit(
+				planQuickChange(chart, [...selected], change, { now: new Date(), today: today() })
+			);
+			pickAll(false);
+		} catch (err) {
+			bulkError = `Nothing was changed: ${(err as Error).message}`;
+		} finally {
+			busy = false;
+		}
+	}
 </script>
 
 <div class="flex">
@@ -99,6 +153,46 @@
 			</div>
 			<p class="mb-3 text-xs text-gray-500">{rows.length} of {total} Transactions</p>
 
+			{#if selected.size}
+				<div
+					class="sticky top-14 z-10 mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-sky-200 bg-sky-50 p-2 text-sm shadow-sm"
+					role="toolbar"
+					aria-label="Bulk actions"
+				>
+					<span class="font-medium">{selected.size} selected</span>
+					<button
+						class="rounded border border-sky-300 bg-white px-3 py-1 hover:bg-sky-100 disabled:opacity-50"
+						disabled={busy || selectedPending.length === 0}
+						title={selectedPending.length ? '' : 'None of the selected rows is pending'}
+						onclick={() => bulk({ status: 'cleared' })}
+						>Mark cleared{selectedPending.length ? ` (${selectedPending.length})` : ''}</button
+					>
+					<span class="flex items-center gap-1">
+						<input
+							type="date"
+							bind:value={bulkDate}
+							max={today()}
+							aria-label="New date"
+							class="rounded border-gray-300 py-1 text-sm"
+						/>
+						<button
+							class="rounded border border-sky-300 bg-white px-3 py-1 hover:bg-sky-100 disabled:opacity-50"
+							disabled={busy || !bulkDate}
+							onclick={() => bulk({ date: bulkDate })}>Set date</button
+						>
+						<button
+							class="rounded border border-sky-300 bg-white px-3 py-1 hover:bg-sky-100 disabled:opacity-50"
+							disabled={busy || !bulkDate}
+							onclick={() => bulk({ status: 'cleared', date: bulkDate })}>Clear on this date</button
+						>
+					</span>
+					<button class="ml-auto text-sky-700 hover:underline" onclick={() => pickAll(false)}
+						>Deselect</button
+					>
+					{#if bulkError}<p class="w-full text-xs text-red-600">{bulkError}</p>{/if}
+				</div>
+			{/if}
+
 			{#if total === 0}
 				<p class="text-sm text-gray-500">
 					No Transactions yet. <a class="text-sky-700 underline" href={resolve('/transactions/new')}
@@ -109,6 +203,17 @@
 				<table class="w-full text-sm">
 					<thead class="text-left text-xs text-gray-500 uppercase">
 						<tr>
+							<th class="w-8 py-2 pr-2">
+								<input
+									type="checkbox"
+									aria-label="Select all shown"
+									checked={allSelected}
+									indeterminate={selected.size > 0 && !allSelected}
+									disabled={rows.length === 0}
+									onchange={(e) => pickAll(e.currentTarget.checked)}
+									class="rounded border-gray-300"
+								/>
+							</th>
 							<th class="py-2 pr-3">Date</th>
 							<th class="pr-3">Description</th>
 							<th class="pr-3">From → To</th>
@@ -117,14 +222,28 @@
 						</tr>
 					</thead>
 					<tbody>
-						{#each rows as tx (tx.id)}
+						{#each rows as tx, i (tx.id)}
 							{@const row = journalRow(chart, tx)}
 							<tr
 								onclick={() => (openId = tx.id)}
 								class="cursor-pointer border-t hover:bg-gray-50 {openId === tx.id
 									? 'bg-sky-50'
-									: ''} {row.pending ? 'text-amber-700 italic' : ''}"
+									: ''} {selected.has(tx.id) ? 'bg-sky-50/60' : ''} {row.pending
+									? 'text-amber-700 italic'
+									: ''}"
 							>
+								<td class="py-2 pr-2">
+									<input
+										type="checkbox"
+										aria-label="Select {tx.description}"
+										checked={selected.has(tx.id)}
+										onclick={(e) => {
+											e.stopPropagation();
+											pick(i, e.currentTarget.checked, e.shiftKey);
+										}}
+										class="rounded border-gray-300"
+									/>
+								</td>
 								<td class="py-2 pr-3 whitespace-nowrap">{tx.date}</td>
 								<td class="pr-3">
 									<button class="text-left hover:underline" onclick={() => (openId = tx.id)}
@@ -149,7 +268,7 @@
 								<td class="text-right tabular-nums">{formatAmount(row.total)}</td>
 							</tr>
 						{:else}
-							<tr><td colspan="5" class="py-4 text-gray-500">No Transactions match.</td></tr>
+							<tr><td colspan="6" class="py-4 text-gray-500">No Transactions match.</td></tr>
 						{/each}
 					</tbody>
 				</table>

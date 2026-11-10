@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { buildChart } from './chart.ts';
-import { journal, journalRow, noFilters, planSetStatus } from './journal.ts';
+import {
+	journal,
+	journalRow,
+	noFilters,
+	planClear,
+	planQuickChange,
+	planSetStatus,
+	selectionAfterFilter
+} from './journal.ts';
 import type { Transaction } from './schemas.ts';
 import { account, now, opening, roots, tx } from './test-fixtures.ts';
 
@@ -134,5 +142,132 @@ describe('planSetStatus', () => {
 	it('keeps the creation time', () => {
 		const [write] = planSetStatus(chart, 'grab', 'cleared', { now: later });
 		expect(write).toMatchObject({ data: { createdAt: now } });
+	});
+});
+
+describe('planQuickChange', () => {
+	const later = new Date('2026-11-10T08:00:00Z');
+	const opts = { now: later, today: '2026-11-10' };
+
+	it('clears several Transactions in one list of writes, touching only status and update time', () => {
+		const pending = buildChart(chart.all(), [
+			...transactions.filter((x) => x.id !== 'rent'),
+			{ ...transactions.find((x) => x.id === 'rent')!, status: 'pending' }
+		]);
+		const writes = planQuickChange(pending, ['grab', 'rent'], { status: 'cleared' }, opts);
+		expect(writes).toHaveLength(2);
+		for (const w of writes) {
+			const { id, ...data } = pending.transaction(w.id)!;
+			expect(w).toEqual({
+				op: 'setTransaction',
+				id,
+				data: { ...data, status: 'cleared', updatedAt: later }
+			});
+		}
+	});
+
+	it('moves the date and keeps everything else, links included', () => {
+		const linked = buildChart(chart.all(), [
+			...transactions.filter((x) => x.id !== 'rent'),
+			{
+				...transactions.find((x) => x.id === 'rent')!,
+				pays: { plan: 'scheduled', planId: 'rent-plan', due: '2026-10-15' },
+				billOn: '2026-11-01'
+			}
+		]);
+		const [write] = planQuickChange(linked, ['rent'], { date: '2026-10-20' }, opts);
+		const { id: _id, ...data } = linked.transaction('rent')!;
+		expect(write).toEqual({
+			op: 'setTransaction',
+			id: 'rent',
+			data: { ...data, date: '2026-10-20', updatedAt: later }
+		});
+	});
+
+	it('sets status and date together', () => {
+		const [write] = planQuickChange(
+			chart,
+			['grab'],
+			{ status: 'cleared', date: '2026-11-07' },
+			opts
+		);
+		expect(write).toMatchObject({ data: { status: 'cleared', date: '2026-11-07' } });
+	});
+
+	it('skips Transactions the change leaves as they are, and repeated ids', () => {
+		expect(planQuickChange(chart, ['salary', 'grab', 'grab'], { status: 'cleared' }, opts)).toEqual(
+			[expect.objectContaining({ id: 'grab' })]
+		);
+		expect(planQuickChange(chart, ['salary'], { date: '2026-10-30' }, opts)).toEqual([]);
+	});
+
+	it('refuses a date after today or not a date', () => {
+		expect(() => planQuickChange(chart, ['grab'], { date: '2026-11-11' }, opts)).toThrow(
+			/Scheduled Transaction/
+		);
+		expect(() => planQuickChange(chart, ['grab'], { date: '' }, opts)).toThrow(/Choose a date/);
+	});
+
+	it('refuses Opening Balances and Transactions that no longer exist', () => {
+		expect(() => planQuickChange(chart, ['opening_bpi'], { status: 'cleared' }, opts)).toThrow(
+			/Opening Balance/
+		);
+		expect(() => planQuickChange(chart, ['gone'], { status: 'cleared' }, opts)).toThrow(
+			/no longer exists/
+		);
+	});
+
+	it('refuses more than one batch holds', () => {
+		const many = Array.from({ length: 501 }, () => 'grab');
+		expect(() => planQuickChange(chart, many, { status: 'cleared' }, opts)).not.toThrow();
+		const big = buildChart(
+			chart.all(),
+			Array.from({ length: 501 }, (_, i) =>
+				t(
+					`p${i}`,
+					'2026-11-01',
+					[
+						['gcash', -100],
+						['dining', 100]
+					],
+					{ status: 'pending' }
+				)
+			)
+		);
+		expect(() =>
+			planQuickChange(
+				big,
+				big.transactions().map((x) => x.id),
+				{ status: 'cleared' },
+				opts
+			)
+		).toThrow(/at most 500/);
+	});
+});
+
+describe('planClear', () => {
+	const later = new Date('2026-11-10T08:00:00Z');
+
+	it('clears a pending Transaction and can move it to another date in the same write', () => {
+		expect(planClear(chart, 'grab', { now: later, today: '2026-11-10' })).toEqual([
+			expect.objectContaining({
+				data: expect.objectContaining({ status: 'cleared', date: '2026-11-05' })
+			})
+		]);
+		expect(
+			planClear(chart, 'grab', { date: '2026-11-09', now: later, today: '2026-11-10' })
+		).toEqual([
+			expect.objectContaining({
+				data: expect.objectContaining({ status: 'cleared', date: '2026-11-09' })
+			})
+		]);
+	});
+});
+
+describe('selectionAfterFilter', () => {
+	it('keeps only selected ids still visible', () => {
+		expect(selectionAfterFilter(new Set(['grab', 'rent', 'gone']), ['grab', 'salary'])).toEqual(
+			new Set(['grab'])
+		);
 	});
 });

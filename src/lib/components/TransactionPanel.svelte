@@ -9,8 +9,10 @@
 		paidLinkLabel,
 		planDeleteTransaction,
 		planMadeFrom,
+		planClear,
 		planSetStatus,
 		planUnlink,
+		today,
 		type ActionCheck,
 		type Transaction
 	} from '#lib/domain/index.ts';
@@ -78,6 +80,19 @@
 		goto(`${resolve('/transactions/new')}?copy=${encodeURIComponent(tx.id)}`);
 	}
 
+	// Mark cleared: one click clears, on the date the bank shows (today unless changed).
+	let clearDate = $state(today());
+	async function markCleared() {
+		statusError = '';
+		try {
+			await ledger.commit(
+				planClear(chart, tx.id, { date: clearDate, now: new Date(), today: today() })
+			);
+		} catch (err) {
+			statusError = `Could not mark it cleared: ${(err as Error).message}`;
+		}
+	}
+
 	async function toggleStatus() {
 		statusError = '';
 		try {
@@ -121,6 +136,38 @@
 		{/each}
 		<span class="ml-auto font-semibold tabular-nums">{formatAmount(row.total)}</span>
 	</div>
+	{#if row.pending}
+		<form
+			class="flex flex-wrap items-center gap-2 rounded bg-amber-50 p-2 text-amber-900"
+			onsubmit={(e) => {
+				e.preventDefault();
+				markCleared();
+			}}
+		>
+			<label class="flex items-center gap-2 text-xs">
+				Cleared on
+				<input
+					type="date"
+					bind:value={clearDate}
+					max={today()}
+					required
+					class="rounded border-amber-300 py-0.5 text-sm"
+				/>
+			</label>
+			{#if clearDate !== tx.date}
+				<button
+					type="button"
+					class="text-xs text-amber-800 underline"
+					onclick={() => (clearDate = tx.date!)}>Keep {tx.date}</button
+				>
+			{/if}
+			<button
+				type="submit"
+				class="ml-auto rounded bg-amber-600 px-3 py-1 text-xs font-medium text-white hover:bg-amber-700"
+				>Mark cleared</button
+			>
+		</form>
+	{/if}
 	{#if statusError}<p class="text-xs text-red-600">{statusError}</p>{/if}
 
 	<div class="grid grid-cols-2 gap-4">
