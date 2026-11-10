@@ -12,7 +12,7 @@ Single-user personal finance app (SvelteKit 3, Svelte 5, Tailwind 4, TypeScript,
 ## Commands
 
 - `bun run dev`: dev server (SPA, no SSR). Put `FIREBASE_USE_EMULATORS=true` in `.env.local` to use the local emulators.
-- `bun run emulators`: Auth + Firestore emulators for project `demo-perancial`; data kept in `.emulator-data/`. Then `bun run seed:emulators` once to create the local test users (credentials in `scripts/seed-emulator.ts`).
+- `bun run emulators`: Auth + Firestore emulators for project `demo-perancial`; data kept in `.emulator-data/`. Then `bun run seed:emulators` once to create the local test users (credentials in `scripts/seed-emulator.ts`). `bun run seed:forecast-demo` adds made-up Accounts and plans for trying the Forecast page.
 - `bun run test`: unit tests. `bun run test:rules`: Firestore rules tests (starts the emulator itself).
 - `bun run check`, `bun run lint`, `bun run build`, `bun run deploy`.
 - Emulators need Java 21+ on PATH (`JAVA_HOME`).
