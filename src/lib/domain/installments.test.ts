@@ -1,18 +1,22 @@
 import { describe, expect, it } from 'vitest';
 import { buildChart } from './chart.ts';
 import {
+	archiveOffer,
 	flatRows,
+	liabilityHint,
 	planAddRow,
 	planDeleteInstallment,
 	planEditRow,
+	planEditTerms,
 	planMarkRowPaid,
+	planMoveTrackedFrom,
 	planRemoveRow,
 	planSaveInstallment,
 	planSummary,
 	rowStatuses
 } from './installments.ts';
 import type { Installment, Transaction } from './schemas.ts';
-import { account, now, roots, tx } from './test-fixtures.ts';
+import { account, now, opening, roots, tx } from './test-fixtures.ts';
 
 const peso = (p: number) => Math.round(p * 100);
 const today = '2026-11-10';
@@ -338,5 +342,140 @@ describe('row edits', () => {
 			{ op: 'deleteInstallment', id: 'visa' }
 		]);
 		expect(() => planDeleteInstallment(chart([paid('2026-11-30')]), 'visa')).toThrow(/pay/);
+	});
+});
+
+describe('plan page helpers', () => {
+	const later = new Date('2026-11-10T00:00:00Z');
+	const three: Installment = {
+		...claude,
+		id: 'ub',
+		title: 'UB Paydirect',
+		trackedFrom: 1,
+		accounts: { ...claude.accounts, repaid: 'ub' },
+		rows: [1, 2, 3].map((n) => ({
+			n,
+			due: `2026-1${n - 1}-30`,
+			date: `2026-1${n - 1}-30`,
+			principal: peso(1000),
+			interest: peso(10),
+			additionals: []
+		}))
+	};
+	const book = [
+		...accounts,
+		account('ub', 'liability', 'liability'),
+		account('ub2', 'liability', 'liability')
+	];
+	const pay = (id: string, due: string, toLiability: number, interest = 0): Transaction => ({
+		...tx(id, '2026-11-01', [
+			['bpi', -(toLiability + interest)],
+			['ub', toLiability],
+			...(interest ? ([['finance', interest]] as [string, number][]) : [])
+		]),
+		pays: { plan: 'installment', planId: 'ub', due }
+	});
+	const owed = opening('ub', -peso(3000));
+
+	describe('liabilityHint', () => {
+		it('is quiet while the Liability holds tracked principal less what payments put on it', () => {
+			expect(liabilityHint(buildChart(book, [owed]), three)).toBeNull();
+			const paid = buildChart(book, [owed, pay('a', '2026-10-30', peso(1000), peso(10))]);
+			expect(liabilityHint(paid, three)).toBeNull();
+			const part = buildChart(book, [owed, pay('b', '2026-11-30', peso(500))]);
+			expect(liabilityHint(part, three)).toBeNull();
+		});
+
+		it('shows both numbers when they differ, and never for internal plans', () => {
+			expect(liabilityHint(buildChart(book, []), three)).toEqual({
+				balance: 0,
+				expected: peso(3000)
+			});
+			const internal = { ...three, kind: 'internal' as const };
+			expect(liabilityHint(buildChart(book, []), internal)).toBeNull();
+		});
+	});
+
+	describe('archiveOffer', () => {
+		const allPaid = [
+			owed,
+			pay('a', '2026-10-30', peso(1000), peso(10)),
+			pay('b', '2026-11-30', peso(1000), peso(10)),
+			pay('c', '2026-12-30', peso(1000), peso(10))
+		];
+		it('offers to archive once every tracked row is Paid and the Liability is at zero', () => {
+			expect(archiveOffer(buildChart(book, allPaid), three, { today })).toBe(true);
+			expect(archiveOffer(buildChart(book, allPaid.slice(0, 3)), three, { today })).toBe(false);
+		});
+		it('not for internal plans or an already archived Liability', () => {
+			expect(
+				archiveOffer(buildChart(book, allPaid), { ...three, kind: 'internal' }, { today })
+			).toBe(false);
+			const archived = book.map((a) => (a.id === 'ub' ? { ...a, archived: true } : a));
+			expect(archiveOffer(buildChart(archived, allPaid), three, { today })).toBe(false);
+		});
+	});
+
+	describe('planEditTerms', () => {
+		const data = (w: ReturnType<typeof planEditTerms>) => {
+			if (w[0].op !== 'setInstallment') throw new Error('expected a plan write');
+			return w[0].data;
+		};
+		it('changes the terms and keeps the rows', () => {
+			const d = data(
+				planEditTerms(
+					buildChart(book, []),
+					[three],
+					three,
+					{ title: 'UB', tags: ['babu'] },
+					{ now: later }
+				)
+			);
+			expect(d).toMatchObject({ title: 'UB', tags: ['babu'], rows: three.rows, createdAt: now });
+		});
+		it('moves to another free Liability, never one another plan holds', () => {
+			const c = buildChart(book, []);
+			const other = {
+				...three,
+				id: 'other',
+				title: 'Other',
+				accounts: { ...three.accounts, repaid: 'ub2' }
+			};
+			expect(() =>
+				planEditTerms(
+					c,
+					[three, other],
+					three,
+					{ accounts: { ...three.accounts, repaid: 'ub2' } },
+					{ now: later }
+				)
+			).toThrow(/already/);
+			expect(
+				data(
+					planEditTerms(
+						c,
+						[three],
+						three,
+						{ accounts: { ...three.accounts, repaid: 'ub2' } },
+						{ now: later }
+					)
+				).accounts.repaid
+			).toBe('ub2');
+		});
+		it('refuses an empty title', () => {
+			expect(() =>
+				planEditTerms(buildChart(book, []), [three], three, { title: ' ' }, { now: later })
+			).toThrow(/title/i);
+		});
+	});
+
+	describe('planMoveTrackedFrom', () => {
+		it('moves tracking to an existing row, keeping links', () => {
+			const w = planMoveTrackedFrom(buildChart(book, []), [three], three, 2, { now: later });
+			expect(w[0].op === 'setInstallment' && w[0].data.trackedFrom).toBe(2);
+			expect(() =>
+				planMoveTrackedFrom(buildChart(book, []), [three], three, 9, { now: later })
+			).toThrow(/row/);
+		});
 	});
 });
