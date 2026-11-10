@@ -1,5 +1,5 @@
 <script lang="ts">
-	// Settings, one tab per area. Forecast: the owner's Inflow and Outflow Section lists.
+	// Settings, one tab per area. Forecast: the owner's Inflow and Outflow Section lists. Tags.
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import {
@@ -9,9 +9,13 @@
 		sectionErrors,
 		type SectionLists
 	} from '#lib/domain/index.ts';
+	import TagsSettings from '#lib/components/TagsSettings.svelte';
 	import { ledger } from '#lib/ledger.svelte.ts';
 
-	const TABS = [['forecast', 'Forecast']] as const;
+	const TABS = [
+		['forecast', 'Forecast'],
+		['tags', 'Tags']
+	] as const;
 	const tab = $derived(page.url.searchParams.get('tab') ?? 'forecast');
 	function show(key: string) {
 		const url = new URL(page.url.href);
@@ -97,7 +101,9 @@
 		<p class="rounded-lg bg-red-50 p-4 text-sm text-red-800">{ledger.error}</p>
 	{:else if !ledger.ready}
 		<p class="text-sm text-gray-500">Loading your settings…</p>
-	{:else if tab === 'forecast'}
+	{:else if tab === 'tags'}
+		<TagsSettings />
+	{:else}
 		<p class="mb-4 max-w-2xl text-sm text-gray-600">
 			Sections group a Forecast's Inflows and Outflows. Pick one on a Scheduled Transaction or
 			Installment Plan; a plan without one gets a default from its Accounts. Renaming keeps its
