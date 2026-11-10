@@ -23,10 +23,12 @@
 		plan && from ? Object.keys(plan.occurrences).filter((d) => d >= from).length : 0
 	);
 
-	/** Both edits keep the end the editor shows. */
+	/** Both edits keep the end and the Forecast Section the editor shows. */
 	const withEnd = (writes: ChartWrite[], draft: PlanDraft): ChartWrite[] =>
 		writes.map((w) =>
-			w.op === 'setScheduled' ? { ...w, data: { ...w.data, end: draft.end } } : w
+			w.op === 'setScheduled'
+				? { ...w, data: { ...w.data, end: draft.end, section: draft.section ?? null } }
+				: w
 		);
 
 	async function save(draft: PlanDraft) {

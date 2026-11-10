@@ -8,6 +8,7 @@
 		type TermsPatch
 	} from '#lib/domain/index.ts';
 	import { ledger } from '#lib/ledger.svelte.ts';
+	import SectionPicker from './SectionPicker.svelte';
 
 	let { plan, onclose }: { plan: Installment; onclose: () => void } = $props();
 
@@ -18,7 +19,8 @@
 			tags: plan.tags,
 			note: plan.note,
 			purchaseDate: plan.purchaseDate,
-			accounts: plan.accounts
+			accounts: plan.accounts,
+			section: plan.section ?? null
 		})
 	);
 	let tagText = $state('');
@@ -89,6 +91,7 @@
 <form class="space-y-3 text-sm" onsubmit={save}>
 	<h2 class="text-lg font-semibold">Edit terms</h2>
 	<label class="block">Title <input class={field} bind:value={t.title} /></label>
+	<SectionPicker value={t.section} onchange={(id) => (t.section = id)} />
 	<div>
 		Tags
 		<div class="mt-1 flex flex-wrap items-center gap-1">

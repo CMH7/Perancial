@@ -86,6 +86,8 @@ export type PlanDraft = {
 	fees: DraftFee[];
 	rule: RepeatRule;
 	end: PlanEnd;
+	/** The owner's Forecast Section; none (or null) means the derived default. */
+	section?: string | null;
 };
 
 /** Where the rule starts: its start date, or the date of a one-off. */
@@ -184,6 +186,7 @@ export function planCreatePlan(
 				versions: [{ from: ruleStart(draft.rule), ...version }],
 				end: draft.end,
 				occurrences: {},
+				...(draft.section ? { section: draft.section } : {}),
 				createdAt: now,
 				updatedAt: now
 			}
@@ -210,7 +213,8 @@ export function planDraftFrom(plan: Scheduled, date?: IsoDate): PlanDraft {
 		to: version.lines.filter((l) => l.side === 'to' && !l.fee).map(line),
 		fees: version.lines.filter((l) => l.fee).map((l) => ({ ...line(l), mode: l.fee! })),
 		rule: version.rule,
-		end: plan.end
+		end: plan.end,
+		...(plan.section ? { section: plan.section } : {})
 	};
 }
 

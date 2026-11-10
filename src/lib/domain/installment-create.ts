@@ -53,6 +53,8 @@ export type InstallmentDraft = {
 	feesId: string;
 	/** The Transaction this plan is made from, when started from one. */
 	madeFrom?: string;
+	/** The owner's Forecast Section; none (or null) means the derived default. */
+	section?: string | null;
 };
 
 export type EvaluatedInstallment = {
@@ -342,7 +344,8 @@ export function planCreateInstallmentFromDraft(
 				trackedFrom: ev.trackedFrom,
 				accounts,
 				rows: ev.rows,
-				...(d.madeFrom ? { madeFrom: d.madeFrom } : {})
+				...(d.madeFrom ? { madeFrom: d.madeFrom } : {}),
+				...(d.section ? { section: d.section } : {})
 			},
 			{ now }
 		)

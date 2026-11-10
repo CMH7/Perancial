@@ -10,6 +10,7 @@
 		type InstallmentDraft
 	} from '#lib/domain/index.ts';
 	import { ledger } from '#lib/ledger.svelte.ts';
+	import SectionPicker from './SectionPicker.svelte';
 	import { SvelteSet } from 'svelte/reactivity';
 
 	let {
@@ -139,6 +140,8 @@
 			>Title <input class={field} bind:value={d.title} onblur={() => touched.add('title')} />
 			{@render error('title')}
 		</label>
+
+		<SectionPicker value={d.section} onchange={(id) => (d.section = id)} />
 
 		<div>
 			Tags
