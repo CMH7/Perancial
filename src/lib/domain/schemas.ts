@@ -67,6 +67,8 @@ export const TransactionDoc = z
 			.max(100, 'A Transaction has at most 100 Entries'),
 		accountIds: z.array(z.string()),
 		pays: PaidLink.nullable().default(null),
+		/** A card or payable charge billed as if dated this day ("Bill with next payment"). */
+		billOn: z.iso.date().nullable().default(null),
 		createdAt: z.date(),
 		updatedAt: z.date()
 	})
@@ -99,6 +101,21 @@ export function parseTransaction(id: string, data: unknown): Transaction {
 export function parseAccount(id: string, data: unknown): Account {
 	return { id, ...AccountDoc.parse(data) };
 }
+
+/** One Funding Account paying part of an Outflow (ADR 0005). Positive integer centavos. */
+export const PayingSource = z.object({
+	accountId: z.string().min(1),
+	amount: z.int().positive('A source amount must be more than zero')
+});
+export type PayingSource = z.infer<typeof PayingSource>;
+
+/** An Outflow's Paying sources; each Account at most once. */
+const PayingSources = z
+	.array(PayingSource)
+	.max(20)
+	.refine((ss) => new Set(ss.map((x) => x.accountId)).size === ss.length, {
+		message: 'An Account can be a source only once'
+	});
 
 /**
  * One line of a Scheduled Transaction. Unlike an Entry the side is explicit, because the amount
@@ -159,7 +176,9 @@ export const OccurrenceChange = z.object({
 	/** Per line of the version in force, replacing the plan's amount; null keeps "varies". */
 	amounts: z.array(z.int().positive().nullable()).optional(),
 	/** "Mark paid": settled by hand after at least one paying Transaction. */
-	settled: z.boolean().optional()
+	settled: z.boolean().optional(),
+	/** Paying sources picked in a Forecast; none means the plan's defaults (ADR 0005). */
+	sources: PayingSources.optional()
 });
 export type OccurrenceChange = z.infer<typeof OccurrenceChange>;
 
@@ -174,6 +193,10 @@ export const ScheduledDoc = z.object({
 		}),
 	end: PlanEnd,
 	occurrences: z.record(z.iso.date(), OccurrenceChange).default({}),
+	/** The owner's Forecast Section; none means the derived default. */
+	section: z.string().min(1).nullable().optional(),
+	/** Early allocation: the Outflow this transfer sets money aside for (paid-link shape). */
+	allocates: PaidLink.nullable().optional(),
 	createdAt: z.date(),
 	updatedAt: z.date()
 });
@@ -205,7 +228,9 @@ export const InstallmentRow = z.object({
 	interest: z.int().min(0),
 	additionals: z.array(Additional).max(20),
 	/** "Mark paid": settled by hand after at least one paying Transaction. */
-	settled: z.boolean().optional()
+	settled: z.boolean().optional(),
+	/** Paying sources picked in a Forecast; none means the plan's paying Account (ADR 0005). */
+	sources: PayingSources.optional()
 });
 export type InstallmentRow = z.infer<typeof InstallmentRow>;
 
@@ -238,6 +263,8 @@ export const InstallmentDoc = z.object({
 	rows: z.array(InstallmentRow).min(1, 'A plan needs at least one row').max(600),
 	/** The Transaction this plan was made from, if any; it may since have been deleted. */
 	madeFrom: z.string().min(1).nullable().optional(),
+	/** The owner's Forecast Section; none means the derived default. */
+	section: z.string().min(1).nullable().optional(),
 	createdAt: z.date(),
 	updatedAt: z.date()
 });
@@ -246,4 +273,46 @@ export type Installment = InstallmentDoc & { id: string };
 
 export function parseInstallment(id: string, data: unknown): Installment {
 	return { id, ...InstallmentDoc.parse(data) };
+}
+
+/** `users/{uid}/forecasts/{cutoffDate}`: only what a Forecast can't derive (ADR 0005). */
+export const ForecastDoc = z.object({
+	/** Asset Leaf Accounts Outflows may be paid from in this Cut-off, in the owner's order. */
+	fundingAccounts: z
+		.array(z.string().min(1))
+		.max(50)
+		.refine((ids) => new Set(ids).size === ids.length, 'Funding Accounts must not repeat'),
+	createdAt: z.date(),
+	updatedAt: z.date()
+});
+export type ForecastDoc = z.infer<typeof ForecastDoc>;
+/** `id` is the Cut-off date. */
+export type Forecast = ForecastDoc & { id: string };
+
+export function parseForecast(id: string, data: unknown): Forecast {
+	z.iso.date().parse(id);
+	return { id, ...ForecastDoc.parse(data) };
+}
+
+export const ForecastSection = z.object({
+	id: z.string().min(1),
+	name: z.string().trim().min(1, 'Name the Section').max(60, 'At most 60 characters')
+});
+export type ForecastSection = z.infer<typeof ForecastSection>;
+
+const SectionList = z
+	.array(ForecastSection)
+	.max(50)
+	.refine((ss) => new Set(ss.map((x) => x.id)).size === ss.length, 'Section ids must not repeat');
+
+/** `users/{uid}/settings/forecast`: the owner's Section lists, in order. */
+export const ForecastSettingsDoc = z.object({
+	inflowSections: SectionList,
+	outflowSections: SectionList,
+	updatedAt: z.date()
+});
+export type ForecastSettingsDoc = z.infer<typeof ForecastSettingsDoc>;
+
+export function parseForecastSettings(data: unknown): ForecastSettingsDoc {
+	return ForecastSettingsDoc.parse(data);
 }

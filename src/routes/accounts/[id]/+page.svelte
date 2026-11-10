@@ -7,6 +7,7 @@
 		archiveCheck,
 		clearedBalance,
 		deleteCheck,
+		forecastAccountUsers,
 		planDeleteAccount,
 		planDropAccount,
 		planSetArchived
@@ -303,7 +304,8 @@
 				}}
 			/>
 		{:else if dialog === 'delete'}
-			{@const check = deleteCheck(chart, account.id, ledger.installments)}
+			{@const users = [...ledger.installments, ...forecastAccountUsers(ledger)]}
+			{@const check = deleteCheck(chart, account.id, users)}
 			<ConfirmAction
 				title="Delete {account.name}"
 				{check}
@@ -315,7 +317,7 @@
 				onclose={close}
 				onconfirm={async () => {
 					const parentId = account.parentId ?? 'asset';
-					await ledger.commit(planDeleteAccount(chart, account.id, ledger.installments));
+					await ledger.commit(planDeleteAccount(chart, account.id, users));
 					close();
 					goto(accountHref(parentId));
 				}}

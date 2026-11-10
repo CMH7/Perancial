@@ -300,6 +300,7 @@ export function planSaveTransaction(
 				entries: ev.entries,
 				accountIds: [...new Set(ev.entries.map((e) => e.accountId))],
 				pays: existing ? existing.pays : (pays ?? null),
+				billOn: existing?.billOn ?? null,
 				createdAt: existing?.createdAt ?? now,
 				updatedAt: now
 			}

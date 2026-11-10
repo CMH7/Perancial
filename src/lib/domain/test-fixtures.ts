@@ -52,6 +52,7 @@ export function opening(accountId: string, amount: number): Transaction {
 		],
 		accountIds: [accountId, 'opening-balances'],
 		pays: null,
+		billOn: null,
 		createdAt: now,
 		updatedAt: now
 	};
@@ -69,6 +70,7 @@ export function tx(id: string, date: string, entries: [string, number][]): Trans
 		entries: entries.map(([accountId, amount]) => ({ accountId, amount })),
 		accountIds: entries.map(([accountId]) => accountId),
 		pays: null,
+		billOn: null,
 		createdAt: now,
 		updatedAt: now
 	};

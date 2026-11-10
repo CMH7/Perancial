@@ -16,15 +16,20 @@ import {
 import {
 	ACCOUNT_TYPE_GUIDE,
 	AccountDoc,
+	ForecastDoc,
+	ForecastSettingsDoc,
 	InstallmentDoc,
 	ScheduledDoc,
 	TransactionDoc,
 	parseAccount,
+	parseForecast,
+	parseForecastSettings,
 	parseInstallment,
 	parseScheduled,
 	parseTransaction,
 	type Account,
 	type ChartWrite,
+	type Forecast,
 	type Installment,
 	type Scheduled,
 	type Transaction
@@ -34,6 +39,9 @@ export const accountsPath = (uid: string) => `users/${uid}/accounts`;
 export const transactionsPath = (uid: string) => `users/${uid}/transactions`;
 export const scheduledPath = (uid: string) => `users/${uid}/scheduled`;
 export const installmentsPath = (uid: string) => `users/${uid}/installments`;
+export const forecastsPath = (uid: string) => `users/${uid}/forecasts`;
+/** Collection of one-document settings, such as `settings/forecast`. */
+export const settingsPath = (uid: string) => `users/${uid}/settings`;
 
 /** Firestore Timestamps → Date (duck-typed, so the emulator test SDK's Timestamps work too). */
 function fromFirestore(data: DocumentData): Record<string, unknown> {
@@ -118,6 +126,10 @@ export type LedgerSnapshot = {
 	transactions: Transaction[];
 	scheduled: Scheduled[];
 	installments: Installment[];
+	/** Per-Cut-off Forecast documents (only Cut-offs whose Funding Accounts were changed). */
+	forecasts: Forecast[];
+	/** The owner's Forecast Section lists; null until first saved. */
+	forecastSettings: ForecastSettingsDoc | null;
 };
 
 /**
@@ -135,9 +147,18 @@ export function subscribeLedger(
 	let transactions: Transaction[] | undefined;
 	let scheduled: Scheduled[] | undefined;
 	let installments: Installment[] | undefined;
+	let forecasts: Forecast[] | undefined;
+	let forecastSettings: ForecastSettingsDoc | null | undefined;
 	const publish = () => {
-		if (accounts && transactions && scheduled && installments)
-			onData({ accounts, transactions, scheduled, installments });
+		if (
+			accounts &&
+			transactions &&
+			scheduled &&
+			installments &&
+			forecasts &&
+			forecastSettings !== undefined
+		)
+			onData({ accounts, transactions, scheduled, installments, forecasts, forecastSettings });
 	};
 	const parseAll = <T>(
 		docs: { id: string; ref: { path: string }; data(): DocumentData }[],
@@ -187,7 +208,32 @@ export function subscribeLedger(
 		},
 		onError
 	);
+	const stopForecasts = onSnapshot(
+		collection(db, forecastsPath(uid)),
+		(snap) => {
+			forecasts = parseAll(snap.docs, parseForecast);
+			publish();
+		},
+		onError
+	);
+	const stopSettings = onSnapshot(
+		doc(db, settingsPath(uid), 'forecast'),
+		(snap) => {
+			if (!snap.exists()) forecastSettings = null;
+			else
+				try {
+					forecastSettings = parseForecastSettings(fromFirestore(snap.data()));
+				} catch (err) {
+					onError(new Error(`Malformed document ${snap.ref.path}: ${(err as Error).message}`));
+					return;
+				}
+			publish();
+		},
+		onError
+	);
 	return () => {
+		stopForecasts();
+		stopSettings();
 		stopAccounts();
 		stopTransactions();
 		stopScheduled();
@@ -235,6 +281,12 @@ export async function commitLedger(db: Firestore, uid: string, writes: LedgerWri
 				break;
 			case 'deleteInstallment':
 				batch.delete(doc(db, installmentsPath(uid), w.id));
+				break;
+			case 'setForecast':
+				batch.set(doc(db, forecastsPath(uid), w.id), ForecastDoc.parse(w.data));
+				break;
+			case 'setForecastSettings':
+				batch.set(doc(db, settingsPath(uid), w.id), ForecastSettingsDoc.parse(w.data));
 				break;
 		}
 	}

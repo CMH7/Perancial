@@ -119,6 +119,7 @@ describe('planCreateAccount', () => {
 					],
 					accountIds: ['bpi', 'opening-balances'],
 					pays: null,
+					billOn: null,
 					createdAt: now,
 					updatedAt: now
 				}
