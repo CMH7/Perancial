@@ -101,6 +101,12 @@ describe('evaluateInstallmentDraft', () => {
 			[2, '2027-02-09', peso(931.8), peso(156.53)]
 		]);
 		expect(ev.rows[0].additionals).toEqual([{ description: 'Processing Fee', amount: peso(250) }]);
+		expect(ev.totals).toEqual({
+			principal: peso(1850.54),
+			interest: peso(478.75),
+			additionals: peso(250),
+			grand: peso(2579.29)
+		});
 	});
 
 	it('points each problem at its field', () => {

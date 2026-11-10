@@ -369,20 +369,28 @@
 
 	<div>
 		<h2 class="mb-2 text-xs font-semibold text-gray-500 uppercase">
-			Preview: {ev.rows.length} rows, {peso(ev.rows.reduce((s, r) => s + rowTotal(r), 0))}
+			Preview: {ev.rows.length} rows
 		</h2>
+		<div class="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+			{#each [['Principal', ev.totals.principal], ['Interest', ev.totals.interest], ['Additionals', ev.totals.additionals], ['Grand total', ev.totals.grand]] as const as [name, v] (name)}
+				<div class="rounded-lg border bg-white px-2 py-1.5">
+					<div class="text-[10px] text-gray-500 uppercase">{name}</div>
+					<div class="text-sm font-semibold tabular-nums">{peso(v)}</div>
+				</div>
+			{/each}
+		</div>
 		<table class="w-full text-xs">
 			<thead class="text-left text-gray-500">
-				<tr
-					><th>#</th><th>Date</th><th class="text-right">Principal</th><th class="text-right"
-						>Interest</th
-					><th>Additionals</th></tr
+				<tr class="border-b"
+					><th class="py-1">#</th><th>Date</th><th class="text-right">Principal</th><th
+						class="text-right">Interest</th
+					><th class="pl-2">Additionals</th><th class="text-right">Total</th></tr
 				>
 			</thead>
 			<tbody>
 				{#each ev.rows as r, i (r.n)}
-					<tr class="border-b align-top {r.n < ev.trackedFrom ? 'text-gray-400' : ''}">
-						<td class="py-1 font-mono">{r.n}</td>
+					<tr class="border-b align-middle {r.n < ev.trackedFrom ? 'text-gray-400' : ''}">
+						<td class="py-1.5 font-mono">{r.n}</td>
 						<td>{shortDate(r.date)}</td>
 						{#if d.entry === 'varied' && d.varied[i]}
 							<td class="text-right"
@@ -407,7 +415,7 @@
 						{/if}
 						<td class="pl-2">
 							{#each d.additionals[r.n] ?? [] as a, k (k)}
-								<div class="flex gap-1">
+								<div class="mb-1 flex gap-1">
 									<input
 										class="w-24 rounded border-gray-300 py-0 text-xs"
 										placeholder="Processing fee"
@@ -430,6 +438,7 @@
 								>+ add</button
 							>
 						</td>
+						<td class="text-right font-medium tabular-nums">{peso(rowTotal(r))}</td>
 					</tr>
 				{/each}
 			</tbody>

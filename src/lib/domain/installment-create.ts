@@ -2,7 +2,7 @@
 // plan with its Accounts, and the optional take-on prefills. Pure TypeScript, no Firebase imports.
 import { buildChart, type Chart, type IsoDate } from './chart.ts';
 import { inheritsMoney, planCreateAccount } from './create-account.ts';
-import { datesOf, flatRows, planSaveInstallment } from './installments.ts';
+import { datesOf, flatRows, planSaveInstallment, rowAdditionals } from './installments.ts';
 import { parseAmount } from './money.ts';
 import type { Additional, Installment, InstallmentRow, RepeatRule } from './schemas.ts';
 import { normalizeTags, type DraftError, type TransactionDraft } from './transactions.ts';
@@ -57,6 +57,8 @@ export type EvaluatedInstallment = {
 	trackedPrincipal: number;
 	/** The chosen parent is a Leaf with money, so it is split into history + plan Leaf. */
 	parentHoldsMoney: boolean;
+	/** Sums over every previewed row; `grand` is what all rows cost together. */
+	totals: { principal: number; interest: number; additionals: number; grand: number };
 	errors: DraftError[];
 };
 
@@ -191,7 +193,22 @@ export function evaluateInstallmentDraft(
 	if (!paying || paying.system || paying.archived || chart.isGroup(d.payingId))
 		fail('paying', 'Choose the Account the rows are paid from');
 
-	return { rule, rows, inProgress, trackedFrom, trackedPrincipal, parentHoldsMoney, errors };
+	const sum = (f: (r: InstallmentRow) => number) => rows.reduce((s, r) => s + f(r), 0);
+	const totals = {
+		principal: sum((r) => r.principal),
+		interest: sum((r) => r.interest),
+		additionals: sum(rowAdditionals)
+	};
+	return {
+		rule,
+		rows,
+		inProgress,
+		trackedFrom,
+		trackedPrincipal,
+		parentHoldsMoney,
+		totals: { ...totals, grand: totals.principal + totals.interest + totals.additionals },
+		errors
+	};
 }
 
 const FINANCE_CHARGES = 'Finance charges';
