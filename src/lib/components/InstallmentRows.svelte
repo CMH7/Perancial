@@ -24,7 +24,11 @@
 
 	type Edit = {
 		due: string;
+		/** The row's date before this edit. */
+		was: string;
 		date: string;
+		/** Move every later row by the same number of days as this one. */
+		moveFollowing: boolean;
 		principal: string;
 		interest: string;
 		additionals: { description: string; amount: string }[];
@@ -49,7 +53,9 @@
 		error = '';
 		edit = {
 			due: s.row.due,
+			was: s.row.date,
 			date: s.row.date,
+			moveFollowing: false,
 			principal: text(s.row.principal),
 			interest: text(s.row.interest),
 			additionals: s.row.additionals.map((a) => ({
@@ -89,7 +95,7 @@
 				plan,
 				e.due,
 				{ date: e.date, principal, interest, additionals },
-				{ now: new Date() }
+				{ now: new Date(), moveFollowing: e.moveFollowing && e.date !== e.was }
 			)
 		);
 	}
@@ -136,7 +142,13 @@
 				<td class="py-1.5 pr-2 font-mono">{s.row.n}</td>
 				{#if edit?.due === s.row.due}
 					<td class="pr-2"
-						><input type="date" class="{input} text-left" bind:value={edit.date} /></td
+						><input type="date" class="{input} text-left" bind:value={edit.date} />
+						{#if edit.date !== edit.was && s.row.due !== plan.rows.at(-1)!.due}
+							<label class="mt-1 flex items-center gap-1 text-xs text-gray-600">
+								<input type="checkbox" bind:checked={edit.moveFollowing} />
+								Move later rows by the same days
+							</label>
+						{/if}</td
 					>
 					<td class="pr-2 text-right"
 						><input class="{input} w-24" inputmode="decimal" bind:value={edit.principal} /></td

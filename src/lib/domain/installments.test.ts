@@ -305,6 +305,26 @@ describe('row edits', () => {
 		expect(data.rows[1]).toMatchObject({ due: '2026-12-30', date: '2027-01-02' });
 	});
 
+	it('moving a row can move every following row by the same number of days', () => {
+		const data = saved(
+			planEditRow(
+				chart(),
+				[visa],
+				visa,
+				'2026-12-30',
+				{ date: '2026-12-22' },
+				{ now: later, moveFollowing: true }
+			)
+		);
+		expect(data.rows.map((r) => [r.due, r.date])).toEqual([
+			['2026-11-30', '2026-11-30'],
+			['2026-12-30', '2026-12-22'],
+			['2027-01-30', '2027-01-22'],
+			['2027-02-28', '2027-02-20'],
+			['2027-03-30', '2027-03-22']
+		]);
+	});
+
 	it('adds a row at the end on the next rule date, copying the last amounts', () => {
 		const data = saved(planAddRow(chart(), [visa], visa, { now: later }));
 		expect(data.rows.at(-1)).toEqual({
