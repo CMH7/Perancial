@@ -3,6 +3,7 @@ import {
 	buildChart,
 	type Account,
 	type ChartWrite,
+	type Installment,
 	type Scheduled,
 	type Transaction
 } from '#lib/domain/index.ts';
@@ -13,6 +14,7 @@ import {
 	ensureSystemAccounts,
 	migrateLegacyTransactions,
 	newAccountId,
+	newInstallmentId,
 	newScheduledId,
 	newTransactionId,
 	subscribeLedger
@@ -22,6 +24,7 @@ class Ledger {
 	accounts = $state.raw<Account[]>([]);
 	transactions = $state.raw<Transaction[]>([]);
 	scheduled = $state.raw<Scheduled[]>([]);
+	installments = $state.raw<Installment[]>([]);
 	/** True once both collections have loaded at least once. */
 	ready = $state(false);
 	/** Set when seeding fails or a document can't be parsed; data is not trusted then. */
@@ -55,6 +58,12 @@ class Ledger {
 		return newScheduledId(db, this.#uid);
 	}
 
+	/** A fresh ID for a new Installment Plan. */
+	newInstallmentId() {
+		if (!this.#uid) throw new Error('Not signed in');
+		return newInstallmentId(db, this.#uid);
+	}
+
 	/** A fresh ID for a new Transaction. */
 	newTransactionId() {
 		if (!this.#uid) throw new Error('Not signed in');
@@ -74,10 +83,11 @@ class Ledger {
 		this.#stop = subscribeLedger(
 			db,
 			uid,
-			({ accounts, transactions, scheduled }) => {
+			({ accounts, transactions, scheduled, installments }) => {
 				this.accounts = accounts;
 				this.transactions = transactions;
 				this.scheduled = scheduled;
+				this.installments = installments;
 				this.ready = true;
 			},
 			(err) => {
@@ -94,6 +104,7 @@ class Ledger {
 		this.accounts = [];
 		this.transactions = [];
 		this.scheduled = [];
+		this.installments = [];
 		this.ready = false;
 	}
 }

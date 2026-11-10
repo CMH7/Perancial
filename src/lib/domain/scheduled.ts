@@ -3,12 +3,13 @@
 import type { Chart, IsoDate } from './chart.ts';
 import type {
 	OccurrenceChange,
+	PaidLink,
 	PlanVersion,
 	RepeatRule,
 	Scheduled,
-	ScheduledDoc,
-	Transaction
+	ScheduledDoc
 } from './schemas.ts';
+import { paidStatus, paymentsFor, planHasPayments, type PaidStatus } from './payable.ts';
 import type { ChartWrite } from './writes.ts';
 
 /** One due date a plan produces. `due` (the rule date) is its identity, even after a move. */
@@ -38,7 +39,7 @@ export function addDays(d: IsoDate, n: number): IsoDate {
 }
 
 /** A rule's dates from its start through `until`, ascending. */
-function* ruleDates(rule: RepeatRule, until: IsoDate): Generator<IsoDate> {
+export function* ruleDates(rule: RepeatRule, until: IsoDate): Generator<IsoDate> {
 	if (rule.type === 'once') {
 		if (rule.date <= until) yield rule.date;
 		return;
@@ -112,61 +113,21 @@ export function occurrencesOf(
 	return out.sort((a, b) => a.date.localeCompare(b.date) || a.due.localeCompare(b.due));
 }
 
-export type OccurrenceStatus = {
-	status: 'unpaid' | 'partly-paid' | 'paid' | 'skipped';
-	/** Past its date and not paid or skipped. */
-	overdue: boolean;
-	/** What the paying Transactions add up to (their To side). */
-	paid: number;
-	/** What is left; null while the total varies. */
-	remaining: number | null;
-	payments: Transaction[];
-};
+export type OccurrenceStatus = PaidStatus;
 
-const txTotal = (tx: Transaction) => tx.entries.reduce((s, e) => s + Math.max(e.amount, 0), 0);
+const linkOf = (occ: Pick<Occurrence, 'planId' | 'due'>): PaidLink => ({
+	plan: 'scheduled',
+	planId: occ.planId,
+	due: occ.due
+});
 
-/** Transactions whose paid link names this occurrence, oldest first. */
-export function paymentsFor(chart: Chart, occ: Pick<Occurrence, 'planId' | 'due'>): Transaction[] {
-	return chart
-		.transactions()
-		.filter(
-			(tx) =>
-				tx.pays?.plan === 'scheduled' && tx.pays.planId === occ.planId && tx.pays.due === occ.due
-		)
-		.sort((a, b) => (a.date ?? '').localeCompare(b.date ?? '') || +a.createdAt - +b.createdAt);
-}
-
-/**
- * Paid once its paying Transactions reach its total, or once "Mark paid" settles it after at
- * least one payment. Only Transactions pay: nothing is paid without one.
- */
+/** Paid, partly paid, unpaid or skipped, from the Transactions that pay it (`payable.ts`). */
 export function occurrenceStatus(
 	chart: Chart,
 	occ: Occurrence,
 	{ today }: { today: IsoDate }
 ): OccurrenceStatus {
-	const payments = paymentsFor(chart, occ);
-	const paid = payments.reduce((s, tx) => s + txTotal(tx), 0);
-	const status: OccurrenceStatus['status'] = occ.skipped
-		? 'skipped'
-		: payments.length === 0
-			? 'unpaid'
-			: occ.settled || (occ.total !== null && paid >= occ.total)
-				? 'paid'
-				: 'partly-paid';
-	const remaining =
-		status === 'paid' || status === 'skipped'
-			? 0
-			: occ.total === null
-				? null
-				: Math.max(occ.total - paid, 0);
-	return {
-		status,
-		overdue: (status === 'unpaid' || status === 'partly-paid') && occ.date < today,
-		paid,
-		remaining,
-		payments
-	};
+	return paidStatus(chart, linkOf(occ), occ, { today });
 }
 
 /** The write that saves a plan with some fields changed. */
@@ -194,7 +155,7 @@ export function planChangeOccurrence(
 	{ now }: { now: Date }
 ): ChartWrite[] {
 	if (!producesDue(plan, due)) throw new Error(`${due} is not an occurrence of this plan`);
-	if (change.settled && paymentsFor(chart, { planId: plan.id, due }).length === 0)
+	if (change.settled && paymentsFor(chart, linkOf({ planId: plan.id, due })).length === 0)
 		throw new Error('Record or link a paying Transaction first');
 	const merged: OccurrenceChange = { ...plan.occurrences[due], ...change };
 	if (merged.movedTo === due) delete merged.movedTo;
@@ -248,38 +209,9 @@ export function planEndPlan(
 
 /** Deleting is only for a plan nothing has paid yet; otherwise it is ended. */
 export function planDeletePlan(chart: Chart, planId: string): ChartWrite[] {
-	const paid = chart
-		.transactions()
-		.some((tx) => tx.pays?.plan === 'scheduled' && tx.pays.planId === planId);
-	if (paid)
+	if (planHasPayments(chart, 'scheduled', planId))
 		throw new Error(
 			'Transactions pay this plan, so deleting it would break their links. End it instead.'
 		);
 	return [{ op: 'deleteScheduled', id: planId }];
-}
-
-/**
- * "Mark paid" settles the payments made so far. When the last paying Transaction of an occurrence
- * is unlinked or deleted, the mark goes too, so a later payment starts from partly paid again.
- */
-export function clearSettledWithLastPayment(
-	chart: Chart,
-	tx: Transaction,
-	plans: Scheduled[],
-	now: Date
-): ChartWrite[] {
-	const link = tx.pays;
-	if (link?.plan !== 'scheduled') return [];
-	const plan = plans.find((p) => p.id === link.planId);
-	const change = plan?.occurrences[link.due];
-	if (!plan || !change?.settled) return [];
-	const others = paymentsFor(chart, { planId: plan.id, due: link.due }).filter(
-		(p) => p.id !== tx.id
-	);
-	if (others.length) return [];
-	const { settled: _settled, ...rest } = change;
-	const occurrences = { ...plan.occurrences };
-	if (Object.keys(rest).length) occurrences[link.due] = rest;
-	else delete occurrences[link.due];
-	return save(plan, { occurrences }, now);
 }

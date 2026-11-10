@@ -1,7 +1,7 @@
 // Move, archive, and delete: what is allowed (with a reason when not), and what to write.
 import type { Chart } from './chart.ts';
 import { formatAmount } from './money.ts';
-import type { Account } from './schemas.ts';
+import type { Account, Installment } from './schemas.ts';
 import type { ChartWrite } from './writes.ts';
 
 /** Where an Account may move: same type, a Group or an empty Leaf, outside its own subtree. */
@@ -126,11 +126,24 @@ function unarchiveCheck(chart: Chart, id: string): ActionCheck {
 	return { allowed: true, inside: chart.descendantCount(id) };
 }
 
-/** Deleting is for mistakes: only when nothing in the subtree has Transactions besides Opening Balances. */
-export function deleteCheck(chart: Chart, id: string): ActionCheck {
+/** What the delete check needs from an Installment Plan: its title and the Accounts it uses. */
+export type AccountUser = Pick<Installment, 'title' | 'accounts'>;
+
+/**
+ * Deleting is for mistakes: only when nothing in the subtree has Transactions besides Opening
+ * Balances, and no Installment Plan uses an Account in it.
+ */
+export function deleteCheck(chart: Chart, id: string, plans: AccountUser[] = []): ActionCheck {
 	const account = chart.account(id);
 	if (!account) return { allowed: false, reason: 'This account no longer exists.' };
 	if (account.system) return { allowed: false, reason: "System Accounts can't be deleted." };
+	const inside = new Set(chart.subtree(id).map((a) => a.id));
+	const user = plans.find((p) => Object.values(p.accounts).some((a) => a && inside.has(a)));
+	if (user)
+		return {
+			allowed: false,
+			reason: `The Installment Plan "${user.title}" uses it. Delete the plan or change its Accounts first.`
+		};
 	const hasHistory = chart
 		.subtree(id)
 		.some((a) => chart.transactionsFor(a.id).some((tx) => tx.origin !== 'opening'));
@@ -144,8 +157,12 @@ export function deleteCheck(chart: Chart, id: string): ActionCheck {
 }
 
 /** Deletes an Account, everything under it, and their Opening Balance Transactions. */
-export function planDeleteAccount(chart: Chart, id: string): ChartWrite[] {
-	const check = deleteCheck(chart, id);
+export function planDeleteAccount(
+	chart: Chart,
+	id: string,
+	plans: AccountUser[] = []
+): ChartWrite[] {
+	const check = deleteCheck(chart, id, plans);
 	if (!check.allowed) throw new Error(check.reason);
 	return chart
 		.subtree(id)

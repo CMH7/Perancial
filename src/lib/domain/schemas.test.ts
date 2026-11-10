@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseAccount, parseScheduled, parseTransaction } from './schemas.ts';
+import { parseAccount, parseInstallment, parseScheduled, parseTransaction } from './schemas.ts';
 
 const now = new Date('2026-11-09T00:00:00Z');
 
@@ -228,5 +228,66 @@ describe('parseScheduled', () => {
 				versions: [{ ...v, rule: { type: 'monthly', day: 32, start: '2026-01-05' } }]
 			})
 		).toThrow();
+	});
+});
+
+describe('parseInstallment', () => {
+	const visa = {
+		kind: 'lender',
+		title: 'ANV15 VISA',
+		note: '',
+		tags: ['anv15-rcbc-visa'],
+		purchaseDate: '2026-08-24',
+		entry: 'flat',
+		rule: { type: 'monthly', day: 15, start: '2026-11-15' },
+		trackedFrom: 1,
+		accounts: { repaid: 'anv15', paying: 'visa-spending', interest: 'finance', fees: 'finance' },
+		rows: [
+			{
+				n: 1,
+				due: '2026-11-15',
+				date: '2026-11-15',
+				principal: 233333,
+				interest: 0,
+				additionals: []
+			},
+			{
+				n: 2,
+				due: '2026-12-15',
+				date: '2026-12-15',
+				principal: 233337,
+				interest: 0,
+				additionals: [{ description: 'Late fee', amount: 50000 }],
+				settled: true
+			}
+		],
+		createdAt: now,
+		updatedAt: now
+	};
+
+	it('parses a plan and attaches its id', () => {
+		expect(parseInstallment('p1', visa)).toMatchObject({ id: 'p1', ...visa });
+	});
+
+	it('allows internal plans without Interest and Fees Accounts', () => {
+		const internal = {
+			...visa,
+			kind: 'internal',
+			accounts: { repaid: 'loan-money', paying: 'bpi', interest: null, fees: null }
+		};
+		expect(parseInstallment('p1', internal).accounts.interest).toBeNull();
+	});
+
+	it('rejects bad kinds, empty titles, empty rows and bad row amounts or dates', () => {
+		const bad = (patch: object) => () => parseInstallment('p1', { ...visa, ...patch });
+		expect(bad({ kind: 'loan' })).toThrow();
+		expect(bad({ rows: [] })).toThrow();
+		expect(bad({ title: '' })).toThrow();
+		expect(bad({ rows: [{ ...visa.rows[0], principal: -1 }] })).toThrow();
+		expect(bad({ rows: [{ ...visa.rows[0], principal: 1.5 }] })).toThrow();
+		expect(
+			bad({ rows: [{ ...visa.rows[0], additionals: [{ description: 'x', amount: 0 }] }] })
+		).toThrow();
+		expect(bad({ rows: [{ ...visa.rows[0], due: '15 Nov' }] })).toThrow();
 	});
 });

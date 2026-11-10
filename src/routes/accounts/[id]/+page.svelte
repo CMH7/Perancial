@@ -303,7 +303,7 @@
 				}}
 			/>
 		{:else if dialog === 'delete'}
-			{@const check = deleteCheck(chart, account.id)}
+			{@const check = deleteCheck(chart, account.id, ledger.installments)}
 			<ConfirmAction
 				title="Delete {account.name}"
 				{check}
@@ -315,7 +315,7 @@
 				onclose={close}
 				onconfirm={async () => {
 					const parentId = account.parentId ?? 'asset';
-					await ledger.commit(planDeleteAccount(chart, account.id));
+					await ledger.commit(planDeleteAccount(chart, account.id, ledger.installments));
 					close();
 					goto(accountHref(parentId));
 				}}
