@@ -1,5 +1,5 @@
 <script lang="ts">
-	// A side drawer on the right of a page. Drag its left edge (or focus it and use the arrow
+	// A side drawer floating over the right of a page (the page keeps its width). Drag its left edge (or focus it and use the arrow
 	// keys) to resize; the width is remembered per drawer on this browser.
 	import type { Snippet } from 'svelte';
 
@@ -66,7 +66,7 @@
 <svelte:window onresize={() => (width = clamp(width))} />
 
 <div
-	class="sticky top-0 h-screen shrink-0 border-l bg-white shadow-xl {dragging ? 'select-none' : ''}"
+	class="fixed inset-y-0 right-0 z-40 border-l bg-white shadow-2xl {dragging ? 'select-none' : ''}"
 	style:width="{width}px"
 >
 	<!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->

@@ -2,6 +2,7 @@
 	// One Account's register: newest first, with Out / In in the Account's normal direction and a
 	// running Balance on every row. Rows open the Transaction side panel; the Opening Balance row
 	// opens the Account's edit form instead.
+	import Drawer from './Drawer.svelte';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { formatAmount, register, type Transaction } from '#lib/domain/index.ts';
@@ -81,9 +82,7 @@
 </section>
 
 {#if open}
-	<div
-		class="fixed top-0 right-0 z-40 h-full w-96 max-w-full overflow-y-auto border-l bg-white p-6 shadow-xl"
-	>
+	<Drawer id="account-transaction">
 		<TransactionPanel tx={open} onclose={() => (openId = null)} ontag={() => {}} />
-	</div>
+	</Drawer>
 {/if}
