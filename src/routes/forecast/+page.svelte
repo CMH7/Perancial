@@ -568,15 +568,28 @@
 								>Use as Funding Account</button
 							>
 						{:else}
+							{@const atEnd = expected.get(lane.accountId)}
+							<!-- The headline is Expected at end, and colours the header; a Cut-off already over
+							     has none, so Planned left leads there. -->
 							<div
-								class="my-3 rounded-lg p-2 text-center {lane.plannedLeft < 0
+								class="my-3 rounded-lg p-2 text-center {(atEnd ?? lane.plannedLeft) < 0
 									? 'bg-red-50 text-red-700'
 									: 'bg-emerald-50 text-emerald-800'}"
 							>
-								<div class="text-xs">Planned left</div>
-								<div class="text-xl font-semibold tabular-nums">
-									{formatAmount(lane.plannedLeft)}
-								</div>
+								{#if atEnd !== undefined}
+									<div
+										class="text-xs"
+										title="Balance today plus what is still to receive, minus what is still to pay, through the end of this Cut-off"
+									>
+										Expected at end
+									</div>
+									<div class="text-xl font-semibold tabular-nums">{formatAmount(atEnd)}</div>
+								{:else}
+									<div class="text-xs">Planned left</div>
+									<div class="text-xl font-semibold tabular-nums">
+										{formatAmount(lane.plannedLeft)}
+									</div>
+								{/if}
 								<div class="text-xs">
 									in {formatAmount(lane.inn)} − out {formatAmount(lane.forecastedExp)} · left now
 									{formatAmount(lane.left)}
@@ -584,12 +597,9 @@
 								{#if lane.forecastedEAlloc}<div class="text-xs">
 										E.Alloc {formatAmount(lane.eAlloc)} of {formatAmount(lane.forecastedEAlloc)}
 									</div>{/if}
-								{#if expected.has(lane.accountId)}<div
-										class="mt-1 border-t border-current/20 pt-1 text-xs"
-										title="Balance today plus what is still to receive, minus what is still to pay, through the end of this Cut-off"
-									>
-										Expected at end <span class="font-semibold tabular-nums"
-											>{formatAmount(expected.get(lane.accountId)!)}</span
+								{#if atEnd !== undefined}<div class="mt-1 border-t border-current/20 pt-1 text-xs">
+										Planned left <span class="font-semibold tabular-nums"
+											>{formatAmount(lane.plannedLeft)}</span
 										>
 									</div>{/if}
 							</div>
