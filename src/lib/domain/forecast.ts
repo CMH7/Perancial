@@ -308,12 +308,11 @@ type Ctx = {
 const occurrencesIn = (plans: Scheduled[], range: DateRange) =>
 	plans.flatMap((plan) => occurrencesOf(plan, range).map((occ) => ({ plan, occ })));
 
+/** What a Liability's payments and charges are read from. */
+export type ChargeInput = Pick<ForecastInput, 'chart' | 'scheduled' | 'installments'>;
+
 /** A Liability's payments: Occurrences paying it from an Asset, over a wide range. */
-export function paymentDates(
-	input: ForecastInput,
-	liabilityId: string,
-	around: IsoDate
-): IsoDate[] {
+export function paymentDates(input: ChargeInput, liabilityId: string, around: IsoDate): IsoDate[] {
 	const { chart } = input;
 	return occurrencesIn(input.scheduled, {
 		from: addDays(around, -400),
@@ -337,9 +336,9 @@ export const laterPayments = (
 ): IsoDate[] => [...new Set(paymentDates(input, liabilityId, after).filter((d) => d > after))];
 
 /** Charges on a Liability billed with the payment due on `date`: since the previous payment. */
-function chargesFor(ctx: Ctx, liabilityId: string, date: IsoDate): Charge[] {
-	const { chart, scheduled, installments } = ctx.input;
-	const prev = paymentDates(ctx.input, liabilityId, date)
+export function chargesFor(input: ChargeInput, liabilityId: string, date: IsoDate): Charge[] {
+	const { chart, scheduled, installments } = input;
+	const prev = paymentDates(input, liabilityId, date)
 		.filter((d) => d < date)
 		.at(-1);
 	const range = { from: addDays(prev ?? addDays(date, -31), 1), to: date };
@@ -431,7 +430,7 @@ function outflowFromOccurrence(ctx: Ctx, plan: Scheduled, occ: Occurrence): Fore
 		lines.reduce((s, l, k) => s + (l.fee === mode ? (occ.amounts[k] ?? 0) : 0), 0);
 	const additional = feeSum('additional');
 	const less = feeSum('less');
-	const charges = liability ? chargesFor(ctx, liability.accountId, occ.date) : undefined;
+	const charges = liability ? chargesFor(ctx.input, liability.accountId, occ.date) : undefined;
 	const change = plan.occurrences[occ.due];
 	let total = occ.total ?? 0;
 	// A Liability payment expects what was charged, unless an amount was set for this Occurrence.
