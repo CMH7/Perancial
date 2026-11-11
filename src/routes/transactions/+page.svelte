@@ -404,7 +404,7 @@
 {/if}
 
 {#if open}
-	<Drawer id="journal-transaction">
+	<Drawer id="journal-transaction" label="Transaction" onclose={() => (openId = null)}>
 		<TransactionPanel tx={open} onclose={() => (openId = null)} ontag={(tag) => (f.tag = tag)} />
 	</Drawer>
 {/if}

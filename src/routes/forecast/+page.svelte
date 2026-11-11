@@ -684,7 +684,12 @@
 	</main>
 
 	{#if adding && view}
-		<Drawer id="forecast-add" width={512}>
+		<Drawer
+			id="forecast-add"
+			width={512}
+			label="Add to the Forecast"
+			onclose={() => (adding = null)}
+		>
 			{#key adding}
 				<ForecastAddPanel
 					kind={adding}
@@ -697,7 +702,7 @@
 			{/key}
 		</Drawer>
 	{:else if open && view}
-		<Drawer id="forecast-outflow">
+		<Drawer id="forecast-outflow" label="Outflow" onclose={() => (openKey = null)}>
 			<ForecastDrawer
 				outflow={open}
 				{cutoff}
@@ -715,7 +720,8 @@
 		const t = e.target as HTMLElement;
 		if (t.closest('input, textarea, select, [contenteditable]')) return;
 		if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c' && selected) copied = selected;
-		if (e.key === 'Escape') {
+		// An open drawer or dialog takes the first Esc (overlays.svelte.ts).
+		if (e.key === 'Escape' && !e.defaultPrevented) {
 			selected = null;
 			openKey = null;
 			adding = null;
