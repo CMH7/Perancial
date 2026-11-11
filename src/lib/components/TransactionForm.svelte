@@ -4,6 +4,7 @@
 	import {
 		ACCOUNT_TYPE_GUIDE,
 		accountChoices,
+		canBillLater,
 		duplicateDraft,
 		evaluateDraft,
 		formatAmount,
@@ -237,6 +238,26 @@
 		{@render column('from', 'From', draft.from)}
 		{@render column('to', 'To', draft.to)}
 	</div>
+
+	{#if canBillLater(chart, draft) || draft.billOn}
+		<label class="block text-sm">
+			<span class="text-xs font-semibold text-gray-500 uppercase">Bill on</span>
+			<span class="text-xs text-gray-500">
+				(optional) the payment after this day bills the charge; blank bills it from its date</span
+			>
+			<input
+				type="date"
+				value={draft.billOn ?? ''}
+				min={draft.date}
+				onchange={(e) => {
+					draft.billOn = e.currentTarget.value || null;
+					touch('billOn');
+				}}
+				class="mt-1 block w-44 rounded border-gray-300 text-sm"
+			/>
+			{#if shown('billOn')}<span class="text-xs text-red-600">{shown('billOn')}</span>{/if}
+		</label>
+	{/if}
 
 	<section class="rounded-lg bg-gray-50 p-3">
 		<h2 class="mb-2 text-xs font-semibold text-gray-500 uppercase">Fees</h2>

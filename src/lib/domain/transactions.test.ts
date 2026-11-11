@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { buildChart } from './chart.ts';
 import {
 	accountChoices,
+	canBillLater,
 	draftFromTransaction,
 	duplicateDraft,
 	evaluateDraft,
@@ -452,7 +453,8 @@ describe('draftFromTransaction and duplicateDraft', () => {
 			tags: ['payday'],
 			from: [{ accountId: 'bpi', amount: '5015.00' }],
 			to: [{ accountId: 'gcash', amount: '5000.00' }],
-			fees: [{ accountId: 'bank-fees', amount: '15.00', mode: 'additional' }]
+			fees: [{ accountId: 'bank-fees', amount: '15.00', mode: 'additional' }],
+			billOn: null
 		});
 		expect(evaluateDraft(chart, draftFromTransaction(sent), { today }).entries).toEqual(
 			sent.entries
@@ -464,5 +466,61 @@ describe('draftFromTransaction and duplicateDraft', () => {
 		expect(copy).toEqual({ ...draftFromTransaction(sent), date: today, status: 'cleared' });
 		const [write] = planSaveTransaction(chart, copy, { id: 'copy', now, today });
 		expect(write).toMatchObject({ data: { pays: null, tags: ['payday'], note: 'For bills' } });
+	});
+});
+
+describe('Bill on: a charge on a Liability billed with a later payment', () => {
+	const later = new Date('2026-11-10T08:00:00Z');
+	const charge = (billOn: string | null | undefined) =>
+		draft({
+			description: 'Fan',
+			from: [{ accountId: 'cc-bdo', amount: '1,000' }],
+			to: [{ accountId: 'food', amount: '1,000' }],
+			billOn
+		});
+
+	it('applies when a Liability is on the From side', () => {
+		expect(canBillLater(chart, charge(null))).toBe(true);
+		expect(canBillLater(chart, draft({}))).toBe(false);
+	});
+
+	it('saves the bill date, keeping the Transaction date', () => {
+		const [w] = planSaveTransaction(chart, charge('2026-11-16'), { id: 'fan', now: later, today });
+		expect(w).toMatchObject({ data: { date: '2026-11-09', billOn: '2026-11-16' } });
+	});
+
+	it('clears it when emptied, and keeps it when the form leaves it alone', () => {
+		const existing = { ...chart.transaction('lunch')!, billOn: '2026-11-20' };
+		const keep = planSaveTransaction(
+			chart,
+			{ ...draftFromTransaction(existing), billOn: undefined },
+			{
+				id: 'lunch',
+				now: later,
+				today,
+				existing
+			}
+		);
+		expect(keep[0]).toMatchObject({ data: { billOn: '2026-11-20' } });
+		const [cleared] = planSaveTransaction(chart, charge(''), { id: 'fan', now: later, today });
+		expect(cleared).toMatchObject({ data: { billOn: null } });
+	});
+
+	it('refuses a bill date before the Transaction date', () => {
+		const ev = evaluateDraft(chart, charge('2026-11-01'), { today });
+		expect(ev.errors).toContainEqual({ at: 'billOn', message: 'Bill it on or after the date' });
+	});
+
+	it('refuses a bill date when no Liability is charged', () => {
+		const ev = evaluateDraft(chart, draft({ billOn: '2026-11-16' }), { today });
+		expect(ev.errors).toContainEqual({
+			at: 'billOn',
+			message: 'Only a charge on a Liability is billed later'
+		});
+	});
+
+	it('comes back into the form from a stored Transaction', () => {
+		const stored = { ...chart.transaction('lunch')!, billOn: '2026-11-20' };
+		expect(draftFromTransaction(stored).billOn).toBe('2026-11-20');
 	});
 });

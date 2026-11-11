@@ -7,8 +7,10 @@
 	import {
 		formatAmount,
 		formatPicks,
+		laterPayments,
 		parseAmount,
 		planBillLater,
+		planBillWithPayment,
 		planSetSources,
 		planUndoAllocation,
 		recordPicks,
@@ -22,6 +24,7 @@
 	import { accountItems } from '#lib/account-items.svelte.ts';
 	import AccountPicker from './AccountPicker.svelte';
 	import { ledger } from '#lib/ledger.svelte.ts';
+	import { SvelteSet } from 'svelte/reactivity';
 
 	let {
 		outflow: o,
@@ -78,6 +81,41 @@
 			await ledger.commit(planBillLater(input, c, o.date, new Date()));
 		} catch (err) {
 			billError = (err as Error).message;
+		}
+	}
+
+	// Moving several charges at once to a chosen later payment of this Liability.
+	const picked = new SvelteSet<string>();
+	let pickedFor = $state('');
+	$effect(() => {
+		if (pickedFor !== o.key) {
+			picked.clear();
+			pickedFor = o.key;
+		}
+	});
+	const targets = $derived(
+		o.liabilityId ? laterPayments(input, o.liabilityId, o.date).slice(0, 12) : []
+	);
+	let target = $state<string | undefined>();
+	const allPicked = $derived(!!o.charges?.length && o.charges.every((c) => picked.has(c.key)));
+	function pickAll() {
+		if (allPicked) picked.clear();
+		else for (const c of o.charges ?? []) picked.add(c.key);
+	}
+	let moving = $state(false);
+	async function moveSelected() {
+		const to = target && targets.includes(target) ? target : targets[0];
+		if (!o.liabilityId || !to) return;
+		billError = '';
+		moving = true;
+		try {
+			const chosen = (o.charges ?? []).filter((c) => picked.has(c.key));
+			await ledger.commit(planBillWithPayment(input, chosen, o.liabilityId, to, new Date()));
+			picked.clear();
+		} catch (err) {
+			billError = (err as Error).message;
+		} finally {
+			moving = false;
 		}
 	}
 
@@ -186,18 +224,46 @@
 
 	{#if o.charges}
 		<div>
-			<p class="mb-1 text-xs font-semibold text-gray-500 uppercase">
+			<p class="mb-1 flex items-center gap-2 text-xs font-semibold text-gray-500 uppercase">
+				{#if o.charges.length && targets.length}<input
+						type="checkbox"
+						aria-label="Select all charges"
+						checked={allPicked}
+						onchange={pickAll}
+					/>{/if}
 				Charges on {o.liabilityId ? name(o.liabilityId) : 'this Liability'}
 			</p>
+			{#if picked.size && targets.length}
+				<div class="mb-1 flex flex-wrap items-center gap-2 rounded bg-gray-50 p-2 text-xs">
+					<span>Move {picked.size} to the payment on</span>
+					<select bind:value={target} class="rounded border-gray-300 py-0.5 text-xs">
+						{#each targets as d (d)}<option value={d}>{shortDate(d)}</option>{/each}
+					</select>
+					<button
+						class="rounded bg-gray-800 px-2 py-0.5 text-white disabled:opacity-50"
+						disabled={moving}
+						onclick={moveSelected}>Move</button
+					>
+					<button class="text-gray-500 underline" onclick={() => picked.clear()}>Clear</button>
+				</div>
+			{/if}
 			{#each o.charges as c (c.key)}
 				<div class="flex justify-between gap-2 border-b py-1">
-					<span
-						>{c.label}
-						<span class="text-xs text-gray-500"
-							>{c.from === 'transaction' ? 'recorded' : 'planned'}
-							{shortDate(c.date, {
-								year: false
-							})}</span
+					<span class="flex items-start gap-2"
+						>{#if targets.length}<input
+								type="checkbox"
+								class="mt-1"
+								aria-label="Select {c.label}"
+								checked={picked.has(c.key)}
+								onchange={() => (picked.has(c.key) ? picked.delete(c.key) : picked.add(c.key))}
+							/>{/if}<span
+							>{c.label}
+							<span class="text-xs text-gray-500"
+								>{c.from === 'transaction' ? 'recorded' : 'planned'}
+								{shortDate(c.date, {
+									year: false
+								})}</span
+							></span
 						></span
 					>
 					<span class="flex items-center gap-2">

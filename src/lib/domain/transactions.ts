@@ -58,7 +58,16 @@ export type TransactionDraft = {
 	from: DraftLine[];
 	to: DraftLine[];
 	fees: DraftFee[];
+	/**
+	 * For a charge on a Liability: the day it is billed from, so a later payment bills it.
+	 * Blank or null for none; left out, an edit keeps the stored one.
+	 */
+	billOn?: IsoDate | null;
 };
+
+/** Whether the draft charges a Liability (one on its From side), so it can be billed later. */
+export const canBillLater = (chart: Chart, draft: TransactionDraft): boolean =>
+	draft.from.some((l) => chart.account(l.accountId)?.type === 'liability');
 
 /**
  * Where an error belongs: `date`, `description`, `note`, `total`, or a line's
@@ -147,6 +156,12 @@ export function evaluateDraft(
 	else if (description.length > 200) fail('description', 'At most 200 characters');
 	if (draft.note.length > 5000) fail('note', 'At most 5,000 characters');
 	if (normalizeTags(draft.tags).length > 50) fail('tags', 'At most 50 tags');
+	if (draft.billOn) {
+		if (!canBillLater(chart, draft)) fail('billOn', 'Only a charge on a Liability is billed later');
+		else if (!ISO_DATE.test(draft.billOn)) fail('billOn', 'Choose a date');
+		else if (ISO_DATE.test(draft.date) && draft.billOn < draft.date)
+			fail('billOn', 'Bill it on or after the date');
+	}
 
 	const entries: Entry[] = [
 		...draft.from.map((l, i) => ({ accountId: l.accountId, amount: -(amounts.from[i] ?? 0) })),
@@ -300,7 +315,7 @@ export function planSaveTransaction(
 				entries: ev.entries,
 				accountIds: [...new Set(ev.entries.map((e) => e.accountId))],
 				pays: existing ? existing.pays : (pays ?? null),
-				billOn: existing?.billOn ?? null,
+				billOn: draft.billOn === undefined ? (existing?.billOn ?? null) : draft.billOn || null,
 				createdAt: existing?.createdAt ?? now,
 				updatedAt: now
 			}
@@ -370,13 +385,16 @@ export function draftFromTransaction(tx: Transaction): TransactionDraft {
 		tags: [...tx.tags],
 		from: tx.entries.filter((e) => e.amount < 0).map(line),
 		to: tx.entries.filter((e) => e.amount > 0 && !e.fee).map(line),
-		fees: tx.entries.filter((e) => e.amount > 0 && e.fee).map((e) => ({ ...line(e), mode: e.fee! }))
+		fees: tx.entries
+			.filter((e) => e.amount > 0 && e.fee)
+			.map((e) => ({ ...line(e), mode: e.fee! })),
+		billOn: tx.billOn ?? null
 	};
 }
 
 /** Duplicate: everything copied into a new draft dated today and cleared. It is never saved by itself. */
 export function duplicateDraft(tx: Transaction, { today }: { today: IsoDate }): TransactionDraft {
-	return { ...draftFromTransaction(tx), date: today, status: 'cleared' };
+	return { ...draftFromTransaction(tx), date: today, status: 'cleared', billOn: null };
 }
 
 /** A blank draft for a new Transaction: dated today, cleared, one From and one To line. */
@@ -389,6 +407,7 @@ export function emptyDraft({ today }: { today: IsoDate }): TransactionDraft {
 		tags: [],
 		from: [{ accountId: '', amount: '' }],
 		to: [{ accountId: '', amount: '' }],
-		fees: []
+		fees: [],
+		billOn: null
 	};
 }

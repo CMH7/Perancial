@@ -307,9 +307,13 @@ const occurrencesIn = (plans: Scheduled[], range: DateRange) =>
 	plans.flatMap((plan) => occurrencesOf(plan, range).map((occ) => ({ plan, occ })));
 
 /** A Liability's payments: Occurrences paying it from an Asset, over a wide range. */
-function paymentDates(ctx: Ctx, liabilityId: string, around: IsoDate): IsoDate[] {
-	const { chart } = ctx.input;
-	return occurrencesIn(ctx.input.scheduled, {
+export function paymentDates(
+	input: ForecastInput,
+	liabilityId: string,
+	around: IsoDate
+): IsoDate[] {
+	const { chart } = input;
+	return occurrencesIn(input.scheduled, {
 		from: addDays(around, -400),
 		to: addDays(around, 400)
 	})
@@ -323,10 +327,17 @@ function paymentDates(ctx: Ctx, liabilityId: string, around: IsoDate): IsoDate[]
 		.sort();
 }
 
+/** The payment dates of a Liability after `after`, in order: where its charges can be moved. */
+export const laterPayments = (
+	input: ForecastInput,
+	liabilityId: string,
+	after: IsoDate
+): IsoDate[] => [...new Set(paymentDates(input, liabilityId, after).filter((d) => d > after))];
+
 /** Charges on a Liability billed with the payment due on `date`: since the previous payment. */
 function chargesFor(ctx: Ctx, liabilityId: string, date: IsoDate): Charge[] {
 	const { chart, scheduled, installments } = ctx.input;
-	const prev = paymentDates(ctx, liabilityId, date)
+	const prev = paymentDates(ctx.input, liabilityId, date)
 		.filter((d) => d < date)
 		.at(-1);
 	const range = { from: addDays(prev ?? addDays(date, -31), 1), to: date };

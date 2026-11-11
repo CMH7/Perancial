@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildChart } from './chart.ts';
-import { oneOffDraft, planBillLater } from './forecast-add.ts';
-import type { Charge, ForecastInput } from './forecast.ts';
+import { oneOffDraft, planBillLater, planBillWithPayment } from './forecast-add.ts';
+import { laterPayments, type Charge, type ForecastInput } from './forecast.ts';
 import type { Installment, Scheduled } from './schemas.ts';
 import { planCreatePlan } from './scheduled-views.ts';
 import { account, now, roots, tx } from './test-fixtures.ts';
@@ -165,5 +165,129 @@ describe('Bill with next payment', () => {
 		if (w.op !== 'setInstallment') throw new Error('expected a plan');
 		expect(w.data.rows[0]).toMatchObject({ due: '2026-11-20', date: '2026-11-26' });
 		expect(w.data.entry).toBe('flat');
+	});
+});
+
+// Card payments every Cut-off: 31 Oct, 15 Nov, 30 Nov, ...
+const cardPay: Scheduled = {
+	id: 'cardpay',
+	versions: [
+		{
+			from: '2026-10-15',
+			description: 'Pay card',
+			note: '',
+			tags: [],
+			lines: [
+				{ accountId: 'everyday', side: 'from', amount: 100_000 },
+				{ accountId: 'card', side: 'to', amount: 100_000 }
+			],
+			rule: { type: 'cutoff', start: '2026-10-15' }
+		}
+	],
+	end: { type: 'never' },
+	occurrences: {},
+	createdAt: now,
+	updatedAt: now
+};
+const groceries = tx('groceries', '2026-10-20', [
+	['food', 50_000],
+	['card', -50_000]
+]);
+const paying: ForecastInput = {
+	...input,
+	chart: buildChart(accounts, [buffet, groceries]),
+	scheduled: [music, cardPay]
+};
+
+describe('Later payments of a Liability', () => {
+	it('lists the payment dates after a payment, in order', () => {
+		expect(laterPayments(paying, 'card', '2026-10-31').slice(0, 3)).toEqual([
+			'2026-11-15',
+			'2026-11-30',
+			'2026-12-15'
+		]);
+	});
+});
+
+describe('Moving charges to a chosen payment', () => {
+	it('bills every charge from the day after the payment before the chosen one', () => {
+		const writes = planBillWithPayment(
+			paying,
+			[
+				charge({ key: 'a', from: 'transaction', txId: 'buffet' }),
+				charge({ key: 'b', from: 'transaction', txId: 'groceries' })
+			],
+			'card',
+			'2026-11-30',
+			now
+		);
+		expect(writes).toHaveLength(2);
+		expect(writes[0]).toMatchObject({
+			id: 'buffet',
+			data: { date: '2026-11-09', billOn: '2026-11-16' }
+		});
+		expect(writes[1]).toMatchObject({
+			id: 'groceries',
+			data: { date: '2026-10-20', billOn: '2026-11-16' }
+		});
+	});
+
+	it('moves several Occurrences of one plan in a single write', () => {
+		const writes = planBillWithPayment(
+			paying,
+			[
+				charge({
+					from: 'scheduled',
+					link: { plan: 'scheduled', planId: 'music', due: '2026-10-12' }
+				}),
+				charge({
+					from: 'scheduled',
+					link: { plan: 'scheduled', planId: 'music', due: '2026-11-12' }
+				})
+			],
+			'card',
+			'2026-12-15',
+			now
+		);
+		expect(writes).toHaveLength(1);
+		expect(writes[0]).toMatchObject({
+			op: 'setScheduled',
+			id: 'music',
+			data: {
+				occurrences: {
+					'2026-10-12': { movedTo: '2026-12-01' },
+					'2026-11-12': { movedTo: '2026-12-01' }
+				}
+			}
+		});
+	});
+
+	it('moves an Installment Row to the chosen payment', () => {
+		const [w] = planBillWithPayment(
+			paying,
+			[
+				charge({
+					from: 'installment',
+					link: { plan: 'installment', planId: 'laptop', due: '2026-11-20' }
+				})
+			],
+			'card',
+			'2026-12-15',
+			now
+		);
+		if (w.op !== 'setInstallment') throw new Error('expected a plan');
+		expect(w.data.rows[0]).toMatchObject({ due: '2026-11-20', date: '2026-12-01' });
+	});
+
+	it('refuses a date that is not a payment of this Liability', () => {
+		expect(() =>
+			planBillWithPayment(
+				paying,
+				[charge({ from: 'transaction', txId: 'buffet' })],
+				'card',
+				'2026-11-20',
+				now
+			)
+		).toThrow('not a payment');
 	});
 });
