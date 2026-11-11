@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildChart } from './chart.ts';
-import { expectedAtEnd } from './forecast.ts';
+import { buildForecast, expectedAtEnd, shortAtEnd } from './forecast.ts';
 import type { Forecast, PlanLine, RepeatRule, Scheduled, Transaction } from './schemas.ts';
 import { account, now, opening, roots, tx } from './test-fixtures.ts';
 
@@ -79,5 +79,24 @@ describe('Expected at end of a Cut-off', () => {
 
 	it('shows nothing for a Cut-off already over', () => {
 		expect(expectedAtEnd(input, '2026-10-31').size).toBe(0);
+	});
+});
+
+describe('Short', () => {
+	it('adds up the Funding Accounts expected to end below zero', () => {
+		const lean = { ...input, chart: buildChart(accounts, [opening('bank', 100_000)]) };
+		// 1,000 today + 20,000 pay - 6,000 rent (10 Nov, unpaid) = 15,000 by 15 Nov; fine.
+		const view = buildForecast(lean, '2026-11-15');
+		expect(shortAtEnd(view, expectedAtEnd(lean, '2026-11-15'))).toBe(0);
+		// Without the pay it ends at 1,000 - 6,000 = -5,000.
+		const noPay = { ...lean, scheduled: [rent, rent20] };
+		expect(shortAtEnd(buildForecast(noPay, '2026-11-15'), expectedAtEnd(noPay, '2026-11-15'))).toBe(
+			-500_000
+		);
+	});
+
+	it('falls back to Planned left for a Cut-off already over', () => {
+		const view = buildForecast(input, '2026-10-31');
+		expect(shortAtEnd(view, new Map())).toBe(view.totals.short);
 	});
 });
