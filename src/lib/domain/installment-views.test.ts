@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildChart } from './chart.ts';
-import { cutoffOf, dueByCutoff, plansList } from './installment-views.ts';
+import { cutoffOf, dueByCutoff, filterPlansList, plansList } from './installment-views.ts';
 import { flatRows } from './installments.ts';
 import type { Installment, Transaction } from './schemas.ts';
 import { account, now, roots, tx } from './test-fixtures.ts';
@@ -106,6 +106,24 @@ describe('plansList', () => {
 			rowCount: 12
 		});
 		expect(list[2].summary.next).toBeUndefined();
+	});
+});
+
+describe('filterPlansList', () => {
+	const list = plansList(chart, [old, ub, jcb], { today });
+	const ids = (show: 'open' | 'done' | 'all', q = '') =>
+		filterPlansList(chart, list, { show, q }).map((l) => l.plan.id);
+
+	it('keeps open plans (with a next row), finished ones, or all, in the same order', () => {
+		expect(ids('open')).toEqual(['jcb', 'ub']);
+		expect(ids('done')).toEqual(['old']);
+		expect(ids('all')).toEqual(['jcb', 'ub', 'old']);
+	});
+
+	it('searches the title and the repaid Account name, ignoring case and spaces around', () => {
+		expect(ids('all', '  paydirect ')).toEqual(['ub']);
+		expect(ids('all', 'JCB')).toEqual(['jcb']);
+		expect(ids('open', 'nothing like it')).toEqual([]);
 	});
 });
 

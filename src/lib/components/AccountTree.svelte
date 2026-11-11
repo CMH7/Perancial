@@ -1,49 +1,60 @@
 <script lang="ts">
-	// The Accounts page's left pane: Account Type tabs over one Root Account's tree. Group
-	// Accounts open and close; the open Account's ancestors start open. Rows drag among their
-	// siblings to reorder. Collapsed, it shrinks to a strip of short type labels.
-	import { resolve } from '$app/paths';
+	// A SplitPane left pane: Account Type tabs over one Root Account's tree. Group Accounts open and
+	// close; the selected Account's ancestors start open. Tabs and rows either link (`link`, the
+	// Accounts page) or pick (`onpick`, the Journal's Account filter). With `reorder`, rows drag
+	// among their siblings. Collapsed, it shrinks to a strip of short type labels.
+	import type { Snippet } from 'svelte';
 	import {
 		ACCOUNT_TYPE_GUIDE,
 		accountTreeRows,
 		planDropAccount,
-		treeGroupIds,
-		type Account
+		treeGroupIds
 	} from '#lib/domain/index.ts';
 	import { ledger } from '#lib/ledger.svelte.ts';
 	import Amount from './Amount.svelte';
+	import PaneStrip from './PaneStrip.svelte';
+	import PaneToggle from './PaneToggle.svelte';
 
 	let {
-		path,
+		rootId,
+		selectedId,
+		link,
+		onpick,
+		reorder = false,
+		extra,
 		showArchived = $bindable(false),
 		collapsed = $bindable(false)
 	}: {
-		/** Root Account down to the open Account. */
-		path: Account[];
+		/** The Root Account whose tree shows (its tab is the active one). */
+		rootId: string;
+		/** Highlighted, with its ancestors open; none when nothing is picked. */
+		selectedId?: string;
+		/** Where a tab or row goes; or else `onpick` is called with its Account ID. */
+		link?: (id: string) => string;
+		onpick?: (id: string) => void;
+		reorder?: boolean;
+		/** Drawn under the tabs, above the tree (the Journal's other filters). */
+		extra?: Snippet;
 		showArchived?: boolean;
 		collapsed?: boolean;
 	} = $props();
 
 	const chart = $derived(ledger.chart);
-	const root = $derived(path[0]);
-	const openId = $derived(path.at(-1)?.id);
-	const href = (id: string) => resolve('/accounts/[id]', { id });
+	const root = $derived(chart.account(rootId));
 
 	let filter = $state('');
-	/** Groups opened or closed by hand; any other group is open when the open Account is in it. */
+	/** Groups opened or closed by hand; any other group is open when the selection is in it. */
 	let expanded = $state<Record<string, boolean>>({});
-	const onPath = $derived(new Set(path.map((p) => p.id)));
+	const onPath = $derived(new Set(selectedId ? chart.path(selectedId).map((p) => p.id) : []));
 	const rows = $derived(
-		root
-			? accountTreeRows(chart, root.id, {
-					showArchived,
-					filter,
-					isOpen: (id) => expanded[id] ?? onPath.has(id)
-				})
-			: []
+		accountTreeRows(chart, rootId, {
+			showArchived,
+			filter,
+			isOpen: (id) => expanded[id] ?? onPath.has(id)
+		})
 	);
 	function setAll(open: boolean) {
-		if (root) expanded = Object.fromEntries(treeGroupIds(chart, root.id).map((id) => [id, open]));
+		expanded = Object.fromEntries(treeGroupIds(chart, rootId).map((id) => [id, open]));
 	}
 
 	// Drag-and-drop reordering among siblings.
@@ -65,73 +76,72 @@
 	}
 </script>
 
-{#snippet panelIcon()}
-	<svg
-		viewBox="0 0 16 16"
-		class="size-4"
-		fill="none"
-		stroke="currentColor"
-		stroke-width="1.5"
-		aria-hidden="true"
-		><rect x="2" y="2.5" width="12" height="11" rx="2" /><path d="M6 2.5v11" /></svg
-	>
+<!-- A tab or row target: a link, or a button that picks the Account. -->
+{#snippet target(id: string, cls: string, title: string, body: Snippet)}
+	{#if link}
+		<!-- eslint-disable svelte/no-navigation-without-resolve -- `link` returns resolved paths -->
+		<a
+			href={link(id)}
+			{title}
+			draggable="false"
+			aria-current={id === selectedId ? 'page' : undefined}
+			class={cls}>{@render body()}</a
+		>
+		<!-- eslint-enable svelte/no-navigation-without-resolve -->
+	{:else}
+		<button
+			onclick={() => onpick?.(id)}
+			{title}
+			aria-pressed={id === selectedId}
+			class="text-left {cls}">{@render body()}</button
+		>
+	{/if}
 {/snippet}
 
 {#if collapsed}
-	<nav aria-label="Account Types" class="flex h-full flex-col items-center border-r bg-white py-3">
-		<button
-			onclick={() => (collapsed = false)}
-			class="mb-3 grid size-8 place-items-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-900"
-			title="Show accounts ( [ )"
-			aria-label="Show accounts">{@render panelIcon()}</button
-		>
-		{#each ACCOUNT_TYPE_GUIDE as g (g.type)}
-			{@const active = root?.id === g.type}
-			<a
-				href={href(g.type)}
-				title={g.label}
-				aria-current={active ? 'page' : undefined}
-				class="-mr-px w-full border-r-2 py-2 text-center text-xs {active
-					? 'border-gray-900 font-semibold text-gray-900'
-					: 'border-transparent text-gray-400 hover:text-gray-900'}">{g.label.slice(0, 3)}</a
-			>
-		{/each}
-	</nav>
+	<PaneStrip
+		bind:collapsed
+		label="Accounts"
+		tabs={ACCOUNT_TYPE_GUIDE.map((g) => ({
+			key: g.type,
+			short: g.label.slice(0, 3),
+			title: g.label,
+			active: rootId === g.type,
+			href: link?.(g.type),
+			onclick: () => onpick?.(g.type)
+		}))}
+	/>
 {:else}
 	<section class="flex h-full min-h-0 flex-col border-r bg-white">
 		<nav aria-label="Account Types" class="flex border-b px-2">
 			{#each ACCOUNT_TYPE_GUIDE as g (g.type)}
-				{@const active = root?.id === g.type}
-				<a
-					href={href(g.type)}
-					title={g.what}
-					aria-current={active ? 'page' : undefined}
-					class="-mb-px flex-1 border-b-2 px-1 py-2.5 text-center text-xs {active
-						? 'border-gray-900 font-semibold text-gray-900'
-						: 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-900'}"
-					>{g.label}</a
-				>
+				{#snippet label()}{g.label}{/snippet}
+				{@render target(
+					g.type,
+					`-mb-px flex-1 border-b-2 px-1 py-2.5 text-center text-xs ${
+						rootId === g.type
+							? 'border-gray-900 font-semibold text-gray-900'
+							: 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-900'
+					}`,
+					g.what,
+					label
+				)}
 			{/each}
 		</nav>
+
+		{#if extra}<div class="border-b p-3">{@render extra()}</div>{/if}
 
 		<div class="border-b p-3">
 			<div class="mb-2 flex items-center gap-2 px-1">
 				<span class="text-sm font-semibold">{root?.name}</span>
-				<span class="ml-auto text-sm"
-					><Amount value={root ? chart.balance(root.id) : 0} bold /></span
-				>
-				<button
-					onclick={() => (collapsed = true)}
-					class="grid size-7 place-items-center rounded-md text-gray-400 hover:bg-gray-100 hover:text-gray-900"
-					title="Hide accounts ( [ )"
-					aria-label="Hide accounts">{@render panelIcon()}</button
-				>
+				<span class="ml-auto text-sm"><Amount value={chart.balance(rootId)} bold /></span>
+				<PaneToggle bind:collapsed label="accounts" />
 			</div>
 			<input
 				bind:value={filter}
 				type="search"
-				placeholder="Filter accounts…"
-				aria-label="Filter accounts"
+				placeholder="Find an Account…"
+				aria-label="Find an Account"
 				class="w-full rounded-lg border-gray-200 bg-gray-50 px-3 py-1.5 text-sm"
 			/>
 			<div class="mt-2 flex gap-3 px-1 text-xs text-gray-500">
@@ -143,7 +153,8 @@
 		{#if reorderError}<p class="px-4 pt-2 text-xs text-red-600">{reorderError}</p>{/if}
 		<ul class="min-h-0 flex-1 overflow-y-auto py-2" aria-label="{root?.name ?? 'Account'} tree">
 			{#each rows as { account: a, depth, expandable, open }, i (a.id)}
-				{@const canDrag = !a.system && !filter.trim()}
+				{@const group = chart.isGroup(a.id)}
+				{@const canDrag = reorder && !a.system && !filter.trim()}
 				{@const canDrop =
 					!!dragged && dragged.id !== a.id && !a.system && dragged.parentId === a.parentId}
 				<li
@@ -166,7 +177,7 @@
 						e.preventDefault();
 						if (canDrop) drop(a.id);
 					}}
-					class="flex items-center border-l-2 text-sm {a.id === openId
+					class="flex items-center border-l-2 text-sm {a.id === selectedId
 						? 'border-gray-900 bg-gray-100'
 						: 'border-transparent hover:bg-gray-50'} {a.archived ? 'opacity-50' : ''} {dragId ===
 					a.id
@@ -197,20 +208,20 @@
 					{:else}
 						<span class="size-6 shrink-0"></span>
 					{/if}
-					<a
-						href={href(a.id)}
-						draggable="false"
-						aria-current={a.id === openId ? 'page' : undefined}
-						class="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 py-1.5 pr-4"
-					>
-						<span
-							class="truncate {chart.isGroup(a.id) ? 'font-medium text-gray-900' : 'text-gray-700'}"
-							title={a.name}>{a.name}</span
+					{#snippet row()}
+						<span class="truncate {group ? 'font-medium text-gray-900' : 'text-gray-700'}"
+							>{a.name}</span
 						>
-						<span class="text-xs {chart.isGroup(a.id) ? '' : 'text-gray-500'}"
-							><Amount value={chart.balance(a.id)} bold={chart.isGroup(a.id)} /></span
+						<span class="text-xs {group ? '' : 'text-gray-500'}"
+							><Amount value={chart.balance(a.id)} bold={group} /></span
 						>
-					</a>
+					{/snippet}
+					{@render target(
+						a.id,
+						'grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 py-1.5 pr-4',
+						a.name,
+						row
+					)}
 				</li>
 			{:else}
 				<li class="px-4 py-6 text-center text-sm text-gray-500">

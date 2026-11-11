@@ -2,6 +2,168 @@
 @plugin '@tailwindcss/forms';
 @plugin '@tailwindcss/typography';
 
+/* `dark:` follows the theme class on <html> (set in app.html and by the Appearance setting). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+ * The palette. Gray is a warm charcoal scale; gray-900 is the primary (buttons, active tabs).
+ * `white` is the paper that cards, panes, drawers and dialogs are made of. In dark mode the gray
+ * scale and the paper flip, and the light tints (-50 to -300) and dark text shades (-600 to -900)
+ * of the accent hues are remixed so the same classes read well on dark paper.
+ */
+@theme {
+	--color-white: #fffefb;
+	--color-gray-50: #f8f7f4;
+	--color-gray-100: #f0eee9;
+	--color-gray-200: #e3e0d9;
+	--color-gray-300: #cdc9c1;
+	--color-gray-400: #a29e96;
+	--color-gray-500: #79766f;
+	--color-gray-600: #5c5a55;
+	--color-gray-700: #46443f;
+	--color-gray-800: #34332f;
+	--color-gray-900: #2a2a28;
+	--color-gray-950: #1b1b1a;
+}
+
+:root {
+	color-scheme: light;
+	/* Fine dark specks; laid over every paper surface and the page. */
+	--grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.09 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
+	--paper-shadow: 0 1px 0 rgb(40 36 30 / 0.04), 0 1px 3px rgb(40 36 30 / 0.07);
+}
+
+:root.dark {
+	color-scheme: dark;
+	--color-white: #232322;
+	--color-gray-50: #1f1f1e;
+	--color-gray-100: #191918;
+	--color-gray-200: #353431;
+	--color-gray-300: #484641;
+	--color-gray-400: #6d6a64;
+	--color-gray-500: #9b978f;
+	--color-gray-600: #b6b2aa;
+	--color-gray-700: #cecac2;
+	--color-gray-800: #e1ded7;
+	--color-gray-900: #ece9e3;
+	--color-gray-950: #f6f4ef;
+	--grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.06 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
+	--paper-shadow: 0 1px 0 rgb(0 0 0 / 0.25), 0 2px 6px rgb(0 0 0 / 0.35);
+	--color-red-50: color-mix(in oklab, var(--color-red-500) 14%, #232322);
+	--color-red-100: color-mix(in oklab, var(--color-red-500) 22%, #232322);
+	--color-red-200: color-mix(in oklab, var(--color-red-500) 32%, #232322);
+	--color-red-300: color-mix(in oklab, var(--color-red-500) 48%, #232322);
+	--color-red-600: color-mix(in oklab, var(--color-red-500) 85%, #ffffff);
+	--color-red-700: color-mix(in oklab, var(--color-red-500) 72%, #ffffff);
+	--color-red-800: color-mix(in oklab, var(--color-red-500) 60%, #ffffff);
+	--color-red-900: color-mix(in oklab, var(--color-red-500) 50%, #ffffff);
+	--color-rose-50: color-mix(in oklab, var(--color-rose-500) 14%, #232322);
+	--color-rose-100: color-mix(in oklab, var(--color-rose-500) 22%, #232322);
+	--color-rose-200: color-mix(in oklab, var(--color-rose-500) 32%, #232322);
+	--color-rose-300: color-mix(in oklab, var(--color-rose-500) 48%, #232322);
+	--color-rose-600: color-mix(in oklab, var(--color-rose-500) 85%, #ffffff);
+	--color-rose-700: color-mix(in oklab, var(--color-rose-500) 72%, #ffffff);
+	--color-rose-800: color-mix(in oklab, var(--color-rose-500) 60%, #ffffff);
+	--color-rose-900: color-mix(in oklab, var(--color-rose-500) 50%, #ffffff);
+	--color-amber-50: color-mix(in oklab, var(--color-amber-500) 14%, #232322);
+	--color-amber-100: color-mix(in oklab, var(--color-amber-500) 22%, #232322);
+	--color-amber-200: color-mix(in oklab, var(--color-amber-500) 32%, #232322);
+	--color-amber-300: color-mix(in oklab, var(--color-amber-500) 48%, #232322);
+	--color-amber-600: color-mix(in oklab, var(--color-amber-500) 85%, #ffffff);
+	--color-amber-700: color-mix(in oklab, var(--color-amber-500) 72%, #ffffff);
+	--color-amber-800: color-mix(in oklab, var(--color-amber-500) 60%, #ffffff);
+	--color-amber-900: color-mix(in oklab, var(--color-amber-500) 50%, #ffffff);
+	--color-yellow-50: color-mix(in oklab, var(--color-yellow-500) 14%, #232322);
+	--color-yellow-100: color-mix(in oklab, var(--color-yellow-500) 22%, #232322);
+	--color-yellow-200: color-mix(in oklab, var(--color-yellow-500) 32%, #232322);
+	--color-yellow-300: color-mix(in oklab, var(--color-yellow-500) 48%, #232322);
+	--color-yellow-600: color-mix(in oklab, var(--color-yellow-500) 85%, #ffffff);
+	--color-yellow-700: color-mix(in oklab, var(--color-yellow-500) 72%, #ffffff);
+	--color-yellow-800: color-mix(in oklab, var(--color-yellow-500) 60%, #ffffff);
+	--color-yellow-900: color-mix(in oklab, var(--color-yellow-500) 50%, #ffffff);
+	--color-green-50: color-mix(in oklab, var(--color-green-500) 14%, #232322);
+	--color-green-100: color-mix(in oklab, var(--color-green-500) 22%, #232322);
+	--color-green-200: color-mix(in oklab, var(--color-green-500) 32%, #232322);
+	--color-green-300: color-mix(in oklab, var(--color-green-500) 48%, #232322);
+	--color-green-600: color-mix(in oklab, var(--color-green-500) 85%, #ffffff);
+	--color-green-700: color-mix(in oklab, var(--color-green-500) 72%, #ffffff);
+	--color-green-800: color-mix(in oklab, var(--color-green-500) 60%, #ffffff);
+	--color-green-900: color-mix(in oklab, var(--color-green-500) 50%, #ffffff);
+	--color-emerald-50: color-mix(in oklab, var(--color-emerald-500) 14%, #232322);
+	--color-emerald-100: color-mix(in oklab, var(--color-emerald-500) 22%, #232322);
+	--color-emerald-200: color-mix(in oklab, var(--color-emerald-500) 32%, #232322);
+	--color-emerald-300: color-mix(in oklab, var(--color-emerald-500) 48%, #232322);
+	--color-emerald-600: color-mix(in oklab, var(--color-emerald-500) 85%, #ffffff);
+	--color-emerald-700: color-mix(in oklab, var(--color-emerald-500) 72%, #ffffff);
+	--color-emerald-800: color-mix(in oklab, var(--color-emerald-500) 60%, #ffffff);
+	--color-emerald-900: color-mix(in oklab, var(--color-emerald-500) 50%, #ffffff);
+	--color-sky-50: color-mix(in oklab, var(--color-sky-500) 14%, #232322);
+	--color-sky-100: color-mix(in oklab, var(--color-sky-500) 22%, #232322);
+	--color-sky-200: color-mix(in oklab, var(--color-sky-500) 32%, #232322);
+	--color-sky-300: color-mix(in oklab, var(--color-sky-500) 48%, #232322);
+	--color-sky-600: color-mix(in oklab, var(--color-sky-500) 85%, #ffffff);
+	--color-sky-700: color-mix(in oklab, var(--color-sky-500) 72%, #ffffff);
+	--color-sky-800: color-mix(in oklab, var(--color-sky-500) 60%, #ffffff);
+	--color-sky-900: color-mix(in oklab, var(--color-sky-500) 50%, #ffffff);
+	--color-blue-50: color-mix(in oklab, var(--color-blue-500) 14%, #232322);
+	--color-blue-100: color-mix(in oklab, var(--color-blue-500) 22%, #232322);
+	--color-blue-200: color-mix(in oklab, var(--color-blue-500) 32%, #232322);
+	--color-blue-300: color-mix(in oklab, var(--color-blue-500) 48%, #232322);
+	--color-blue-600: color-mix(in oklab, var(--color-blue-500) 85%, #ffffff);
+	--color-blue-700: color-mix(in oklab, var(--color-blue-500) 72%, #ffffff);
+	--color-blue-800: color-mix(in oklab, var(--color-blue-500) 60%, #ffffff);
+	--color-blue-900: color-mix(in oklab, var(--color-blue-500) 50%, #ffffff);
+	--color-violet-50: color-mix(in oklab, var(--color-violet-500) 14%, #232322);
+	--color-violet-100: color-mix(in oklab, var(--color-violet-500) 22%, #232322);
+	--color-violet-200: color-mix(in oklab, var(--color-violet-500) 32%, #232322);
+	--color-violet-300: color-mix(in oklab, var(--color-violet-500) 48%, #232322);
+	--color-violet-600: color-mix(in oklab, var(--color-violet-500) 85%, #ffffff);
+	--color-violet-700: color-mix(in oklab, var(--color-violet-500) 72%, #ffffff);
+	--color-violet-800: color-mix(in oklab, var(--color-violet-500) 60%, #ffffff);
+	--color-violet-900: color-mix(in oklab, var(--color-violet-500) 50%, #ffffff);
+	--color-slate-50: color-mix(in oklab, var(--color-slate-500) 14%, #232322);
+	--color-slate-100: color-mix(in oklab, var(--color-slate-500) 22%, #232322);
+	--color-slate-200: color-mix(in oklab, var(--color-slate-500) 32%, #232322);
+	--color-slate-300: color-mix(in oklab, var(--color-slate-500) 48%, #232322);
+	--color-slate-600: color-mix(in oklab, var(--color-slate-500) 85%, #ffffff);
+	--color-slate-700: color-mix(in oklab, var(--color-slate-500) 72%, #ffffff);
+	--color-slate-800: color-mix(in oklab, var(--color-slate-500) 60%, #ffffff);
+	--color-slate-900: color-mix(in oklab, var(--color-slate-500) 50%, #ffffff);
+}
+
+@layer base {
+	/* Soft borders by default (Tailwind 4 otherwise uses the text colour). */
+	*,
+	::after,
+	::before,
+	::backdrop,
+	::file-selector-button {
+		border-color: var(--color-gray-200);
+	}
+	/* Form controls sit on the paper and follow the theme. */
+	/* `:root` outranks @tailwindcss/forms' own white; utilities (later layer) still win. */
+	:root :is(input:not([type='checkbox'], [type='radio']), select, textarea) {
+		background-color: var(--color-white);
+		color: inherit;
+		border-color: var(--color-gray-300);
+	}
+	:root :is([type='checkbox'], [type='radio']):not(:checked) {
+		background-color: var(--color-white);
+		border-color: var(--color-gray-400);
+	}
+}
+
 body {
 	@apply bg-gray-100 text-gray-900;
+	background-image: var(--grain);
+}
+
+/* Paper: every white surface (cards, panes, drawers, dialogs, popovers) carries the grain;
+   cards also lift a little off the page. Drawers and dialogs keep their own deeper shadow. */
+.bg-white,
+dialog {
+	background-image: var(--grain);
+}
+.bg-white:is(.rounded-lg, .rounded-xl, .rounded-2xl):not([class*='shadow-']) {
+	box-shadow: var(--paper-shadow);
 }

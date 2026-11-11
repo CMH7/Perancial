@@ -1,12 +1,13 @@
 <script lang="ts">
 	import './layout.css';
+	import '#lib/theme.svelte.ts';
 	import favicon from '#lib/assets/favicon.svg';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { onAuthStateChanged } from 'firebase/auth';
 	import { auth } from '#lib/firebase/app.ts';
-	import { signOut } from '#lib/firebase/auth.ts';
+	import NotificationBell from '#lib/components/NotificationBell.svelte';
 	import { ledger } from '#lib/ledger.svelte.ts';
 	import type { LayoutProps } from './$types';
 
@@ -51,17 +52,38 @@
 			<a href={resolve('/scheduled')} class="text-gray-600 hover:text-gray-900">Scheduled</a>
 			<a href={resolve('/installments')} class="text-gray-600 hover:text-gray-900">Installments</a>
 			<a href={resolve('/forecast')} class="text-gray-600 hover:text-gray-900">Forecast</a>
-			<a href={resolve('/settings')} class="text-gray-600 hover:text-gray-900">Settings</a>
 			<a
 				href={resolve('/transactions/new')}
 				class="rounded bg-gray-900 px-2 py-1 text-white hover:bg-gray-700">New Transaction</a
 			>
 		</nav>
-		<div class="flex items-center gap-4 text-gray-500">
-			<span>{data.user?.email}</span>
-			<button onclick={signOut} class="rounded px-2 py-1 hover:bg-gray-100 hover:text-gray-900"
-				>Sign out</button
+		<div class="flex items-center gap-1">
+			<NotificationBell />
+			<a
+				href={resolve('/settings')}
+				class="grid size-8 place-items-center rounded-md hover:bg-gray-100 hover:text-gray-900 {page.url.pathname.startsWith(
+					'/settings'
+				)
+					? 'bg-gray-100 text-gray-900'
+					: 'text-gray-500'}"
+				aria-label="Settings"
+				aria-current={page.url.pathname.startsWith('/settings') ? 'page' : undefined}
+				title="Settings"
 			>
+				<svg
+					viewBox="0 0 24 24"
+					class="size-5"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="1.75"
+					stroke-linecap="round"
+					stroke-linejoin="round"
+					aria-hidden="true"
+					><path
+						d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"
+					/><circle cx="12" cy="12" r="3" /></svg
+				>
+			</a>
 		</div>
 	</header>
 {/if}

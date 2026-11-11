@@ -61,7 +61,7 @@
 	const peso = (c: number) => formatAmount(c);
 </script>
 
-<main class="mx-auto max-w-5xl px-4 py-8">
+<main class="max-w-5xl px-8 py-6">
 	<a href={resolve('/installments')} class="text-sm text-gray-500">← Installments</a>
 	{#if ledger.error}
 		<p class="mt-4 rounded-lg bg-red-50 p-4 text-sm text-red-800">{ledger.error}</p>
