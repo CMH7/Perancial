@@ -119,7 +119,7 @@
 	};
 	const chosen = $derived(charges.filter((c) => ticked.has(c.key) && c.blocked !== 'later'));
 	const chargesBlocked = $derived(chosen.some((c) => centsOf(c.key) === null));
-	const chargeWrites = ({ now, today }: { now: Date; today: string }) =>
+	const chargeWrites = ({ now, today, id }: { now: Date; today: string; id: string }) =>
 		planRecordCharges(
 			ledger.chart,
 			chosen.map((charge) => ({
@@ -127,7 +127,7 @@
 				amount: centsOf(charge.key)!,
 				id: ledger.newTransactionId()
 			})),
-			{ now, today }
+			{ now, today, recordedWith: id }
 		);
 
 	// The form copies this once when it mounts, so later changes don't reset what the user typed.

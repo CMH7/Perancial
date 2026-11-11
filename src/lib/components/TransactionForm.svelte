@@ -42,8 +42,8 @@
 		onsaved: (id: string) => void;
 		/** More of the form, shown above Save (Record's planned charges). */
 		extra?: Snippet;
-		/** Writes saved together with this Transaction, all or none. */
-		extraWrites?: (at: { now: Date; today: string }) => ChartWrite[];
+		/** Writes saved together with this Transaction (its `id`), all or none. */
+		extraWrites?: (at: { now: Date; today: string; id: string }) => ChartWrite[];
 		/** The extra part has an error, so Save waits. */
 		extraBlocked?: boolean;
 	} = $props();
@@ -128,7 +128,7 @@
 			const now = new Date();
 			await ledger.commit([
 				...planSaveTransaction(chart, draft, { id, now, today: todayIso, existing, pays }),
-				...(extraWrites?.({ now, today: todayIso }) ?? [])
+				...(extraWrites?.({ now, today: todayIso, id }) ?? [])
 			]);
 			onsaved(id);
 		} catch (err) {

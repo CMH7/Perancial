@@ -322,6 +322,7 @@ describe('planSaveTransaction', () => {
 					accountIds: ['bpi', 'gcash', 'bank-fees'],
 					pays: null,
 					billOn: null,
+					recordedWith: null,
 					createdAt: later,
 					updatedAt: later
 				}

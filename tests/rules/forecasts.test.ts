@@ -136,7 +136,7 @@ describe('Forecast fields on plans and Transactions', () => {
 		await assertFails(setDoc(ref, { ...plan, section: 5 }));
 	});
 
-	it('accept billOn on a Transaction', async () => {
+	it('accept billOn and recordedWith on a Transaction', async () => {
 		const db = ownerDb(env());
 		const ref = doc(db, transactionsPath(OWNER_UID), 't1');
 		const buffet = {
@@ -154,5 +154,8 @@ describe('Forecast fields on plans and Transactions', () => {
 		await assertSucceeds(setDoc(ref, { ...buffet, billOn: '2026-11-26' }));
 		await assertSucceeds(setDoc(ref, { ...buffet, billOn: null }));
 		await assertFails(setDoc(ref, { ...buffet, billOn: 20261126 }));
+		await assertSucceeds(setDoc(ref, { ...buffet, recordedWith: 'pay1' }));
+		await assertSucceeds(setDoc(ref, { ...buffet, recordedWith: null }));
+		await assertFails(setDoc(ref, { ...buffet, recordedWith: 1 }));
 	});
 });

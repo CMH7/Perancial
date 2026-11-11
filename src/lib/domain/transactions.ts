@@ -287,7 +287,8 @@ export function planSaveTransaction(
 		now,
 		today,
 		existing,
-		pays
+		pays,
+		recordedWith
 	}: {
 		id: string;
 		now: Date;
@@ -295,6 +296,8 @@ export function planSaveTransaction(
 		existing?: Transaction;
 		/** The occurrence a new Transaction pays (Record); an edit keeps its own link. */
 		pays?: PaidLink;
+		/** The Liability payment a new planned charge is recorded with; an edit keeps its own. */
+		recordedWith?: string;
 	}
 ): ChartWrite[] {
 	assertNotOpening(existing);
@@ -316,6 +319,7 @@ export function planSaveTransaction(
 				accountIds: [...new Set(ev.entries.map((e) => e.accountId))],
 				pays: existing ? existing.pays : (pays ?? null),
 				billOn: draft.billOn === undefined ? (existing?.billOn ?? null) : draft.billOn || null,
+				recordedWith: existing ? existing.recordedWith : (recordedWith ?? null),
 				createdAt: existing?.createdAt ?? now,
 				updatedAt: now
 			}

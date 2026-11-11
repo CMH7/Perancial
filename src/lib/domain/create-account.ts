@@ -92,6 +92,7 @@ export function openingWrite(
 				accountIds: [id, 'opening-balances'],
 				pays: null,
 				billOn: null,
+				recordedWith: null,
 				createdAt,
 				updatedAt: now
 			}

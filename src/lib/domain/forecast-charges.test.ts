@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { buildChart } from './chart.ts';
-import { plannedChargeDraft, plannedCharges, planRecordCharges } from './forecast-charges.ts';
+import {
+	plannedChargeDraft,
+	plannedCharges,
+	planRecordCharges,
+	planUndoRecord,
+	recordedWith
+} from './forecast-charges.ts';
 import type { Installment, Scheduled } from './schemas.ts';
 import { account, now, roots, tx } from './test-fixtures.ts';
 
@@ -149,6 +155,48 @@ describe('Planned charges recorded with a Liability payment', () => {
 					pays: { plan: 'scheduled', planId: 'music', due: '2026-11-12' }
 				})
 			})
+		]);
+	});
+});
+
+describe('Undoing a recorded Liability payment', () => {
+	const list = plannedCharges(input, 'card', '2026-11-25', { today: '2026-11-18' });
+
+	it('links each charge recorded with it to the payment', () => {
+		const [w] = planRecordCharges(chart, [{ charge: list[0], amount: 15_000, id: 't1' }], {
+			now,
+			today: '2026-11-18',
+			recordedWith: 'pay1'
+		});
+		expect(w).toMatchObject({ data: { recordedWith: 'pay1' } });
+	});
+
+	const payment = {
+		...tx('pay1', '2026-11-18', [
+			['card', 15_000],
+			['everyday', -15_000]
+		]),
+		pays: { plan: 'scheduled' as const, planId: 'cardpay', due: '2026-11-25' }
+	};
+	const musicTx = {
+		...tx('t1', '2026-11-12', [
+			['food', 15_000],
+			['card', -15_000]
+		]),
+		pays: { plan: 'scheduled' as const, planId: 'music', due: '2026-11-12' },
+		recordedWith: 'pay1'
+	};
+	const books = buildChart(accounts, [payment, musicTx, gymPaid]);
+
+	it('finds the charges recorded with a payment', () => {
+		expect(recordedWith(books, 'pay1').map((t) => t.id)).toEqual(['t1']);
+	});
+
+	it('deletes the payment and the charges recorded with it, nothing else', () => {
+		const writes = planUndoRecord(books, 'pay1', { now, plans: input.scheduled });
+		expect(writes).toEqual([
+			{ op: 'deleteTransaction', id: 'pay1' },
+			{ op: 'deleteTransaction', id: 't1' }
 		]);
 	});
 });

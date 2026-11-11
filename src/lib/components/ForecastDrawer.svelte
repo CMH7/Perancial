@@ -7,6 +7,10 @@
 	import {
 		formatAmount,
 		formatPicks,
+		paymentsFor,
+		planUndoRecord,
+		recordedWith,
+		txTotal,
 		laterPayments,
 		parseAmount,
 		planBillLater,
@@ -16,6 +20,7 @@
 		recordPicks,
 		shortDate,
 		sourceEditErrors,
+		type ActionCheck,
 		type Charge,
 		type ForecastInput,
 		type ForecastOutflow,
@@ -23,6 +28,8 @@
 	} from '#lib/domain/index.ts';
 	import { accountItems } from '#lib/account-items.svelte.ts';
 	import AccountPicker from './AccountPicker.svelte';
+	import ConfirmAction from './ConfirmAction.svelte';
+	import Modal from './Modal.svelte';
 	import { ledger } from '#lib/ledger.svelte.ts';
 	import { SvelteSet } from 'svelte/reactivity';
 
@@ -160,6 +167,32 @@
 	const statusLabel = $derived(
 		o.status === 'paid' ? 'Paid' : o.status === 'partly-paid' ? 'Partly Paid' : 'Unpaid'
 	);
+
+	// Undo record: each Transaction that pays this Outflow, with the planned charges recorded with
+	// it, can be deleted again (all together), so the Outflow and those charges become unpaid.
+	const plans = $derived([...input.scheduled, ...input.installments]);
+	const recorded = $derived(
+		paymentsFor(input.chart, o.link).map((tx) => ({
+			tx,
+			charges: recordedWith(input.chart, tx.id)
+		}))
+	);
+	let undoing = $state<string | null>(null);
+	const undoItem = $derived(recorded.find((r) => r.tx.id === undoing));
+	const undoCheck = $derived.by((): ActionCheck => {
+		if (!undoing) return { allowed: true, inside: 0 };
+		try {
+			planUndoRecord(input.chart, undoing, { now: new Date(), plans });
+			return { allowed: true, inside: 0 };
+		} catch (err) {
+			return { allowed: false, reason: (err as Error).message };
+		}
+	});
+	async function undoRecord() {
+		if (!undoing) return;
+		await ledger.commit(planUndoRecord(input.chart, undoing, { now: new Date(), plans }));
+		undoing = null;
+	}
 
 	function record(which: 'all' | string) {
 		const picks = recordPicks(o, which);
@@ -380,6 +413,32 @@
 			</p>{/if}
 	</div>
 
+	{#if recorded.length}
+		<div>
+			<p class="mb-1 text-xs font-semibold text-gray-500 uppercase">Recorded</p>
+			{#each recorded as r (r.tx.id)}
+				<div class="flex items-center justify-between gap-2 border-b py-1">
+					<span
+						>{shortDate(r.tx.date ?? '', { year: false })}
+						<span class="text-xs text-gray-500"
+							>{r.charges.length
+								? `with ${r.charges.length} planned charge${r.charges.length === 1 ? '' : 's'}`
+								: ''}</span
+						></span
+					>
+					<span class="flex items-center gap-2">
+						<span class="tabular-nums">{formatAmount(txTotal(r.tx))}</span>
+						<button
+							class="text-xs text-red-700 underline"
+							title="Delete this payment and the planned charges recorded with it"
+							onclick={() => (undoing = r.tx.id)}>Undo record</button
+						>
+					</span>
+				</div>
+			{/each}
+		</div>
+	{/if}
+
 	<div class="flex flex-wrap gap-2">
 		{#if all.length && !dirty}
 			<button class="rounded bg-gray-900 px-3 py-1.5 text-white" onclick={() => record('all')}
@@ -389,3 +448,21 @@
 		<a class="rounded border px-3 py-1.5" href={planHref}>Open plan ↗</a>
 	</div>
 </aside>
+
+{#if undoItem}
+	<Modal onclose={() => (undoing = null)}>
+		<ConfirmAction
+			title="Undo record"
+			check={undoCheck}
+			question={`Delete the ${formatAmount(txTotal(undoItem.tx))} payment on ${shortDate(undoItem.tx.date ?? '')}` +
+				(undoItem.charges.length
+					? ` and the planned charges recorded with it (${undoItem.charges.map((t) => t.description).join(', ')})`
+					: '') +
+				"? They become unpaid again. This can't be undone."}
+			confirmLabel="Undo record"
+			danger
+			onclose={() => (undoing = null)}
+			onconfirm={undoRecord}
+		/>
+	</Modal>
+{/if}

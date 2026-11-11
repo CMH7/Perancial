@@ -7,8 +7,13 @@ import { installmentRecordDraft } from './installment-paying.ts';
 import { rowStatuses } from './installments.ts';
 import { recordDraft } from './paying.ts';
 import { occurrenceStatus, occurrencesOf } from './scheduled.ts';
-import type { PaidLink } from './schemas.ts';
-import { planSaveTransaction, type TransactionDraft } from './transactions.ts';
+import type { PayablePlan } from './payable.ts';
+import type { PaidLink, Transaction } from './schemas.ts';
+import {
+	planDeleteTransactions,
+	planSaveTransaction,
+	type TransactionDraft
+} from './transactions.ts';
 import type { ChartWrite } from './writes.ts';
 
 export type PlannedCharge = {
@@ -89,11 +94,14 @@ export function plannedChargeDraft(charge: PlannedCharge, amount: number): Trans
 	};
 }
 
-/** One Transaction per planned charge, each paying it. Throws on the first that isn't valid. */
+/**
+ * One Transaction per planned charge, each paying it and linked to the payment it is recorded
+ * with, so undoing that payment takes them too. Throws on the first that isn't valid.
+ */
 export function planRecordCharges(
 	chart: Chart,
 	items: { charge: PlannedCharge; amount: number; id: string }[],
-	{ now, today }: { now: Date; today: IsoDate }
+	{ now, today, recordedWith }: { now: Date; today: IsoDate; recordedWith?: string }
 ): ChartWrite[] {
 	return items.flatMap(({ charge, amount, id }) => {
 		try {
@@ -101,10 +109,28 @@ export function planRecordCharges(
 				id,
 				now,
 				today,
-				pays: charge.pays
+				pays: charge.pays,
+				recordedWith
 			});
 		} catch (err) {
 			throw new Error(`${charge.label}: ${(err as Error).message}`, { cause: err });
 		}
 	});
+}
+
+/** The planned charges recorded together with this payment. */
+export const recordedWith = (chart: Chart, paymentId: string): Transaction[] =>
+	chart.transactions().filter((tx) => tx.recordedWith === paymentId);
+
+/**
+ * Undo record: deletes the payment and the planned charges recorded with it, which become unpaid
+ * again. Deleting is permanent.
+ */
+export function planUndoRecord(
+	chart: Chart,
+	paymentId: string,
+	{ now, plans }: { now: Date; plans: PayablePlan[] }
+): ChartWrite[] {
+	const ids = [paymentId, ...recordedWith(chart, paymentId).map((tx) => tx.id)];
+	return planDeleteTransactions(chart, ids, { now, plans });
 }

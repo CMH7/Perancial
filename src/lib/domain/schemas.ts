@@ -69,6 +69,8 @@ export const TransactionDoc = z
 		pays: PaidLink.nullable().default(null),
 		/** A card or payable charge billed as if dated this day ("Bill with next payment"). */
 		billOn: z.iso.date().nullable().default(null),
+		/** A planned charge recorded together with this Liability payment: the payment's id. */
+		recordedWith: z.string().nullable().default(null),
 		createdAt: z.date(),
 		updatedAt: z.date()
 	})
