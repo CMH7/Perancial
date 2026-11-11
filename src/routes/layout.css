@@ -33,7 +33,28 @@
 	--paper-shadow: 0 1px 0 rgb(40 36 30 / 0.04), 0 1px 3px rgb(40 36 30 / 0.07);
 }
 
-:root.dark {
+/* `.theme-light` / `.theme-dark` pin a subtree to one theme (the Appearance previews). */
+.theme-light {
+	--color-white: #fffefb;
+	--color-gray-50: #f8f7f4;
+	--color-gray-100: #f0eee9;
+	--color-gray-200: #e3e0d9;
+	--color-gray-300: #cdc9c1;
+	--color-gray-400: #a29e96;
+	--color-gray-500: #79766f;
+	--color-gray-600: #5c5a55;
+	--color-gray-700: #46443f;
+	--color-gray-800: #34332f;
+	--color-gray-900: #2a2a28;
+	--color-gray-950: #1b1b1a;
+	color-scheme: light;
+	/* Fine dark specks; laid over every paper surface and the page. */
+	--grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.09 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
+	--paper-shadow: 0 1px 0 rgb(40 36 30 / 0.04), 0 1px 3px rgb(40 36 30 / 0.07);
+}
+
+:root.dark,
+.theme-dark {
 	color-scheme: dark;
 	--color-white: #232322;
 	--color-gray-50: #1f1f1e;

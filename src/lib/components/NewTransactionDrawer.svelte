@@ -46,6 +46,7 @@
 			{#key round}
 				<TransactionForm
 					initial={emptyDraft({ today: today() })}
+					oncancel={onclose}
 					onsaved={(id) => {
 						savedId = id;
 						round++;
