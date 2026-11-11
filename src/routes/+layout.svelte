@@ -9,6 +9,7 @@
 	import { auth } from '#lib/firebase/app.ts';
 	import NewTransactionDrawer from '#lib/components/NewTransactionDrawer.svelte';
 	import NotificationBell from '#lib/components/NotificationBell.svelte';
+	import Wordmark from '#lib/components/Wordmark.svelte';
 	import { dialogOpen, isTyping } from '#lib/overlays.svelte.ts';
 	import { ledger } from '#lib/ledger.svelte.ts';
 	import type { LayoutProps } from './$types';
@@ -63,7 +64,7 @@
 		class="sticky top-0 z-30 flex items-center justify-between border-b bg-white px-6 py-3 text-sm"
 	>
 		<nav class="flex items-center gap-4">
-			<a href={resolve('/')} class="font-semibold">Perancial</a>
+			<a href={resolve('/')} class="text-base"><Wordmark /></a>
 			<a href={resolve('/')} class="text-gray-600 hover:text-gray-900">Accounts</a>
 			<a href={resolve('/transactions')} class="text-gray-600 hover:text-gray-900">Journal</a>
 			<a href={resolve('/scheduled')} class="text-gray-600 hover:text-gray-900">Scheduled</a>

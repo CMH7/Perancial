@@ -10,6 +10,7 @@
 		sectionErrors,
 		type SectionLists
 	} from '#lib/domain/index.ts';
+	import PesoMark from '#lib/components/PesoMark.svelte';
 	import TagsSettings from '#lib/components/TagsSettings.svelte';
 	import { signOut } from '#lib/firebase/auth.ts';
 	import { theme, type ThemeChoice } from '#lib/theme.svelte.ts';
@@ -108,17 +109,57 @@
 	</div>
 
 	{#if tab === 'appearance'}
-		<fieldset class="grid max-w-2xl gap-3 sm:grid-cols-3">
+		<!-- Each choice shows a small slice of the app in that theme; System shows both halves. -->
+		{#snippet preview(mode: 'light' | 'dark')}
+			<div
+				class="theme-{mode} h-full bg-gray-100 text-gray-900"
+				style="background-image: var(--grain)"
+			>
+				<div class="flex items-center gap-1.5 border-b bg-white px-2.5 py-1.5 text-[10px]">
+					<PesoMark size={12} /><span class="font-semibold">Perancial</span>
+					<span class="ml-auto h-1.5 w-6 rounded-full bg-gray-200"></span>
+					<span class="h-1.5 w-6 rounded-full bg-gray-200"></span>
+				</div>
+				<div class="space-y-2 p-2.5">
+					<div class="rounded-lg border bg-white p-2.5">
+						<div class="text-[9px] text-gray-500 uppercase">Everyday bank</div>
+						<div class="text-sm font-semibold tabular-nums">₱3,700.00</div>
+						<div class="mt-2 flex gap-1">
+							<span class="rounded bg-gray-900 px-1.5 py-0.5 text-[9px] text-white">Save</span>
+							<span class="rounded border border-gray-300 px-1.5 py-0.5 text-[9px]">Cancel</span>
+						</div>
+					</div>
+					<div class="flex gap-1">
+						<span class="h-1.5 flex-1 rounded-full bg-gray-200"></span>
+						<span class="h-1.5 w-8 rounded-full bg-gray-300"></span>
+					</div>
+				</div>
+			</div>
+		{/snippet}
+		<fieldset class="grid max-w-3xl gap-4 sm:grid-cols-3">
 			<legend class="mb-3 text-sm text-gray-600">Theme</legend>
 			{#each THEMES as [key, label, hint] (key)}
 				<label
-					class="cursor-pointer rounded-xl border bg-white p-4 text-sm {theme.choice === key
+					class="cursor-pointer overflow-hidden rounded-xl border bg-white text-sm {theme.choice ===
+					key
 						? 'border-gray-900 ring-1 ring-gray-900'
 						: 'hover:border-gray-400'}"
 				>
 					<input type="radio" class="sr-only" value={key} bind:group={theme.choice} />
-					<span class="font-semibold">{label}</span>
-					<span class="mt-1 block text-xs text-gray-500">{hint}</span>
+					<div class="h-32 overflow-hidden border-b" aria-hidden="true">
+						{#if key === 'system'}
+							<div class="grid h-full grid-cols-2">
+								<div class="overflow-hidden">{@render preview('light')}</div>
+								<div class="overflow-hidden border-l">{@render preview('dark')}</div>
+							</div>
+						{:else}
+							{@render preview(key)}
+						{/if}
+					</div>
+					<div class="p-3">
+						<span class="font-semibold">{label}</span>
+						<span class="mt-0.5 block text-xs text-gray-500">{hint}</span>
+					</div>
 				</label>
 			{/each}
 		</fieldset>
