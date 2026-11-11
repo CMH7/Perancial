@@ -392,7 +392,11 @@ function chargesFor(ctx: Ctx, liabilityId: string, date: IsoDate): Charge[] {
 			txId: tx.id
 		});
 	}
-	return charges.sort((a, b) => a.date.localeCompare(b.date) || a.label.localeCompare(b.label));
+	// Oldest first by when each was bought: a recorded charge's own date, a planned one's date.
+	const bought = (c: Charge) => c.purchased ?? c.date;
+	return charges.sort(
+		(a, b) => bought(a).localeCompare(bought(b)) || a.label.localeCompare(b.label)
+	);
 }
 
 const rowLabel = (plan: Installment, n: number) =>
