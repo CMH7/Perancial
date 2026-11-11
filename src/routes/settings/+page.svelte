@@ -1,5 +1,6 @@
 <script lang="ts">
 	// Settings, one tab per area. Forecast: the owner's Inflow and Outflow Section lists. Tags.
+	// Appearance: light, dark, or the system's. Account: who is signed in, and Sign out.
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import {
@@ -10,13 +11,22 @@
 		type SectionLists
 	} from '#lib/domain/index.ts';
 	import TagsSettings from '#lib/components/TagsSettings.svelte';
+	import { signOut } from '#lib/firebase/auth.ts';
+	import { theme, type ThemeChoice } from '#lib/theme.svelte.ts';
 	import { ledger } from '#lib/ledger.svelte.ts';
 
 	const TABS = [
 		['forecast', 'Forecast'],
-		['tags', 'Tags']
+		['tags', 'Tags'],
+		['appearance', 'Appearance'],
+		['account', 'Account']
 	] as const;
 	const tab = $derived(page.url.searchParams.get('tab') ?? 'forecast');
+	const THEMES: [ThemeChoice, string, string][] = [
+		['light', 'Light', 'Warm paper with charcoal ink.'],
+		['dark', 'Dark', 'Charcoal paper with light ink.'],
+		['system', 'System', 'Follow this device’s setting.']
+	];
 	function show(key: string) {
 		const url = new URL(page.url.href);
 		url.searchParams.set('tab', key);
@@ -97,7 +107,32 @@
 		{/each}
 	</div>
 
-	{#if ledger.error}
+	{#if tab === 'appearance'}
+		<fieldset class="grid max-w-2xl gap-3 sm:grid-cols-3">
+			<legend class="mb-3 text-sm text-gray-600">Theme</legend>
+			{#each THEMES as [key, label, hint] (key)}
+				<label
+					class="cursor-pointer rounded-xl border bg-white p-4 text-sm {theme.choice === key
+						? 'border-gray-900 ring-1 ring-gray-900'
+						: 'hover:border-gray-400'}"
+				>
+					<input type="radio" class="sr-only" value={key} bind:group={theme.choice} />
+					<span class="font-semibold">{label}</span>
+					<span class="mt-1 block text-xs text-gray-500">{hint}</span>
+				</label>
+			{/each}
+		</fieldset>
+	{:else if tab === 'account'}
+		<section class="max-w-md rounded-xl border bg-white p-4 text-sm">
+			<h2 class="font-semibold">Signed in</h2>
+			<p class="mt-1 text-gray-600">{page.data.user?.email ?? 'Unknown account'}</p>
+			<button
+				onclick={signOut}
+				class="mt-4 rounded border border-red-200 px-3 py-1.5 text-red-700 hover:bg-red-50"
+				>Sign out</button
+			>
+		</section>
+	{:else if ledger.error}
 		<p class="rounded-lg bg-red-50 p-4 text-sm text-red-800">{ledger.error}</p>
 	{:else if !ledger.ready}
 		<p class="text-sm text-gray-500">Loading your settings…</p>

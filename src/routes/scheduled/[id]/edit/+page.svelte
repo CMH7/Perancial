@@ -43,7 +43,7 @@
 	}
 </script>
 
-<main class="mx-auto max-w-4xl px-4 py-8">
+<main class="max-w-4xl px-8 py-6">
 	{#if !ledger.ready}
 		<p class="text-sm text-gray-500">Loading your plans…</p>
 	{:else if !plan}

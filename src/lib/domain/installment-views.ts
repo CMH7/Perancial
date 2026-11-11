@@ -33,6 +33,26 @@ export function plansList(
 	);
 }
 
+/**
+ * The Installments plan list narrowed for its pane: open plans still have a next row, done ones
+ * don't; `q` matches the title or the repaid Account's name, ignoring case. Order is kept.
+ */
+export function filterPlansList(
+	chart: Chart,
+	lines: InstallmentLine[],
+	{ show, q }: { show: 'open' | 'done' | 'all'; q: string }
+): InstallmentLine[] {
+	const needle = q.trim().toLowerCase();
+	return lines.filter(
+		(l) =>
+			(show === 'all' || (show === 'open') === !!l.summary.next) &&
+			(!needle ||
+				[l.plan.title, chart.account(l.plan.accounts.repaid)?.name ?? ''].some((t) =>
+					t.toLowerCase().includes(needle)
+				))
+	);
+}
+
 export type DueItem = {
 	plan: Installment;
 	status: RowStatus;

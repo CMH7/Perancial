@@ -1,6 +1,7 @@
 <script lang="ts">
-	// The Journal: every Transaction, newest first, with filters and search. A row opens the
-	// detail side panel. Checkboxes select rows for bulk clear and date changes.
+	// The Journal: every Transaction, newest first. The left pane filters: search, dates, kind,
+	// status, tag, and an Account picked from the Account tree (a Group covers its Accounts). A row
+	// opens the detail side panel. Checkboxes select rows for bulk clear and date changes.
 	import { resolve } from '$app/paths';
 	import { KIND } from '#lib/components/kind.ts';
 	import ConfirmAction from '#lib/components/ConfirmAction.svelte';
@@ -8,7 +9,6 @@
 	import Modal from '#lib/components/Modal.svelte';
 	import TransactionPanel from '#lib/components/TransactionPanel.svelte';
 	import {
-		ACCOUNT_TYPE_GUIDE,
 		formatAmount,
 		journal,
 		journalRow,
@@ -22,8 +22,8 @@
 		type QuickChange,
 		type TransactionKind
 	} from '#lib/domain/index.ts';
-	import { accountItems } from '#lib/account-items.svelte.ts';
-	import AccountPicker from '#lib/components/AccountPicker.svelte';
+	import AccountTree from '#lib/components/AccountTree.svelte';
+	import SplitPane from '#lib/components/SplitPane.svelte';
 	import { ledger } from '#lib/ledger.svelte.ts';
 
 	let f = $state(noFilters());
@@ -34,21 +34,20 @@
 	const open = $derived(openId ? chart.transaction(openId) : undefined);
 	const total = $derived(chart.transactions().filter((t) => t.origin === 'normal').length);
 	const tags = $derived([...new Set(chart.transactions().flatMap((t) => t.tags))].sort());
-	const accounts = $derived(
-		ACCOUNT_TYPE_GUIDE.flatMap((g) =>
-			chart
-				.all()
-				.filter((a) => a.type === g.type && a.system !== 'opening-balances')
-				.map((a) => ({
-					id: a.id,
-					label: chart
-						.path(a.id)
-						.map((p) => p.name)
-						.join(' › ')
-				}))
-				.sort((a, b) => a.label.localeCompare(b.label))
-		)
-	);
+	/** The Root Account whose tree the pane shows; picking a tab also filters to it. */
+	let treeRoot = $state('expense');
+	let collapsed = $state(false);
+	let showArchived = $state(false);
+	const pickedAccount = $derived(f.accountId ? chart.account(f.accountId) : undefined);
+	function pickAccount(id: string) {
+		if (chart.account(id)?.system === 'root') treeRoot = id;
+		f.accountId = f.accountId === id ? '' : id;
+	}
+	$effect(() => {
+		// A filter set elsewhere (cleared, or picked in the tree) keeps the tree on its type.
+		const root = f.accountId ? chart.path(f.accountId)[0]?.id : undefined;
+		if (root && root !== treeRoot) treeRoot = root;
+	});
 	const kinds = Object.entries(KIND) as [TransactionKind, (typeof KIND)[TransactionKind]][];
 	const filtering = $derived(Object.values(f).some(Boolean));
 
@@ -138,64 +137,104 @@
 	}
 </script>
 
-<div class="flex">
-	<main class="mx-auto w-full max-w-5xl min-w-0 px-4 py-8">
-		{#if ledger.error}
-			<p class="rounded-lg bg-red-50 p-4 text-sm text-red-800">{ledger.error}</p>
-		{:else if !ledger.ready}
-			<p class="text-sm text-gray-500">Loading your Transactions…</p>
-		{:else}
-			<h1 class="mb-4 text-2xl font-semibold">Journal</h1>
-
-			<div class="mb-2 flex flex-wrap gap-2 text-sm">
-				<input
-					bind:value={f.q}
-					placeholder="Search Description, Note, tags, Accounts…"
-					aria-label="Search"
-					class="w-72 rounded border-gray-300 text-sm"
-				/>
-				<input
+{#snippet filters()}
+	<div class="grid gap-2 text-sm">
+		<input
+			type="search"
+			bind:value={f.q}
+			placeholder="Search Description, Note, tags, Accounts…"
+			aria-label="Search"
+			class="w-full rounded-lg border-gray-200 bg-gray-50 px-3 py-1.5 text-sm"
+		/>
+		<div class="grid grid-cols-2 gap-2">
+			<label class="text-xs text-gray-500"
+				>From<input
 					type="date"
 					bind:value={f.from}
-					aria-label="From date"
-					class="rounded border-gray-300 text-sm"
-				/>
-				<input
+					class="mt-0.5 w-full rounded border-gray-300 py-1 text-sm"
+				/></label
+			>
+			<label class="text-xs text-gray-500"
+				>To<input
 					type="date"
 					bind:value={f.to}
-					aria-label="To date"
-					class="rounded border-gray-300 text-sm"
-				/>
-				<AccountPicker
-					bind:value={f.accountId}
-					items={accountItems.for(accounts.map((a) => a.id))}
-					emptyLabel="Any Account"
-					class="w-56"
-				/>
-				<select bind:value={f.kind} aria-label="Kind" class="rounded border-gray-300 text-sm">
-					<option value="">Any kind</option>
-					{#each kinds as [key, k] (key)}<option value={key}>{k.label}</option>{/each}
-				</select>
-				<select bind:value={f.status} aria-label="Status" class="rounded border-gray-300 text-sm">
-					<option value="">Any status</option>
-					<option value="cleared">Cleared</option>
-					<option value="pending">Pending</option>
-				</select>
-				<select bind:value={f.tag} aria-label="Tag" class="rounded border-gray-300 text-sm">
-					<option value="">Any tag</option>
-					{#each tags as tag (tag)}<option value={tag}>#{tag}</option>{/each}
-				</select>
-				{#if filtering}
-					<button class="text-sky-700 hover:underline" onclick={() => (f = noFilters())}
-						>Clear</button
+					class="mt-0.5 w-full rounded border-gray-300 py-1 text-sm"
+				/></label
+			>
+		</div>
+		<div class="grid grid-cols-3 gap-2">
+			<select bind:value={f.kind} aria-label="Kind" class="rounded border-gray-300 py-1 text-sm">
+				<option value="">Any kind</option>
+				{#each kinds as [key, k] (key)}<option value={key}>{k.label}</option>{/each}
+			</select>
+			<select
+				bind:value={f.status}
+				aria-label="Status"
+				class="rounded border-gray-300 py-1 text-sm"
+			>
+				<option value="">Any status</option>
+				<option value="cleared">Cleared</option>
+				<option value="pending">Pending</option>
+			</select>
+			<select bind:value={f.tag} aria-label="Tag" class="rounded border-gray-300 py-1 text-sm">
+				<option value="">Any tag</option>
+				{#each tags as tag (tag)}<option value={tag}>#{tag}</option>{/each}
+			</select>
+		</div>
+	</div>
+{/snippet}
+
+{#if ledger.error}
+	<main class="mx-auto max-w-3xl px-4 py-8">
+		<p class="rounded-lg bg-red-50 p-4 text-sm text-red-800">{ledger.error}</p>
+	</main>
+{:else if !ledger.ready}
+	<main class="mx-auto max-w-3xl px-4 py-8">
+		<p class="text-sm text-gray-500">Loading your Transactions…</p>
+	</main>
+{:else}
+	<SplitPane storageKey="perancial.journal.paneCollapsed" bind:collapsed>
+		{#snippet pane()}
+			<AccountTree
+				rootId={treeRoot}
+				selectedId={f.accountId || undefined}
+				onpick={pickAccount}
+				extra={filters}
+				bind:showArchived
+				bind:collapsed
+			/>
+		{/snippet}
+
+		<main class="px-8 py-6">
+			<div class="mb-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+				<h1 class="text-2xl font-semibold">Journal</h1>
+				<span class="text-xs text-gray-500">{rows.length} of {total} Transactions</span>
+				{#if pickedAccount}
+					<button
+						class="flex items-center gap-1 rounded-full bg-white px-2.5 py-0.5 text-xs ring-1 ring-gray-300 hover:ring-gray-500"
+						title="Stop filtering by this Account"
+						onclick={() => (f.accountId = '')}
+						>{chart
+							.path(pickedAccount.id)
+							.map((a) => a.name)
+							.join(' › ')}<span aria-hidden="true" class="text-gray-400">×</span></button
 					>
 				{/if}
+				{#if filtering}
+					<button class="text-xs text-sky-700 hover:underline" onclick={() => (f = noFilters())}
+						>Clear filters</button
+					>
+				{/if}
+				<a
+					href={resolve('/transactions/new')}
+					class="ml-auto rounded-md bg-gray-900 px-3 py-1.5 text-sm text-white hover:bg-gray-700"
+					>New Transaction</a
+				>
 			</div>
-			<p class="mb-3 text-xs text-gray-500">{rows.length} of {total} Transactions</p>
 
 			{#if selected.size}
 				<div
-					class="sticky top-14 z-10 mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-sky-200 bg-sky-50 p-2 text-sm shadow-sm"
+					class="sticky top-0 z-10 mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-sky-200 bg-sky-50 p-2 text-sm shadow-sm"
 					role="toolbar"
 					aria-label="Bulk actions"
 				>
@@ -346,26 +385,26 @@
 					</tbody>
 				</table>
 			{/if}
-		{/if}
-	</main>
+		</main>
+	</SplitPane>
+{/if}
 
-	{#if confirmDelete}
-		<Modal onclose={() => (confirmDelete = false)}>
-			<ConfirmAction
-				title="Delete Transactions"
-				check={deleteCheck}
-				question={deleteQuestion}
-				confirmLabel="Delete {selected.size}"
-				danger
-				onclose={() => (confirmDelete = false)}
-				onconfirm={bulkDelete}
-			/>
-		</Modal>
-	{/if}
+{#if confirmDelete}
+	<Modal onclose={() => (confirmDelete = false)}>
+		<ConfirmAction
+			title="Delete Transactions"
+			check={deleteCheck}
+			question={deleteQuestion}
+			confirmLabel="Delete {selected.size}"
+			danger
+			onclose={() => (confirmDelete = false)}
+			onconfirm={bulkDelete}
+		/>
+	</Modal>
+{/if}
 
-	{#if open}
-		<Drawer id="journal-transaction">
-			<TransactionPanel tx={open} onclose={() => (openId = null)} ontag={(tag) => (f.tag = tag)} />
-		</Drawer>
-	{/if}
-</div>
+{#if open}
+	<Drawer id="journal-transaction">
+		<TransactionPanel tx={open} onclose={() => (openId = null)} ontag={(tag) => (f.tag = tag)} />
+	</Drawer>
+{/if}

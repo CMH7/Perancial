@@ -1,6 +1,6 @@
 <script lang="ts">
 	// Chart of Accounts: a collapsible tree pane (Account Type tabs over the tree) beside the open
-	// Account's detail and register, filling the window under the nav bar.
+	// Account's detail and register, in the shared SplitPane shell.
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import {
@@ -21,6 +21,7 @@
 	import CreateAccountForm from '#lib/components/CreateAccountForm.svelte';
 	import EditAccountForm from '#lib/components/EditAccountForm.svelte';
 	import Modal from '#lib/components/Modal.svelte';
+	import SplitPane from '#lib/components/SplitPane.svelte';
 	import MoveAccountForm from '#lib/components/MoveAccountForm.svelte';
 
 	let showArchived = $state(false);
@@ -38,34 +39,8 @@
 	const accountHref = (accountId: string) => resolve('/accounts/[id]', { id: accountId });
 	const insideLabel = (n: number) => `${n} ${n === 1 ? 'account' : 'accounts'} inside`;
 	const andInside = (n: number) => (n ? ` and ${insideLabel(n)}` : '');
-
-	// The tree pane can be hidden to give the detail the width (`[` toggles it). Remembered on
-	// this browser; private windows may refuse storage, and then it just isn't remembered.
-	const COLLAPSED_KEY = 'perancial.accounts.treeCollapsed';
-	let collapsed = $state(readCollapsed());
-	function readCollapsed() {
-		try {
-			return localStorage.getItem(COLLAPSED_KEY) === '1';
-		} catch {
-			return false;
-		}
-	}
-	$effect(() => {
-		try {
-			localStorage.setItem(COLLAPSED_KEY, collapsed ? '1' : '0');
-		} catch {
-			// Not remembered.
-		}
-	});
-	function onkeydown(e: KeyboardEvent) {
-		if (e.key !== '[' || e.ctrlKey || e.metaKey || e.altKey || dialog) return;
-		const t = e.target;
-		if (t instanceof Element && t.closest('input, textarea, select, [contenteditable]')) return;
-		collapsed = !collapsed;
-	}
+	let collapsed = $state(false);
 </script>
-
-<svelte:window {onkeydown} />
 
 {#if ledger.error}
 	<main class="mx-auto max-w-3xl px-4 py-8">
@@ -83,13 +58,19 @@
 		</div>
 	</main>
 {:else}
-	<div
-		class="grid h-[calc(100vh-var(--nav-h))] overflow-hidden transition-[grid-template-columns] duration-200"
-		style="grid-template-columns: {collapsed ? '3rem' : '24rem'} minmax(0, 1fr)"
-	>
-		<AccountTree {path} bind:showArchived bind:collapsed />
+	<SplitPane storageKey="perancial.accounts.treeCollapsed" bind:collapsed>
+		{#snippet pane()}
+			<AccountTree
+				rootId={path[0].id}
+				selectedId={account.id}
+				link={accountHref}
+				reorder
+				bind:showArchived
+				bind:collapsed
+			/>
+		{/snippet}
 
-		<main class="min-h-0 overflow-y-auto bg-gray-50 px-10 py-8">
+		<main class="px-10 py-8">
 			<nav class="mb-2 flex flex-wrap items-center gap-1 text-xs text-gray-500" aria-label="Path">
 				{#each path as p, i (p.id)}
 					{#if i > 0}<span aria-hidden="true">›</span>{/if}
@@ -180,7 +161,7 @@
 
 			<AccountRegister accountId={account.id} onopening={() => (dialog = 'edit')} />
 		</main>
-	</div>
+	</SplitPane>
 {/if}
 
 {#if dialog && account}
