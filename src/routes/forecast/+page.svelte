@@ -11,6 +11,7 @@
 	import ForecastDrawer from '#lib/components/ForecastDrawer.svelte';
 	import {
 		buildForecast,
+		expectedAtEnd,
 		cutoffOf,
 		formatAmount,
 		formatPicks,
@@ -54,6 +55,10 @@
 		today: todayIso
 	});
 	const view = $derived(ledger.ready ? buildForecast(input, cutoff) : null);
+	/** Each Account's expected Balance when this Cut-off ends; empty once it is over. */
+	const expected = $derived(
+		ledger.ready ? expectedAtEnd(input, cutoff) : new Map<string, number>()
+	);
 
 	const name = (id: string) =>
 		ledger.chart
@@ -578,6 +583,14 @@
 								</div>
 								{#if lane.forecastedEAlloc}<div class="text-xs">
 										E.Alloc {formatAmount(lane.eAlloc)} of {formatAmount(lane.forecastedEAlloc)}
+									</div>{/if}
+								{#if expected.has(lane.accountId)}<div
+										class="mt-1 border-t border-current/20 pt-1 text-xs"
+										title="Balance today plus what is still to receive, minus what is still to pay, through the end of this Cut-off"
+									>
+										Expected at end <span class="font-semibold tabular-nums"
+											>{formatAmount(expected.get(lane.accountId)!)}</span
+										>
 									</div>{/if}
 							</div>
 						{/if}
