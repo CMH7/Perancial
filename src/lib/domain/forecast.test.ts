@@ -435,6 +435,18 @@ describe('Bill with next payment', () => {
 		const charge = card.charges!.find((c) => c.txId === 'buffet')!;
 		expect(charge).toMatchObject({ date: '2026-11-26', purchased: buffet.date });
 	});
+
+	it('lists charges oldest purchase first, whatever their bill dates', () => {
+		const later = { ...buffet, billOn: '2026-12-05' };
+		const shoes = tx('shoes', '2026-12-01', [
+			['food', 50_000],
+			['card', -50_000]
+		]);
+		const chart = buildChart(accounts, [later, shoes, loanPayment, groceries]);
+		const f = buildForecast(input({ chart }), '2026-12-31');
+		const card = f.outflows.find((o) => o.key === 'scheduled:cardpay:2026-12-25')!;
+		expect(card.charges!.map((c) => c.label)).toEqual(['buffet', 'shoes', 'Music']);
+	});
 });
 
 describe('Sections', () => {
