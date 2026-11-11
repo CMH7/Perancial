@@ -21,6 +21,18 @@
 	import EditAccountForm from '#lib/components/EditAccountForm.svelte';
 	import Modal from '#lib/components/Modal.svelte';
 	import MoveAccountForm from '#lib/components/MoveAccountForm.svelte';
+	// PROTOTYPE: layout variants switched by `?variant=` (no param = the current page).
+	import PrototypeSwitcher from '#lib/components/PrototypeSwitcher.svelte';
+	import VariantA from './prototype/VariantA.svelte';
+	import VariantB from './prototype/VariantB.svelte';
+	import VariantC from './prototype/VariantC.svelte';
+	const VARIANTS = [
+		{ key: 'current', name: 'Current page' },
+		{ key: 'A', name: 'Split' },
+		{ key: 'B', name: 'Dashboard' },
+		{ key: 'C', name: 'Explorer' }
+	] as const;
+	const variant = $derived(page.url.searchParams.get('variant') ?? 'current');
 
 	let showArchived = $state(false);
 	/** The open dialog, if any. */
@@ -36,7 +48,9 @@
 	const children = $derived(chart.children(id, { showArchived }));
 	const totals = $derived(chart.totals());
 	const group = $derived(chart.isGroup(id));
-	const accountHref = (accountId: string) => resolve('/accounts/[id]', { id: accountId });
+	const accountHref = (accountId: string) =>
+		resolve('/accounts/[id]', { id: accountId }) +
+		(variant === 'current' ? '' : `?variant=${variant}`);
 	const insideLabel = (n: number) => `${n} ${n === 1 ? 'account' : 'accounts'} inside`;
 	const andInside = (n: number) => (n ? ` and ${insideLabel(n)}` : '');
 
@@ -56,6 +70,25 @@
 	}
 </script>
 
+{#if variant !== 'current' && ledger.ready && !ledger.error && account}
+	{@const props = {
+		chart,
+		account,
+		path,
+		root,
+		children,
+		group,
+		href: accountHref,
+		open: (d: NonNullable<typeof dialog>) => (dialog = d)
+	}}
+	{#if variant === 'A'}
+		<VariantA {...props} bind:showArchived />
+	{:else if variant === 'B'}
+		<VariantB {...props} bind:showArchived />
+	{:else}
+		<VariantC {...props} bind:showArchived />
+	{/if}
+{:else}
 <main class="mx-auto max-w-3xl px-4 py-8">
 	{#if ledger.error}
 		<p class="rounded-lg bg-red-50 p-4 text-sm text-red-800">{ledger.error}</p>
@@ -260,7 +293,9 @@
 		{/if}
 	{/if}
 </main>
+{/if}
 
+<PrototypeSwitcher variants={VARIANTS} current={variant} />
 {#if dialog && account}
 	<Modal onclose={close}>
 		{#if dialog === 'create'}
