@@ -257,11 +257,20 @@
 								checked={picked.has(c.key)}
 								onchange={() => (picked.has(c.key) ? picked.delete(c.key) : picked.add(c.key))}
 							/>{/if}<span
-							>{c.label}
+							><a
+								href={c.from === 'transaction'
+									? resolve('/transactions/[id]', { id: c.txId ?? '' })
+									: c.from === 'scheduled'
+										? resolve('/scheduled/[id]', { id: c.link?.planId ?? '' })
+										: resolve('/installments/[id]', { id: c.link?.planId ?? '' })}
+								class="hover:underline"
+								title={c.from === 'transaction' ? 'Open this Transaction' : 'Open its plan'}
+								>{c.label}</a
+							>
 							<span class="text-xs text-gray-500"
 								>{c.from === 'transaction' ? 'recorded' : 'planned'}
-								{shortDate(c.date, {
-									year: false
+								{shortDate(c.purchased ?? c.date, {
+									year: (c.purchased ?? c.date).slice(0, 4) !== o.date.slice(0, 4)
 								})}</span
 							></span
 						></span

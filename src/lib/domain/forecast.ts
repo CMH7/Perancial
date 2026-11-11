@@ -165,6 +165,8 @@ export type Charge = {
 	label: string;
 	/** The date it is billed on (`billOn` for a recorded charge billed later). */
 	date: IsoDate;
+	/** A recorded charge's own date: when the purchase was made, whatever its billing date. */
+	purchased?: IsoDate;
 	amount: number;
 	from: 'scheduled' | 'installment' | 'transaction';
 	link?: PaidLink;
@@ -384,6 +386,7 @@ function chargesFor(ctx: Ctx, liabilityId: string, date: IsoDate): Charge[] {
 			key: `transaction:${tx.id}`,
 			label: tx.description,
 			date: billed,
+			purchased: tx.date,
 			amount: charged,
 			from: 'transaction',
 			txId: tx.id
