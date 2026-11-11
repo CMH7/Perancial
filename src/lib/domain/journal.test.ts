@@ -4,6 +4,7 @@ import {
 	journal,
 	journalRow,
 	noFilters,
+	planBillOn,
 	planClear,
 	planQuickChange,
 	planSetStatus,
@@ -277,6 +278,61 @@ describe('selectionAfterFilter', () => {
 	it('keeps only selected ids still visible', () => {
 		expect(selectionAfterFilter(new Set(['grab', 'rent', 'gone']), ['grab', 'salary'])).toEqual(
 			new Set(['grab'])
+		);
+	});
+});
+
+describe('planBillOn', () => {
+	const accounts = [
+		...roots,
+		account('gcash', 'asset', 'asset'),
+		account('card', 'liability', 'liability'),
+		account('food', 'expense', 'expense')
+	];
+	const books = buildChart(accounts, [
+		tx('fan', '2026-10-20', [
+			['food', 120_000],
+			['card', -120_000]
+		]),
+		tx('lunch', '2026-11-03', [
+			['food', 20_000],
+			['card', -20_000]
+		]),
+		tx('coffee', '2026-11-05', [
+			['food', 10_000],
+			['gcash', -10_000]
+		])
+	]);
+
+	it('sets the bill date on every charge, keeping each date', () => {
+		const writes = planBillOn(books, ['fan', 'lunch'], '2026-11-16', { now });
+		expect(writes).toHaveLength(2);
+		expect(writes[0]).toMatchObject({
+			id: 'fan',
+			data: { date: '2026-10-20', billOn: '2026-11-16' }
+		});
+		expect(writes[1]).toMatchObject({ id: 'lunch', data: { billOn: '2026-11-16' } });
+	});
+
+	it('clears it, skipping Transactions already without one', () => {
+		const billed = buildChart(accounts, [
+			{ ...books.transaction('fan')!, billOn: '2026-11-16' },
+			books.transaction('lunch')!
+		]);
+		const writes = planBillOn(billed, ['fan', 'lunch'], null, { now });
+		expect(writes).toHaveLength(1);
+		expect(writes[0]).toMatchObject({ id: 'fan', data: { billOn: null } });
+	});
+
+	it('refuses a Transaction that charges no Liability, changing nothing', () => {
+		expect(() => planBillOn(books, ['fan', 'coffee'], '2026-11-16', { now })).toThrow(
+			'charges no Liability'
+		);
+	});
+
+	it('refuses a bill date before a Transaction date', () => {
+		expect(() => planBillOn(books, ['fan', 'lunch'], '2026-11-01', { now })).toThrow(
+			'before its date'
 		);
 	});
 });

@@ -13,6 +13,7 @@
 		journal,
 		journalRow,
 		noFilters,
+		planBillOn,
 		planDeleteTransactions,
 		planQuickChange,
 		selectionAfterFilter,
@@ -64,6 +65,11 @@
 		rows.filter((r) => selected.has(r.id) && r.status === 'pending')
 	);
 	const selectedCleared = $derived(selected.size - selectedPending.length);
+	// Bill on: only for charges on a Liability; clearing works on any that has one.
+	let bulkBillOn = $state('');
+	const selectedBilled = $derived(
+		[...selected].filter((id) => chart.transaction(id)?.billOn).length
+	);
 
 	/** Ticks or unticks one row; with Shift, every row between it and the last one ticked. */
 	function pick(index: number, on: boolean, range: boolean) {
@@ -114,13 +120,15 @@
 		pickAll(false);
 	}
 
-	async function bulk(change: QuickChange) {
+	const bulk = (change: QuickChange) =>
+		run(() => planQuickChange(chart, [...selected], change, { now: new Date(), today: today() }));
+	const bulkBill = (billOn: string | null) =>
+		run(() => planBillOn(chart, [...selected], billOn, { now: new Date() }));
+	async function run(plan: () => ReturnType<typeof planBillOn>) {
 		bulkError = '';
 		busy = true;
 		try {
-			await ledger.commit(
-				planQuickChange(chart, [...selected], change, { now: new Date(), today: today() })
-			);
+			await ledger.commit(plan());
 			pickAll(false);
 		} catch (err) {
 			bulkError = `Nothing was changed: ${(err as Error).message}`;
@@ -223,6 +231,27 @@
 							class="rounded border border-sky-300 bg-white px-3 py-1 hover:bg-sky-100 disabled:opacity-50"
 							disabled={busy || !bulkDate}
 							onclick={() => bulk({ status: 'cleared', date: bulkDate })}>Clear on this date</button
+						>
+					</span>
+					<span class="flex items-center gap-1">
+						<input
+							type="date"
+							bind:value={bulkBillOn}
+							aria-label="Bill on date"
+							title="Charges on a Liability are billed from this day, so a later payment bills them"
+							class="rounded border-gray-300 py-1 text-sm"
+						/>
+						<button
+							class="rounded border border-sky-300 bg-white px-3 py-1 hover:bg-sky-100 disabled:opacity-50"
+							disabled={busy || !bulkBillOn}
+							onclick={() => bulkBill(bulkBillOn)}>Set bill on</button
+						>
+						<button
+							class="rounded border border-sky-300 bg-white px-3 py-1 hover:bg-sky-100 disabled:opacity-50"
+							disabled={busy || selectedBilled === 0}
+							title={selectedBilled ? '' : 'None of the selected rows has a bill date'}
+							onclick={() => bulkBill(null)}
+							>Clear bill on{selectedBilled ? ` (${selectedBilled})` : ''}</button
 						>
 					</span>
 					<button

@@ -129,6 +129,39 @@ export function planQuickChange(
 	return writes;
 }
 
+/**
+ * Sets (or with null, clears) the bill date of each Transaction: the day a charge on a Liability
+ * is billed from, so a later payment bills it. Only `billOn` changes. Transactions already as asked
+ * are skipped. Throws when any can't take it, so a bulk change applies to all or none.
+ */
+export function planBillOn(
+	chart: Chart,
+	ids: string[],
+	billOn: IsoDate | null,
+	{ now }: { now: Date }
+): ChartWrite[] {
+	if (billOn !== null && !ISO_DATE.test(billOn)) throw new Error('Choose a date');
+	const writes: ChartWrite[] = [];
+	for (const id of new Set(ids)) {
+		const tx = chart.transaction(id);
+		if (!tx) throw new Error('This Transaction no longer exists');
+		if ((tx.billOn ?? null) === billOn) continue;
+		if (billOn !== null) {
+			const charges = tx.entries.some(
+				(e) => e.amount < 0 && chart.account(e.accountId)?.type === 'liability'
+			);
+			if (!charges) throw new Error(`"${tx.description}" charges no Liability`);
+			if (tx.date && billOn < tx.date)
+				throw new Error(`"${tx.description}" would be billed before its date`);
+		}
+		const { id: _id, ...data } = tx;
+		writes.push({ op: 'setTransaction', id, data: { ...data, billOn, updatedAt: now } });
+	}
+	if (writes.length > MAX_BULK)
+		throw new Error(`Change at most ${MAX_BULK} Transactions at a time`);
+	return writes;
+}
+
 /** The drawer's Mark cleared: clears one Transaction, optionally moving it to `date`. */
 export function planClear(
 	chart: Chart,
