@@ -82,7 +82,7 @@
 </section>
 
 {#if open}
-	<Drawer id="account-transaction">
+	<Drawer id="account-transaction" label="Transaction" onclose={() => (openId = null)}>
 		<TransactionPanel tx={open} onclose={() => (openId = null)} ontag={() => {}} />
 	</Drawer>
 {/if}

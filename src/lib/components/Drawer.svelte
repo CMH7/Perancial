@@ -1,13 +1,27 @@
 <script lang="ts">
 	// A side drawer floating over the right of a page (the page keeps its width). Drag its left edge (or focus it and use the arrow
-	// keys) to resize; the width is remembered per drawer on this browser.
+	// keys) to resize; the width is remembered per drawer on this browser. Esc, or a click outside
+	// it, calls `onclose` (see overlays.svelte.ts).
 	import type { Snippet } from 'svelte';
+	import { openLayer } from '#lib/overlays.svelte.ts';
 
 	let {
 		id,
 		width: initial = 384,
+		onclose,
+		label,
 		children
-	}: { id: string; width?: number; children: Snippet } = $props();
+	}: {
+		id: string;
+		width?: number;
+		onclose: () => void;
+		/** Accessible name of the drawer. */
+		label?: string;
+		children: Snippet;
+	} = $props();
+
+	let el = $state<HTMLElement>();
+	$effect(() => openLayer({ kind: 'drawer', close: () => onclose(), el: () => el }));
 
 	const MIN = 320;
 	const max = () => Math.max(MIN, Math.round(window.innerWidth * 0.8));
@@ -66,6 +80,9 @@
 <svelte:window onresize={() => (width = clamp(width))} />
 
 <div
+	bind:this={el}
+	role="complementary"
+	aria-label={label}
 	class="fixed inset-y-0 right-0 z-40 border-l bg-white shadow-2xl {dragging ? 'select-none' : ''}"
 	style:width="{width}px"
 >

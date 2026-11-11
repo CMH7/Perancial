@@ -7,7 +7,9 @@
 	import { page } from '$app/state';
 	import { onAuthStateChanged } from 'firebase/auth';
 	import { auth } from '#lib/firebase/app.ts';
+	import NewTransactionDrawer from '#lib/components/NewTransactionDrawer.svelte';
 	import NotificationBell from '#lib/components/NotificationBell.svelte';
+	import { dialogOpen, isTyping } from '#lib/overlays.svelte.ts';
 	import { ledger } from '#lib/ledger.svelte.ts';
 	import type { LayoutProps } from './$types';
 
@@ -27,6 +29,19 @@
 		if (ownerUid) return ledger.start(ownerUid);
 	});
 
+	// New Transaction drawer: the nav button, or `c` anywhere except while typing, with a modifier
+	// (Ctrl+C copies), mid-composition, on key repeat, under a dialog, or on the full form's page.
+	let recording = $state(false);
+	let drawerBody = $state<HTMLElement>();
+	function onkeydown(e: KeyboardEvent) {
+		if (e.key !== 'c' || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+		if (e.repeat || e.isComposing || e.defaultPrevented || isTyping(e.target)) return;
+		if (!data.owner || dialogOpen() || page.url.pathname === resolve('/transactions/new')) return;
+		e.preventDefault();
+		recording = true;
+		drawerBody?.querySelector<HTMLElement>('input:is([type="text"], :not([type]))')?.focus();
+	}
+
 	// The load gate only runs on navigation; this catches sign-out mid-session.
 	$effect(() =>
 		onAuthStateChanged(auth, (user) => {
@@ -34,6 +49,8 @@
 		})
 	);
 </script>
+
+<svelte:window {onkeydown} />
 
 <svelte:head>
 	<link rel="icon" href={favicon} />
@@ -52,9 +69,12 @@
 			<a href={resolve('/scheduled')} class="text-gray-600 hover:text-gray-900">Scheduled</a>
 			<a href={resolve('/installments')} class="text-gray-600 hover:text-gray-900">Installments</a>
 			<a href={resolve('/forecast')} class="text-gray-600 hover:text-gray-900">Forecast</a>
-			<a
-				href={resolve('/transactions/new')}
-				class="rounded bg-gray-900 px-2 py-1 text-white hover:bg-gray-700">New Transaction</a
+			<button
+				data-overlay-keep
+				onclick={() => (recording = !recording)}
+				aria-expanded={recording}
+				title="New Transaction ( c )"
+				class="rounded bg-gray-900 px-2 py-1 text-white hover:bg-gray-700">New Transaction</button
 			>
 		</nav>
 		<div class="flex items-center gap-1">
@@ -89,3 +109,9 @@
 {/if}
 
 {@render children()}
+
+{#if recording && data.owner}
+	<div bind:this={drawerBody} class="contents">
+		<NewTransactionDrawer onclose={() => (recording = false)} />
+	</div>
+{/if}
