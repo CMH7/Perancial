@@ -686,6 +686,10 @@ export type Lane = {
 	received: number;
 	paid: number;
 	left: number;
+	/** Of `inn`, what hasn't come in yet. */
+	toReceive: number;
+	/** Of `forecastedExp`, what hasn't been paid from this Account yet. */
+	toPay: number;
 	forecastedEAlloc: number;
 	eAlloc: number;
 	unplanned: Unplanned[];
@@ -796,6 +800,24 @@ function carriedIn(o: ForecastOutflow): ForecastOutflow {
 	};
 }
 
+/**
+ * Each Account's expected Balance when `cutoff` ends: today's Balance plus what is still to come
+ * (still to receive minus still to pay) in every Forecast from today's Cut-off to that one.
+ * Recorded Transactions are already in today's Balance, so they aren't counted again. Empty for
+ * a Cut-off that is already over.
+ */
+export function expectedAtEnd(input: ForecastInput, cutoff: IsoDate): Map<string, number> {
+	const out = new Map<string, number>();
+	const first = openingCutoff(input.today);
+	if (cutoff < first) return out;
+	let k = first;
+	for (let i = 0; k <= cutoff && i < 48; i++, k = nextCutoff(k))
+		for (const lane of buildForecast(input, k).lanes)
+			out.set(lane.accountId, (out.get(lane.accountId) ?? 0) + lane.toReceive - lane.toPay);
+	for (const [id, rest] of out) out.set(id, input.chart.balance(id, input.today) + rest);
+	return out;
+}
+
 function buildLanes(
 	ctx: Ctx,
 	fundingAccounts: string[],
@@ -865,6 +887,8 @@ function buildLanes(
 			received,
 			paid,
 			left: received - paid,
+			toReceive: Math.max(inn - received, 0),
+			toPay: draws.reduce((s, x) => s + Math.max(x.s.amount - x.s.paid, 0), 0),
 			forecastedEAlloc: ea.reduce((s, x) => s + x.s.amount, 0),
 			eAlloc: ea.reduce((s, x) => s + x.s.paid, 0),
 			unplanned: spent
