@@ -70,7 +70,7 @@
 			/>
 		{/snippet}
 
-		<main class="px-10 py-8">
+		<main class="page-pad">
 			<nav class="mb-2 flex flex-wrap items-center gap-1 text-xs text-gray-500" aria-label="Path">
 				{#each path as p, i (p.id)}
 					{#if i > 0}<span aria-hidden="true">›</span>{/if}
@@ -116,29 +116,34 @@
 				</dl>
 			</div>
 
-			<div class="mt-5 flex flex-wrap gap-1 border-b pb-4 text-sm">
+			<div class="mt-5 flex flex-wrap gap-2 border-b pb-4 text-sm">
 				{#if account.system !== 'opening-balances'}
 					<button
 						onclick={() => (dialog = 'create')}
-						class="mr-2 rounded-md bg-gray-900 px-3 py-1.5 text-white hover:bg-gray-700"
+						class="rounded-md bg-gray-900 px-4 py-1.5 font-medium text-white hover:bg-gray-700"
 						>+ Add account inside</button
 					>
-					<button onclick={() => (dialog = 'edit')} class="rounded-md px-3 py-1.5 hover:bg-gray-200"
+					<button
+						onclick={() => (dialog = 'edit')}
+						class="rounded-md border border-gray-300 bg-white px-4 py-1.5 hover:bg-gray-50"
 						>Edit</button
 					>
 				{/if}
 				{#if !account.system}
-					<button onclick={() => (dialog = 'move')} class="rounded-md px-3 py-1.5 hover:bg-gray-200"
+					<button
+						onclick={() => (dialog = 'move')}
+						class="rounded-md border border-gray-300 bg-white px-4 py-1.5 hover:bg-gray-50"
 						>Move</button
 					>
 					<button
 						onclick={() => (dialog = 'archive')}
-						class="rounded-md px-3 py-1.5 hover:bg-gray-200"
+						class="rounded-md border border-gray-300 bg-white px-4 py-1.5 hover:bg-gray-50"
 						>{account.archived ? 'Unarchive' : 'Archive'}</button
 					>
 					<button
 						onclick={() => (dialog = 'delete')}
-						class="rounded-md px-3 py-1.5 text-red-600 hover:bg-red-50">Delete</button
+						class="rounded-md border border-red-200 bg-white px-4 py-1.5 text-red-700 hover:bg-red-50"
+						>Delete</button
 					>
 				{/if}
 			</div>

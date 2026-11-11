@@ -205,7 +205,7 @@
 			/>
 		{/snippet}
 
-		<main class="px-8 py-6">
+		<main class="page-pad">
 			<div class="mb-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
 				<h1 class="text-2xl font-semibold">Journal</h1>
 				<span class="text-xs text-gray-500">{rows.length} of {total} Transactions</span>

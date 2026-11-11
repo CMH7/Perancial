@@ -22,7 +22,8 @@
 		kept = new Set<string>(),
 		notice = '',
 		submitLabel = 'Save',
-		onsubmit
+		onsubmit,
+		oncancel
 	}: {
 		initial: PlanDraft;
 		heading: string;
@@ -33,6 +34,8 @@
 		notice?: string;
 		submitLabel?: string;
 		onsubmit: (draft: PlanDraft) => Promise<void>;
+		/** Shows a Cancel button beside Save. */
+		oncancel?: () => void;
 	} = $props();
 
 	// svelte-ignore state_referenced_locally
@@ -156,207 +159,234 @@
 	</section>
 {/snippet}
 
-<form onsubmit={submit} class="@container space-y-5 text-sm" novalidate>
-	<h1 class="text-xl font-semibold">{heading}</h1>
+<form onsubmit={submit} class="@container space-y-4 text-sm" novalidate>
+	<h1 class="text-2xl font-semibold tracking-tight">{heading}</h1>
 	{#if notice}<p class="rounded-lg bg-amber-50 p-3 text-amber-900">{notice}</p>{/if}
 
-	<label class="block">
-		<span class="sr-only">Description</span>
-		<input
-			bind:value={draft.description}
-			placeholder="Description"
-			maxlength="200"
-			class="w-full rounded border-gray-300 text-sm"
-		/>
-		{#if shown('description')}<span class="text-xs text-red-600">{shown('description')}</span>{/if}
-	</label>
+	<section class="grid gap-3 rounded-xl border bg-white p-4 @2xl:grid-cols-[minmax(0,1fr)_20rem]">
+		<label class="block">
+			<span class="mb-1 block text-xs font-semibold text-gray-500 uppercase">Description</span>
+			<input
+				bind:value={draft.description}
+				placeholder="Description"
+				maxlength="200"
+				class="w-full rounded border-gray-300 text-sm"
+			/>
+			{#if shown('description')}<span class="text-xs text-red-600">{shown('description')}</span
+				>{/if}
+		</label>
 
-	<div class="max-w-sm">
-		<SectionPicker value={draft.section} onchange={(id) => (draft.section = id)} />
-	</div>
-
-	<!-- Side by side only when the form itself is wide (it also sits in narrow drawers). -->
-	<div class="grid gap-6 @2xl:grid-cols-2">
-		{@render column('from', 'From', draft.from)}
-		{@render column('to', 'To', draft.to)}
-	</div>
-
-	<section class="rounded-lg bg-gray-50 p-3">
-		<h2 class="mb-2 text-xs font-semibold text-gray-500 uppercase">Fees</h2>
-		{#each draft.fees as fee, i (i)}
-			<div class="mb-2 flex flex-wrap gap-2">
-				<select
-					bind:value={fee.mode}
-					class="rounded border-gray-300 py-1 text-sm"
-					aria-label="Fee type"
-				>
-					<option value="additional">Additional (on top of From)</option>
-					<option value="less">Less (taken out of To)</option>
-				</select>
-				{@render accountSelect(fee, expenseItems)}
-				<input
-					bind:value={fee.amount}
-					inputmode="decimal"
-					placeholder="varies"
-					aria-label="Amount"
-					class="w-28 rounded border-gray-300 text-right text-sm"
-				/>
-				<button
-					type="button"
-					class="px-1 text-gray-400 hover:text-red-600"
-					aria-label="Remove fee"
-					onclick={() => draft.fees.splice(i, 1)}>✕</button
-				>
-			</div>
-			{@render lineErrors('fees', i)}
-		{/each}
-		<button
-			type="button"
-			class="text-sm text-sky-700 hover:underline"
-			onclick={() => draft.fees.push({ ...blank(), mode: 'additional' })}>+ fee</button
-		>
+		<div>
+			<SectionPicker value={draft.section} onchange={(id) => (draft.section = id)} />
+		</div>
 	</section>
-	<p class="text-xs text-gray-500">
-		Leave an amount blank when it varies; you fill it in per occurrence or when recording.
-	</p>
-	{#if shown('total')}<p class="text-xs text-red-600">{shown('total')}</p>{/if}
 
-	<fieldset class="space-y-2 rounded-lg border p-3" disabled={ruleLocked}>
-		<legend class="px-1 text-xs font-semibold text-gray-500 uppercase">Repeats</legend>
-		{#if ruleLocked}<p class="text-xs text-gray-500">
-				To change the rule, edit from an occurrence and choose "This and all following".
-			</p>{/if}
-		<div class="flex flex-wrap items-center gap-2">
-			<select
-				value={draft.rule.type}
-				onchange={(e) => setRuleType(e.currentTarget.value as RepeatRule['type'])}
-				aria-label="Repeat rule"
-				class="rounded border-gray-300 py-1 text-sm"
-			>
-				<option value="once">Once</option>
-				<option value="cutoff">Every cut-off (15th and 30th)</option>
-				<option value="monthly">Monthly</option>
-				<option value="weekly">Every N weeks</option>
-				<option value="yearly">Yearly</option>
-			</select>
-			{#if draft.rule.type === 'once'}
-				<label
-					>on <input
-						type="date"
-						bind:value={draft.rule.date}
+	<section class="space-y-4 rounded-xl border bg-white p-4">
+		<!-- Side by side only when the form itself is wide (it also sits in narrow drawers). -->
+		<div class="grid gap-6 @2xl:grid-cols-2">
+			{@render column('from', 'From', draft.from)}
+			{@render column('to', 'To', draft.to)}
+		</div>
+
+		<div class="border-t pt-3">
+			<h2 class="mb-2 text-xs font-semibold text-gray-500 uppercase">Fees</h2>
+			{#each draft.fees as fee, i (i)}
+				<div class="mb-2 flex flex-wrap gap-2">
+					<select
+						bind:value={fee.mode}
 						class="rounded border-gray-300 py-1 text-sm"
-					/></label
+						aria-label="Fee type"
+					>
+						<option value="additional">Additional (on top of From)</option>
+						<option value="less">Less (taken out of To)</option>
+					</select>
+					{@render accountSelect(fee, expenseItems)}
+					<input
+						bind:value={fee.amount}
+						inputmode="decimal"
+						placeholder="varies"
+						aria-label="Amount"
+						class="w-28 rounded border-gray-300 text-right text-sm"
+					/>
+					<button
+						type="button"
+						class="px-1 text-gray-400 hover:text-red-600"
+						aria-label="Remove fee"
+						onclick={() => draft.fees.splice(i, 1)}>✕</button
+					>
+				</div>
+				{@render lineErrors('fees', i)}
+			{/each}
+			<button
+				type="button"
+				class="text-sm text-sky-700 hover:underline"
+				onclick={() => draft.fees.push({ ...blank(), mode: 'additional' })}>+ fee</button
+			>
+		</div>
+		<p class="border-t pt-3 text-xs text-gray-500">
+			Leave an amount blank when it varies; you fill it in per occurrence or when recording.
+		</p>
+		{#if shown('total')}<p class="text-xs text-red-600">{shown('total')}</p>{/if}
+	</section>
+
+	<div class="grid gap-4 @2xl:grid-cols-2">
+		<fieldset
+			class="space-y-2 rounded-xl border bg-white p-4 [&>legend+*]:clear-both"
+			disabled={ruleLocked}
+		>
+			<legend class="float-left mb-2 w-full text-xs font-semibold text-gray-500 uppercase"
+				>Repeats</legend
+			>
+			{#if ruleLocked}<p class="text-xs text-gray-500">
+					To change the rule, edit from an occurrence and choose "This and all following".
+				</p>{/if}
+			<div class="flex flex-wrap items-center gap-2">
+				<select
+					value={draft.rule.type}
+					onchange={(e) => setRuleType(e.currentTarget.value as RepeatRule['type'])}
+					aria-label="Repeat rule"
+					class="rounded border-gray-300 py-1 text-sm"
 				>
-			{:else}
-				{#if draft.rule.type === 'monthly'}
+					<option value="once">Once</option>
+					<option value="cutoff">Every cut-off (15th and 30th)</option>
+					<option value="monthly">Monthly</option>
+					<option value="weekly">Every N weeks</option>
+					<option value="yearly">Yearly</option>
+				</select>
+				{#if draft.rule.type === 'once'}
 					<label
-						>on day <input
-							type="number"
-							min="1"
-							max="31"
-							bind:value={draft.rule.day}
-							class="w-16 rounded border-gray-300 py-1 text-sm"
+						>on <input
+							type="date"
+							bind:value={draft.rule.date}
+							class="rounded border-gray-300 py-1 text-sm"
 						/></label
 					>
-				{:else if draft.rule.type === 'weekly'}
+				{:else}
+					{#if draft.rule.type === 'monthly'}
+						<label
+							>on day <input
+								type="number"
+								min="1"
+								max="31"
+								bind:value={draft.rule.day}
+								class="w-16 rounded border-gray-300 py-1 text-sm"
+							/></label
+						>
+					{:else if draft.rule.type === 'weekly'}
+						<label
+							>every <input
+								type="number"
+								min="1"
+								max="52"
+								bind:value={draft.rule.every}
+								class="w-16 rounded border-gray-300 py-1 text-sm"
+							/> weeks</label
+						>
+					{/if}
 					<label
-						>every <input
-							type="number"
-							min="1"
-							max="52"
-							bind:value={draft.rule.every}
-							class="w-16 rounded border-gray-300 py-1 text-sm"
-						/> weeks</label
+						>starting <input
+							type="date"
+							bind:value={draft.rule.start}
+							class="rounded border-gray-300 py-1 text-sm"
+						/></label
 					>
 				{/if}
-				<label
-					>starting <input
-						type="date"
-						bind:value={draft.rule.start}
-						class="rounded border-gray-300 py-1 text-sm"
-					/></label
-				>
-			{/if}
-		</div>
-		{#if shown('rule')}<p class="text-xs text-red-600">{shown('rule')}</p>{/if}
-	</fieldset>
+			</div>
+			{#if shown('rule')}<p class="text-xs text-red-600">{shown('rule')}</p>{/if}
+		</fieldset>
 
-	<fieldset class="flex flex-wrap items-center gap-2 rounded-lg border p-3">
-		<legend class="px-1 text-xs font-semibold text-gray-500 uppercase">Ends</legend>
-		<select
-			value={draft.end.type}
-			onchange={(e) => {
-				const type = e.currentTarget.value;
-				draft.end =
-					type === 'on'
-						? { type, date: '' }
-						: type === 'after'
-							? { type, count: 12 }
-							: { type: 'never' };
-			}}
-			aria-label="Plan ends"
-			class="rounded border-gray-300 py-1 text-sm"
+		<fieldset
+			class="flex flex-wrap items-center gap-2 rounded-xl border bg-white p-4 [&>legend+*]:clear-both"
 		>
-			<option value="never">Never</option>
-			<option value="on">On a date</option>
-			<option value="after">After a number of occurrences</option>
-		</select>
-		{#if draft.end.type === 'on'}
-			<input
-				type="date"
-				bind:value={draft.end.date}
-				aria-label="End date"
-				class="rounded border-gray-300 py-1 text-sm"
-			/>
-		{:else if draft.end.type === 'after'}
-			<input
-				type="number"
-				min="1"
-				bind:value={draft.end.count}
-				aria-label="Number of occurrences"
-				class="w-20 rounded border-gray-300 py-1 text-sm"
-			/>
-		{/if}
-		{#if shown('end')}<p class="w-full text-xs text-red-600">{shown('end')}</p>{/if}
-	</fieldset>
-
-	<div class="flex flex-wrap items-center gap-2">
-		{#each draft.tags as tag, i (tag)}
-			<span class="flex items-center gap-1 rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-700"
-				>#{tag}<button
-					type="button"
-					class="text-gray-400 hover:text-red-600"
-					aria-label="Remove tag {tag}"
-					onclick={() => draft.tags.splice(i, 1)}>✕</button
-				></span
+			<legend class="float-left mb-2 w-full text-xs font-semibold text-gray-500 uppercase"
+				>Ends</legend
 			>
-		{/each}
-		<input
-			bind:value={tagText}
-			onkeydown={(e) => {
-				if (e.key === 'Enter' || e.key === ',') {
-					e.preventDefault();
-					addTag();
-				}
-			}}
-			onblur={addTag}
-			placeholder="Add tag"
-			class="w-40 rounded border-gray-300 py-1 text-sm"
-		/>
+			<select
+				value={draft.end.type}
+				onchange={(e) => {
+					const type = e.currentTarget.value;
+					draft.end =
+						type === 'on'
+							? { type, date: '' }
+							: type === 'after'
+								? { type, count: 12 }
+								: { type: 'never' };
+				}}
+				aria-label="Plan ends"
+				class="rounded border-gray-300 py-1 text-sm"
+			>
+				<option value="never">Never</option>
+				<option value="on">On a date</option>
+				<option value="after">After a number of occurrences</option>
+			</select>
+			{#if draft.end.type === 'on'}
+				<input
+					type="date"
+					bind:value={draft.end.date}
+					aria-label="End date"
+					class="rounded border-gray-300 py-1 text-sm"
+				/>
+			{:else if draft.end.type === 'after'}
+				<input
+					type="number"
+					min="1"
+					bind:value={draft.end.count}
+					aria-label="Number of occurrences"
+					class="w-20 rounded border-gray-300 py-1 text-sm"
+				/>
+			{/if}
+			{#if shown('end')}<p class="w-full text-xs text-red-600">{shown('end')}</p>{/if}
+		</fieldset>
 	</div>
 
-	<textarea
-		bind:value={draft.note}
-		placeholder="Note (optional)"
-		rows="2"
-		class="w-full rounded border-gray-300 text-sm"></textarea>
+	<section class="space-y-3 rounded-xl border bg-white p-4">
+		<div class="flex flex-wrap items-center gap-2">
+			{#each draft.tags as tag, i (tag)}
+				<span class="flex items-center gap-1 rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-700"
+					>#{tag}<button
+						type="button"
+						class="text-gray-400 hover:text-red-600"
+						aria-label="Remove tag {tag}"
+						onclick={() => draft.tags.splice(i, 1)}>✕</button
+					></span
+				>
+			{/each}
+			<input
+				bind:value={tagText}
+				onkeydown={(e) => {
+					if (e.key === 'Enter' || e.key === ',') {
+						e.preventDefault();
+						addTag();
+					}
+				}}
+				onblur={addTag}
+				placeholder="Add tag"
+				class="w-40 rounded border-gray-300 py-1 text-sm"
+			/>
+		</div>
 
-	{#if saveError}<p class="text-red-600">{saveError}</p>{/if}
-	{#if tried && ev.errors.length}<p class="text-xs text-red-600">
-			Fix the highlighted fields first.
-		</p>{/if}
-	<div class="flex justify-end">
-		<button disabled={saving} class="rounded bg-gray-900 px-4 py-2 text-white disabled:opacity-40"
+		<textarea
+			bind:value={draft.note}
+			placeholder="Note (optional)"
+			rows="2"
+			class="w-full rounded border-gray-300 text-sm"></textarea>
+	</section>
+
+	<div class="flex flex-wrap items-center justify-end gap-2 border-t pt-4">
+		{#if saveError}<p class="mr-auto text-red-600">{saveError}</p>{/if}
+		{#if tried && ev.errors.length}<p class="mr-auto text-xs text-red-600">
+				Fix the highlighted fields first.
+			</p>{/if}
+		{#if oncancel}
+			<button
+				type="button"
+				onclick={oncancel}
+				class="rounded-md border border-gray-300 bg-white px-4 py-2 hover:bg-gray-50">Cancel</button
+			>
+		{/if}
+		<button
+			disabled={saving}
+			class="rounded-md bg-gray-900 px-5 py-2 font-medium text-white hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-40"
 			>{saving ? 'Saving…' : submitLabel}</button
 		>
 	</div>

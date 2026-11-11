@@ -24,7 +24,7 @@
 	const peso = (c: number) => formatAmount(c);
 </script>
 
-<main class="max-w-5xl px-8 py-6">
+<main class="page-pad">
 	{#if ledger.error}
 		<p class="rounded-lg bg-red-50 p-4 text-sm text-red-800">{ledger.error}</p>
 	{:else if !ledger.ready}
@@ -47,39 +47,41 @@
 				Nothing overdue or due in the next 3 months.
 			</p>
 		{/if}
-		{#each groups as g (g.key)}
-			<section class="mb-5">
-				<h2
-					class="mb-1 flex justify-between text-sm font-semibold uppercase {g.key === 'overdue'
-						? 'text-amber-700'
-						: 'text-gray-500'}"
-				>
-					<span>{g.key === 'overdue' ? 'Overdue' : `Cut-off ${shortDate(g.key)}`}</span>
-					<span class="tabular-nums">{peso(g.total)}</span>
-				</h2>
-				<ul class="divide-y rounded-xl border bg-white">
-					{#each g.items as { plan, status, of } (`${plan.id}:${status.row.due}`)}
-						<li class="flex items-center gap-3 px-4 py-2 text-sm">
-							<span class="w-28 text-gray-500">{shortDate(status.row.date)}</span>
-							<a
-								class="flex-1 hover:underline"
-								href={resolve('/installments/[id]', { id: plan.id })}
-							>
-								{plan.title}
-								<span class="text-gray-400">#{status.row.n} of {of}</span>
-								{#if status.state === 'partly-paid'}<span class="ml-1 text-xs text-sky-700"
-										>partly paid</span
-									>{/if}
-							</a>
-							<span class="w-32 text-right tabular-nums">{peso(status.remaining)}</span>
-							<button
-								class="rounded bg-gray-900 px-2 py-0.5 text-xs text-white"
-								onclick={() => record(plan.id, status.row.due)}>Record</button
-							>
-						</li>
-					{/each}
-				</ul>
-			</section>
-		{/each}
+		<div class="grid gap-x-8 2xl:grid-cols-2">
+			{#each groups as g (g.key)}
+				<section class="mb-5 min-w-0">
+					<h2
+						class="mb-1 flex justify-between text-sm font-semibold uppercase {g.key === 'overdue'
+							? 'text-amber-700'
+							: 'text-gray-500'}"
+					>
+						<span>{g.key === 'overdue' ? 'Overdue' : `Cut-off ${shortDate(g.key)}`}</span>
+						<span class="tabular-nums">{peso(g.total)}</span>
+					</h2>
+					<ul class="divide-y rounded-xl border bg-white">
+						{#each g.items as { plan, status, of } (`${plan.id}:${status.row.due}`)}
+							<li class="flex items-center gap-3 px-4 py-2 text-sm">
+								<span class="w-28 text-gray-500">{shortDate(status.row.date)}</span>
+								<a
+									class="flex-1 hover:underline"
+									href={resolve('/installments/[id]', { id: plan.id })}
+								>
+									{plan.title}
+									<span class="text-gray-400">#{status.row.n} of {of}</span>
+									{#if status.state === 'partly-paid'}<span class="ml-1 text-xs text-sky-700"
+											>partly paid</span
+										>{/if}
+								</a>
+								<span class="w-32 text-right tabular-nums">{peso(status.remaining)}</span>
+								<button
+									class="rounded bg-gray-900 px-2 py-0.5 text-xs text-white"
+									onclick={() => record(plan.id, status.row.due)}>Record</button
+								>
+							</li>
+						{/each}
+					</ul>
+				</section>
+			{/each}
+		</div>
 	{/if}
 </main>

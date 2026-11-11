@@ -19,12 +19,15 @@
 		initial,
 		today,
 		startedOn,
-		onsubmit
+		onsubmit,
+		oncancel
 	}: {
 		initial: InstallmentDraft;
 		today: string;
 		startedOn: string;
 		onsubmit: (draft: InstallmentDraft) => Promise<void>;
+		/** Shows a Cancel button beside Create plan. */
+		oncancel?: () => void;
 	} = $props();
 
 	// svelte-ignore state_referenced_locally
@@ -129,136 +132,149 @@
 
 <form class="grid gap-6 md:grid-cols-2" onsubmit={submit}>
 	<div class="space-y-4 text-sm">
-		<div class="flex gap-2">
+		<div class="flex gap-1 rounded-lg bg-gray-200/60 p-1" role="radiogroup" aria-label="Kind">
 			{#each [['lender', 'Owed to a lender'], ['internal', 'Internal (repays my Asset)']] as const as [k, text] (k)}
 				<button
 					type="button"
-					class="flex-1 rounded border px-2 py-1.5 {d.kind === k
-						? 'border-gray-900 bg-gray-900 text-white'
-						: 'bg-white'}"
+					role="radio"
+					aria-checked={d.kind === k}
+					class="flex-1 rounded-md px-2 py-1.5 {d.kind === k
+						? 'bg-white font-medium text-gray-900 shadow-sm'
+						: 'text-gray-500 hover:text-gray-900'}"
 					onclick={() => (d.kind = k)}>{text}</button
 				>
 			{/each}
 		</div>
 
-		<label class="block"
-			>Title <input class={field} bind:value={d.title} onblur={() => touched.add('title')} />
-			{@render error('title')}
-		</label>
-
-		<SectionPicker value={d.section} onchange={(id) => (d.section = id)} />
-
-		<div>
-			Tags
-			<div class="mt-1 flex flex-wrap items-center gap-1">
-				{#each d.tags as tag, i (tag)}
-					<span class="rounded bg-gray-100 px-1.5 py-0.5 text-xs"
-						>#{tag}
-						<button type="button" class="ml-0.5 text-gray-500" onclick={() => d.tags.splice(i, 1)}
-							>×</button
-						></span
-					>
-				{/each}
-				<input
-					class="min-w-24 flex-1 rounded border-gray-300 py-0.5 text-sm"
-					placeholder="Add a tag"
-					bind:value={tagText}
-					onkeydown={(e) => {
-						if (e.key === 'Enter' || e.key === ',') {
-							e.preventDefault();
-							addTag();
-						}
-					}}
-					onblur={addTag}
-				/>
-			</div>
-		</div>
-
-		<div class="grid grid-cols-2 gap-3">
-			<label
-				>Purchase date <input type="date" class={field} bind:value={d.purchaseDate} />
-				{@render error('purchaseDate')}</label
-			>
-			<label
-				>First payment <input type="date" class={field} bind:value={d.firstDate} />
-				{@render error('firstDate')}</label
-			>
-			<label
-				>Repeats
-				<select class={field} bind:value={d.repeat}>
-					<option value="monthly">Monthly on day {d.firstDate.slice(8) || '…'}</option>
-					<option value="cutoff">Every cut-off (15th and 30th)</option>
-					<option value="weekly">Every N weeks</option>
-				</select>
-				{@render error('repeat')}
+		<section class="space-y-3 rounded-xl border bg-white p-4">
+			<h2 class="text-xs font-semibold text-gray-500 uppercase">Details</h2>
+			<label class="block"
+				>Title <input class={field} bind:value={d.title} onblur={() => touched.add('title')} />
+				{@render error('title')}
 			</label>
-			{#if d.repeat === 'weekly'}
-				<label
-					>Every <input type="number" min="1" max="52" class={field} bind:value={d.everyWeeks} /> weeks</label
-				>
-			{/if}
-			<label
-				>Payments <input type="number" min="1" class={field} bind:value={d.count} />
-				{@render error('count')}</label
-			>
-		</div>
 
-		<label class="flex items-center gap-2"
-			><input type="checkbox" bind:checked={d.rowZero} /> Starts with an interest/fee-only row 0</label
-		>
+			<SectionPicker value={d.section} onchange={(id) => (d.section = id)} />
 
-		<div class="flex gap-4">
-			<label><input type="radio" bind:group={d.entry} value="flat" /> Flat</label>
-			<label
-				><input type="radio" bind:group={d.entry} value="varied" /> Varied (type each row)</label
-			>
-		</div>
-		{#if d.entry === 'flat'}
+			<div>
+				Tags
+				<div class="mt-1 flex flex-wrap items-center gap-1">
+					{#each d.tags as tag, i (tag)}
+						<span class="rounded bg-gray-100 px-1.5 py-0.5 text-xs"
+							>#{tag}
+							<button type="button" class="ml-0.5 text-gray-500" onclick={() => d.tags.splice(i, 1)}
+								>×</button
+							></span
+						>
+					{/each}
+					<input
+						class="min-w-24 flex-1 rounded border-gray-300 py-0.5 text-sm"
+						placeholder="Add a tag"
+						bind:value={tagText}
+						onkeydown={(e) => {
+							if (e.key === 'Enter' || e.key === ',') {
+								e.preventDefault();
+								addTag();
+							}
+						}}
+						onblur={addTag}
+					/>
+				</div>
+			</div>
+		</section>
+
+		<section class="space-y-3 rounded-xl border bg-white p-4">
+			<h2 class="text-xs font-semibold text-gray-500 uppercase">Schedule</h2>
 			<div class="grid grid-cols-2 gap-3">
 				<label
-					>Amount (principal) <input
-						class={field}
-						inputmode="decimal"
-						bind:value={d.amount}
-						onblur={() => touched.add('amount')}
-					/>
-					{@render error('amount')}</label
+					>Purchase date <input type="date" class={field} bind:value={d.purchaseDate} />
+					{@render error('purchaseDate')}</label
 				>
 				<label
-					>Interest per row <input
-						class={field}
-						inputmode="decimal"
-						placeholder="None"
-						bind:value={d.interest}
-					/>
-					{@render error('interest')}</label
+					>First payment <input type="date" class={field} bind:value={d.firstDate} />
+					{@render error('firstDate')}</label
 				>
-			</div>
-		{/if}
-
-		{#if ev.inProgress}
-			<div class="rounded-lg bg-amber-50 p-3">
 				<label
-					>The first payment is in the past. Track from row
-					<select
-						class="ml-1 rounded border-gray-300 py-0.5 text-sm"
-						value={ev.trackedFrom}
-						onchange={(e) => (d.trackedFrom = Number(e.currentTarget.value))}
-					>
-						{#each ev.rows as r (r.n)}<option value={r.n}>{r.n} ({shortDate(r.date)})</option
-							>{/each}
+					>Repeats
+					<select class={field} bind:value={d.repeat}>
+						<option value="monthly">Monthly on day {d.firstDate.slice(8) || '…'}</option>
+						<option value="cutoff">Every cut-off (15th and 30th)</option>
+						<option value="weekly">Every N weeks</option>
 					</select>
+					{@render error('repeat')}
 				</label>
-				<p class="mt-1 text-xs text-amber-900">
-					Earlier rows are Before tracking: your Opening Balances already cover them. Principal
-					still owed: {peso(ev.trackedPrincipal)}.
-				</p>
+				{#if d.repeat === 'weekly'}
+					<label
+						>Every <input type="number" min="1" max="52" class={field} bind:value={d.everyWeeks} /> weeks</label
+					>
+				{/if}
+				<label
+					>Payments <input type="number" min="1" class={field} bind:value={d.count} />
+					{@render error('count')}</label
+				>
 			</div>
-		{/if}
 
-		<fieldset class="space-y-3 rounded-lg border p-3">
+			<label class="flex items-center gap-2"
+				><input type="checkbox" bind:checked={d.rowZero} /> Starts with an interest/fee-only row 0</label
+			>
+		</section>
+
+		<section class="space-y-3 rounded-xl border bg-white p-4">
+			<h2 class="text-xs font-semibold text-gray-500 uppercase">Amounts</h2>
+			<div class="flex gap-4">
+				<label><input type="radio" bind:group={d.entry} value="flat" /> Flat</label>
+				<label
+					><input type="radio" bind:group={d.entry} value="varied" /> Varied (type each row)</label
+				>
+			</div>
+			{#if d.entry === 'flat'}
+				<div class="grid grid-cols-2 gap-3">
+					<label
+						>Amount (principal) <input
+							class={field}
+							inputmode="decimal"
+							bind:value={d.amount}
+							onblur={() => touched.add('amount')}
+						/>
+						{@render error('amount')}</label
+					>
+					<label
+						>Interest per row <input
+							class={field}
+							inputmode="decimal"
+							placeholder="None"
+							bind:value={d.interest}
+						/>
+						{@render error('interest')}</label
+					>
+				</div>
+			{/if}
+
+			{#if ev.inProgress}
+				<div class="rounded-lg bg-amber-50 p-3">
+					<label
+						>The first payment is in the past. Track from row
+						<select
+							class="ml-1 rounded border-gray-300 py-0.5 text-sm"
+							value={ev.trackedFrom}
+							onchange={(e) => (d.trackedFrom = Number(e.currentTarget.value))}
+						>
+							{#each ev.rows as r (r.n)}<option value={r.n}>{r.n} ({shortDate(r.date)})</option
+								>{/each}
+						</select>
+					</label>
+					<p class="mt-1 text-xs text-amber-900">
+						Earlier rows are Before tracking: your Opening Balances already cover them. Principal
+						still owed: {peso(ev.trackedPrincipal)}.
+					</p>
+				</div>
+			{/if}
+		</section>
+
+		<fieldset class="space-y-3 rounded-xl border bg-white p-4 [&>legend+*]:clear-both">
 			{#if d.kind === 'lender'}
-				<legend class="px-1 text-xs text-gray-500 uppercase">Liability</legend>
+				<legend class="float-left mb-1 w-full text-xs font-semibold text-gray-500 uppercase"
+					>Liability</legend
+				>
 				<div class="flex gap-4">
 					<label
 						><input
@@ -342,7 +358,9 @@
 					>
 				</div>
 			{:else}
-				<legend class="px-1 text-xs text-gray-500 uppercase">Repaid Asset</legend>
+				<legend class="float-left mb-1 w-full text-xs font-semibold text-gray-500 uppercase"
+					>Repaid Asset</legend
+				>
 				{@render select(
 					d.repaidAssetId,
 					assets,
@@ -362,20 +380,33 @@
 			>
 		</fieldset>
 
-		<label class="block"
-			>Note <textarea class={field} rows="2" bind:value={d.note}></textarea></label
-		>
+		<section class="space-y-3 rounded-xl border bg-white p-4">
+			<label class="block"
+				>Note <textarea class={field} rows="2" bind:value={d.note}></textarea></label
+			>
+		</section>
 
-		{#if saveError}<p class="text-sm text-red-700">{saveError}</p>{/if}
-		{#if tried && ev.errors.length}<p class="text-sm text-red-700">
-				Fix the marked fields first.
-			</p>{/if}
-		<button class="rounded bg-gray-900 px-4 py-1.5 text-white disabled:opacity-50" disabled={saving}
-			>{saving ? 'Saving…' : 'Create plan'}</button
-		>
+		<div class="flex flex-wrap items-center justify-end gap-2 border-t pt-4">
+			{#if saveError}<p class="mr-auto text-sm text-red-700">{saveError}</p>{/if}
+			{#if tried && ev.errors.length}<p class="mr-auto text-sm text-red-700">
+					Fix the marked fields first.
+				</p>{/if}
+			{#if oncancel}
+				<button
+					type="button"
+					onclick={oncancel}
+					class="rounded-md border border-gray-300 bg-white px-4 py-2 hover:bg-gray-50"
+					>Cancel</button
+				>
+			{/if}
+			<button
+				class="rounded-md bg-gray-900 px-5 py-2 font-medium text-white hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-40"
+				disabled={saving}>{saving ? 'Saving…' : 'Create plan'}</button
+			>
+		</div>
 	</div>
 
-	<div>
+	<div class="self-start rounded-xl border bg-white p-4 md:sticky md:top-6">
 		<h2 class="mb-2 text-xs font-semibold text-gray-500 uppercase">
 			Preview: {ev.rows.length} rows
 		</h2>

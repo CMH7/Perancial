@@ -30,6 +30,7 @@
 		existing,
 		pays,
 		onsaved,
+		oncancel,
 		extra,
 		extraWrites,
 		extraBlocked = false
@@ -40,6 +41,8 @@
 		/** The occurrence a new Transaction pays (Record). */
 		pays?: PaidLink;
 		onsaved: (id: string) => void;
+		/** Shows a Cancel button beside Save. */
+		oncancel?: () => void;
 		/** More of the form, shown above Save (Record's planned charges). */
 		extra?: Snippet;
 		/** Writes saved together with this Transaction (its `id`), all or none. */
@@ -195,10 +198,12 @@
 	</section>
 {/snippet}
 
-<form onsubmit={submit} class="space-y-5 text-sm" novalidate>
+<form onsubmit={submit} class="space-y-4 text-sm" novalidate>
 	<div class="flex flex-wrap items-center justify-between gap-3">
 		<div class="flex items-center gap-3">
-			<h1 class="text-xl font-semibold">{existing ? 'Edit Transaction' : 'New Transaction'}</h1>
+			<h1 class="text-2xl font-semibold tracking-tight">
+				{existing ? 'Edit Transaction' : 'New Transaction'}
+			</h1>
 			{#if ev.kind}
 				<span class="rounded-full px-2 py-0.5 text-xs font-medium {KIND[ev.kind].style}"
 					>{KIND[ev.kind].label}</span
@@ -208,7 +213,8 @@
 		<select
 			bind:value={copyFrom}
 			onchange={copy}
-			class="max-w-xs rounded border-gray-300 py-1 text-sm"
+			aria-label="Copy from a past Transaction"
+			class="max-w-xs rounded-md border-gray-300 py-1 text-sm"
 		>
 			<option value="">Copy from a past Transaction…</option>
 			{#each pastTransactions as t (t.id)}
@@ -221,9 +227,9 @@
 		</select>
 	</div>
 
-	<div class="grid grid-cols-[11rem_1fr] gap-3">
+	<section class="grid grid-cols-[11rem_1fr] gap-3 rounded-xl border bg-white p-4">
 		<label>
-			<span class="sr-only">Date</span>
+			<span class="mb-1 block text-xs font-semibold text-gray-500 uppercase">Date</span>
 			<input
 				type="date"
 				bind:value={draft.date}
@@ -234,7 +240,7 @@
 			{#if shown('date')}<span class="text-xs text-red-600">{shown('date')}</span>{/if}
 		</label>
 		<label>
-			<span class="sr-only">Description</span>
+			<span class="mb-1 block text-xs font-semibold text-gray-500 uppercase">Description</span>
 			<input
 				bind:value={draft.description}
 				oninput={() => touch('description')}
@@ -245,138 +251,149 @@
 			{#if shown('description')}<span class="text-xs text-red-600">{shown('description')}</span
 				>{/if}
 		</label>
-	</div>
-
-	<div class="grid gap-6 md:grid-cols-2">
-		{@render column('from', 'From', draft.from)}
-		{@render column('to', 'To', draft.to)}
-	</div>
-
-	{#if canBillLater(chart, draft) || draft.billOn}
-		<label class="block text-sm">
-			<span class="text-xs font-semibold text-gray-500 uppercase">Bill on</span>
-			<span class="text-xs text-gray-500">
-				(optional) the payment after this day bills the charge; blank bills it from its date</span
-			>
-			<input
-				type="date"
-				value={draft.billOn ?? ''}
-				min={draft.date}
-				onchange={(e) => {
-					draft.billOn = e.currentTarget.value || null;
-					touch('billOn');
-				}}
-				class="mt-1 block w-44 rounded border-gray-300 text-sm"
-			/>
-			{#if shown('billOn')}<span class="text-xs text-red-600">{shown('billOn')}</span>{/if}
-		</label>
-	{/if}
-
-	<section class="rounded-lg bg-gray-50 p-3">
-		<h2 class="mb-2 text-xs font-semibold text-gray-500 uppercase">Fees</h2>
-		{#each draft.fees as fee, i (i)}
-			<div class="mb-2 flex flex-wrap gap-2">
-				<select
-					bind:value={fee.mode}
-					class="rounded border-gray-300 py-1 text-sm"
-					aria-label="Fee type"
-				>
-					<option value="additional">Additional (on top of From)</option>
-					<option value="less">Less (taken out of To)</option>
-				</select>
-				{@render accountSelect('fees', i, fee, expenseItems)}
-				{@render amountInput('fees', i, fee)}
-				<button
-					type="button"
-					class="px-1 text-gray-400 hover:text-red-600"
-					aria-label="Remove fee"
-					onclick={() => draft.fees.splice(i, 1)}>✕</button
-				>
-			</div>
-			{@render lineErrors('fees', i)}
-		{/each}
-		<button
-			type="button"
-			class="text-sm text-sky-700 hover:underline"
-			onclick={() => draft.fees.push({ ...blank(), mode: 'additional' })}>+ fee</button
-		>
 	</section>
 
-	<div class="flex flex-wrap items-baseline justify-between gap-2 text-gray-600">
-		<p class="text-xs">Leave one amount blank and it fills with what is left (amber).</p>
-		<p class="tabular-nums">
-			From {formatAmount(ev.fromTotal)} · To {formatAmount(ev.toTotal)}
-			{#if ev.uncovered > 0}
-				<span class="block text-right text-xs text-amber-700"
-					>{formatAmount(ev.uncovered)} not covered by From yet</span
-				>
-			{:else if ev.uncovered < 0}
-				<span class="block text-right text-xs text-amber-700"
-					>From is {formatAmount(-ev.uncovered)} more than To</span
-				>
-			{/if}
-			{#if errorAt.get('total') && (touched.size > 0 || existing)}
-				<span class="block text-right text-xs text-red-600">{errorAt.get('total')}</span>
-			{/if}
-		</p>
-	</div>
+	<section class="space-y-4 rounded-xl border bg-white p-4">
+		<div class="grid gap-6 md:grid-cols-2">
+			{@render column('from', 'From', draft.from)}
+			{@render column('to', 'To', draft.to)}
+		</div>
 
-	<div class="flex flex-wrap items-center gap-2">
-		{#each draft.tags as tag, i (tag)}
-			<span class="flex items-center gap-1 rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-700"
-				>#{tag}<button
-					type="button"
-					class="text-gray-400 hover:text-red-600"
-					aria-label="Remove tag {tag}"
-					onclick={() => draft.tags.splice(i, 1)}>✕</button
-				></span
+		{#if canBillLater(chart, draft) || draft.billOn}
+			<label class="block text-sm">
+				<span class="text-xs font-semibold text-gray-500 uppercase">Bill on</span>
+				<span class="text-xs text-gray-500">
+					(optional) the payment after this day bills the charge; blank bills it from its date</span
+				>
+				<input
+					type="date"
+					value={draft.billOn ?? ''}
+					min={draft.date}
+					onchange={(e) => {
+						draft.billOn = e.currentTarget.value || null;
+						touch('billOn');
+					}}
+					class="mt-1 block w-44 rounded border-gray-300 text-sm"
+				/>
+				{#if shown('billOn')}<span class="text-xs text-red-600">{shown('billOn')}</span>{/if}
+			</label>
+		{/if}
+
+		<div class="border-t pt-3">
+			<h2 class="mb-2 text-xs font-semibold text-gray-500 uppercase">Fees</h2>
+			{#each draft.fees as fee, i (i)}
+				<div class="mb-2 flex flex-wrap gap-2">
+					<select
+						bind:value={fee.mode}
+						class="rounded border-gray-300 py-1 text-sm"
+						aria-label="Fee type"
+					>
+						<option value="additional">Additional (on top of From)</option>
+						<option value="less">Less (taken out of To)</option>
+					</select>
+					{@render accountSelect('fees', i, fee, expenseItems)}
+					{@render amountInput('fees', i, fee)}
+					<button
+						type="button"
+						class="px-1 text-gray-400 hover:text-red-600"
+						aria-label="Remove fee"
+						onclick={() => draft.fees.splice(i, 1)}>✕</button
+					>
+				</div>
+				{@render lineErrors('fees', i)}
+			{/each}
+			<button
+				type="button"
+				class="text-sm text-sky-700 hover:underline"
+				onclick={() => draft.fees.push({ ...blank(), mode: 'additional' })}>+ fee</button
 			>
-		{/each}
-		<input
-			bind:value={tagText}
-			onkeydown={(e) => {
-				if (e.key === 'Enter' || e.key === ',') {
-					e.preventDefault();
-					addTag();
-				}
-			}}
-			onblur={addTag}
-			list="known-tags"
-			placeholder="Add tag"
-			class="w-40 rounded border-gray-300 py-1 text-sm"
-		/>
-		<datalist id="known-tags">
-			{#each knownTags as tag (tag)}<option value={tag}></option>{/each}
-		</datalist>
-		<label class="ml-auto flex items-center gap-2">
-			<input
-				type="checkbox"
-				checked={draft.status === 'pending'}
-				onchange={(e) => (draft.status = e.currentTarget.checked ? 'pending' : 'cleared')}
-			/>
-			Pending
-		</label>
-	</div>
+		</div>
 
-	<label class="block">
-		<span class="sr-only">Note</span>
-		<textarea
-			bind:value={draft.note}
-			oninput={() => touch('note')}
-			placeholder="Note (optional)"
-			rows="3"
-			class="w-full rounded border-gray-300 text-sm"></textarea>
-		{#if shown('note')}<span class="text-xs text-red-600">{shown('note')}</span>{/if}
-	</label>
+		<div class="flex flex-wrap items-baseline justify-between gap-2 border-t pt-3 text-gray-600">
+			<p class="text-xs">Leave one amount blank and it fills with what is left (amber).</p>
+			<p class="tabular-nums">
+				From {formatAmount(ev.fromTotal)} · To {formatAmount(ev.toTotal)}
+				{#if ev.uncovered > 0}
+					<span class="block text-right text-xs text-amber-700"
+						>{formatAmount(ev.uncovered)} not covered by From yet</span
+					>
+				{:else if ev.uncovered < 0}
+					<span class="block text-right text-xs text-amber-700"
+						>From is {formatAmount(-ev.uncovered)} more than To</span
+					>
+				{/if}
+				{#if errorAt.get('total') && (touched.size > 0 || existing)}
+					<span class="block text-right text-xs text-red-600">{errorAt.get('total')}</span>
+				{/if}
+			</p>
+		</div>
+	</section>
+
+	<section class="space-y-3 rounded-xl border bg-white p-4">
+		<div class="flex flex-wrap items-center gap-2">
+			{#each draft.tags as tag, i (tag)}
+				<span class="flex items-center gap-1 rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-700"
+					>#{tag}<button
+						type="button"
+						class="text-gray-400 hover:text-red-600"
+						aria-label="Remove tag {tag}"
+						onclick={() => draft.tags.splice(i, 1)}>✕</button
+					></span
+				>
+			{/each}
+			<input
+				bind:value={tagText}
+				onkeydown={(e) => {
+					if (e.key === 'Enter' || e.key === ',') {
+						e.preventDefault();
+						addTag();
+					}
+				}}
+				onblur={addTag}
+				list="known-tags"
+				placeholder="Add tag"
+				class="w-40 rounded border-gray-300 py-1 text-sm"
+			/>
+			<datalist id="known-tags">
+				{#each knownTags as tag (tag)}<option value={tag}></option>{/each}
+			</datalist>
+			<label class="ml-auto flex items-center gap-2">
+				<input
+					type="checkbox"
+					checked={draft.status === 'pending'}
+					onchange={(e) => (draft.status = e.currentTarget.checked ? 'pending' : 'cleared')}
+				/>
+				Pending
+			</label>
+		</div>
+
+		<label class="block">
+			<span class="sr-only">Note</span>
+			<textarea
+				bind:value={draft.note}
+				oninput={() => touch('note')}
+				placeholder="Note (optional)"
+				rows="3"
+				class="w-full rounded border-gray-300 text-sm"></textarea>
+			{#if shown('note')}<span class="text-xs text-red-600">{shown('note')}</span>{/if}
+		</label>
+	</section>
 
 	{@render extra?.()}
 
-	{#if saveError}<p class="text-red-600">{saveError}</p>{/if}
-	<div class="flex justify-end">
+	<div class="flex flex-wrap items-center justify-end gap-2 border-t pt-4">
+		{#if saveError}<p class="mr-auto text-red-600">{saveError}</p>{/if}
+		{#if oncancel}
+			<button
+				type="button"
+				onclick={oncancel}
+				class="rounded-md border border-gray-300 bg-white px-4 py-2 hover:bg-gray-50">Cancel</button
+			>
+		{/if}
 		<button
 			disabled={ev.errors.length > 0 || extraBlocked || saving}
-			class="rounded bg-gray-900 px-4 py-2 text-white disabled:opacity-40"
-			>{saving ? 'Saving…' : 'Save'}</button
+			class="rounded-md bg-gray-900 px-5 py-2 font-medium text-white hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-40"
+			>{saving ? 'Saving…' : existing ? 'Save changes' : 'Save'}</button
 		>
 	</div>
 </form>
