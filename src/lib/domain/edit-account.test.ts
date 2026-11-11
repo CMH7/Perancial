@@ -94,6 +94,7 @@ describe('planEditAccount', () => {
 				accountIds: ['cash', 'opening-balances'],
 				pays: null,
 				billOn: null,
+				recordedWith: null,
 				createdAt: now,
 				updatedAt: later
 			}

@@ -66,6 +66,7 @@ const tx = (id: string, date: string | null, description: string, entries: [stri
 			accountIds: entries.map(([a]) => a),
 			pays: null,
 			billOn: null,
+			recordedWith: null,
 			createdAt: now,
 			updatedAt: now
 		}

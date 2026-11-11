@@ -74,7 +74,7 @@ service cloud.firestore {
         }
         // Added in v2; optional so documents written before them stay valid.
         function optional() {
-          return ['note', 'status', 'tags', 'pays', 'billOn'];
+          return ['note', 'status', 'tags', 'pays', 'billOn', 'recordedWith'];
         }
         function validTags(d) {
           return !('tags' in d) || (d.tags is list && d.tags.size() <= 50
@@ -92,6 +92,7 @@ service cloud.firestore {
             && validTags(d)
             && (!('pays' in d) || d.pays == null || d.pays is map)
             && (!('billOn' in d) || d.billOn == null || d.billOn is string)
+            && (!('recordedWith' in d) || d.recordedWith == null || d.recordedWith is string)
             && d.createdAt is timestamp && d.updatedAt is timestamp;
         }
 

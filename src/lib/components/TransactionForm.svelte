@@ -11,6 +11,7 @@
 		normalizeTag,
 		planSaveTransaction,
 		today,
+		type ChartWrite,
 		type DraftLine,
 		type LineSide,
 		type PaidLink,
@@ -22,12 +23,16 @@
 	import AccountPicker from './AccountPicker.svelte';
 	import { KIND } from './kind.ts';
 	import { SvelteSet } from 'svelte/reactivity';
+	import type { Snippet } from 'svelte';
 
 	let {
 		initial,
 		existing,
 		pays,
-		onsaved
+		onsaved,
+		extra,
+		extraWrites,
+		extraBlocked = false
 	}: {
 		initial: TransactionDraft;
 		/** The Transaction being edited; absent for a new one. */
@@ -35,6 +40,12 @@
 		/** The occurrence a new Transaction pays (Record). */
 		pays?: PaidLink;
 		onsaved: (id: string) => void;
+		/** More of the form, shown above Save (Record's planned charges). */
+		extra?: Snippet;
+		/** Writes saved together with this Transaction (its `id`), all or none. */
+		extraWrites?: (at: { now: Date; today: string; id: string }) => ChartWrite[];
+		/** The extra part has an error, so Save waits. */
+		extraBlocked?: boolean;
 	} = $props();
 
 	// svelte-ignore state_referenced_locally
@@ -114,9 +125,11 @@
 		saveError = '';
 		try {
 			const id = existing?.id ?? ledger.newTransactionId();
-			await ledger.commit(
-				planSaveTransaction(chart, draft, { id, now: new Date(), today: todayIso, existing, pays })
-			);
+			const now = new Date();
+			await ledger.commit([
+				...planSaveTransaction(chart, draft, { id, now, today: todayIso, existing, pays }),
+				...(extraWrites?.({ now, today: todayIso, id }) ?? [])
+			]);
 			onsaved(id);
 		} catch (err) {
 			saveError = `Could not save: ${(err as Error).message}`;
@@ -356,10 +369,12 @@
 		{#if shown('note')}<span class="text-xs text-red-600">{shown('note')}</span>{/if}
 	</label>
 
+	{@render extra?.()}
+
 	{#if saveError}<p class="text-red-600">{saveError}</p>{/if}
 	<div class="flex justify-end">
 		<button
-			disabled={ev.errors.length > 0 || saving}
+			disabled={ev.errors.length > 0 || extraBlocked || saving}
 			class="rounded bg-gray-900 px-4 py-2 text-white disabled:opacity-40"
 			>{saving ? 'Saving…' : 'Save'}</button
 		>

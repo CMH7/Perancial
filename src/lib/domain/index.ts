@@ -26,5 +26,6 @@ export * from './forecast-record.ts';
 export * from './forecast-sources.ts';
 export * from './forecast-alloc.ts';
 export * from './forecast-add.ts';
+export * from './forecast-charges.ts';
 export * from './account-picker.ts';
 export * from './forecast-order.ts';

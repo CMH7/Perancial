@@ -4,7 +4,8 @@
 	// `?takeOn=<installmentId>&variant=purchase|move-debt|card-payment[&to=<id>]` prefills taking on
 	// an Installment Plan (never linked); `?installment=<id>&due=<date>` records that row, linked.
 	// From the Forecast, `&sources=<account:centavos,…>` pays those Paying sources and
-	// `&back=/forecast?…` returns there after saving.
+	// `&back=/forecast?…` returns there after saving. Recording a Liability payment also offers
+	// its unpaid planned charges, recorded with it on their own dates.
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
@@ -13,11 +14,15 @@
 		addDays,
 		duplicateDraft,
 		emptyDraft,
+		formatAmount,
 		forecastRecordDraft,
 		installmentRecordDraft,
 		occurrencesOf,
 		occurrenceStatus,
+		parseAmount,
 		parsePicks,
+		plannedCharges,
+		planRecordCharges,
 		recordDraft,
 		shortDate,
 		takeOnDraft,
@@ -26,6 +31,7 @@
 		type TakeOn
 	} from '#lib/domain/index.ts';
 	import { ledger } from '#lib/ledger.svelte.ts';
+	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 
 	/** Bumped after each save so the form starts over. */
 	let round = $state(0);
@@ -79,6 +85,51 @@
 	const fromForecast = (draft: ReturnType<typeof emptyDraft>) =>
 		picks.length ? forecastRecordDraft(draft, picks) : draft;
 
+	// Recording a Liability payment: its planned charges not yet recorded, ticked by default.
+	const charges = $derived.by(() => {
+		if (!recording) return [];
+		const { chart } = ledger;
+		const occ = recording.view.occurrence;
+		const liability = occ.version.lines.find(
+			(l) => l.side === 'to' && !l.fee && chart.account(l.accountId)?.type === 'liability'
+		);
+		if (!liability) return [];
+		const input = { chart, scheduled: ledger.scheduled, installments: ledger.installments };
+		return plannedCharges(input, liability.accountId, occ.date, { today: todayIso });
+	});
+	const amountText = (c: number | null) =>
+		c === null ? '' : `${Math.floor(c / 100)}.${String(c % 100).padStart(2, '0')}`;
+	const ticked = new SvelteSet<string>();
+	const amounts = new SvelteMap<string, string>();
+	let chargesFor = $state('');
+	$effect(() => {
+		const key = charges.map((c) => c.key).join('|');
+		if (key === chargesFor) return;
+		chargesFor = key;
+		ticked.clear();
+		amounts.clear();
+		for (const c of charges) {
+			amounts.set(c.key, amountText(c.amount));
+			if (c.blocked !== 'later' && c.amount !== null) ticked.add(c.key);
+		}
+	});
+	const centsOf = (key: string) => {
+		const cents = parseAmount(amounts.get(key) ?? '');
+		return cents !== null && cents > 0 ? cents : null;
+	};
+	const chosen = $derived(charges.filter((c) => ticked.has(c.key) && c.blocked !== 'later'));
+	const chargesBlocked = $derived(chosen.some((c) => centsOf(c.key) === null));
+	const chargeWrites = ({ now, today, id }: { now: Date; today: string; id: string }) =>
+		planRecordCharges(
+			ledger.chart,
+			chosen.map((charge) => ({
+				charge,
+				amount: centsOf(charge.key)!,
+				id: ledger.newTransactionId()
+			})),
+			{ now, today, recordedWith: id }
+		);
+
 	// The form copies this once when it mounts, so later changes don't reset what the user typed.
 	const initial = $derived(
 		round === 0 && recording
@@ -92,6 +143,46 @@
 						: emptyDraft({ today: todayIso })
 	);
 </script>
+
+{#snippet plannedSection()}
+	<section class="rounded-lg border border-sky-200 bg-sky-50 p-3 text-sm">
+		<h2 class="mb-1 text-xs font-semibold text-gray-600 uppercase">
+			Also record planned charges ({chosen.length} of {charges.length})
+		</h2>
+		<p class="mb-2 text-xs text-gray-500">
+			Each is recorded on its own date and pays its plan, saved together with this payment.
+		</p>
+		{#each charges as c (c.key)}
+			<div class="flex flex-wrap items-center gap-2 border-b border-sky-100 py-1">
+				<input
+					type="checkbox"
+					aria-label="Record {c.label}"
+					disabled={c.blocked === 'later'}
+					checked={ticked.has(c.key)}
+					onchange={() => (ticked.has(c.key) ? ticked.delete(c.key) : ticked.add(c.key))}
+				/>
+				<span class="flex-1">
+					{c.label}
+					<span class="text-xs text-gray-500">planned {shortDate(c.date, { year: false })}</span>
+					{#if c.blocked === 'later'}<span class="text-xs text-amber-700">
+							· not yet: dated after today</span
+						>{/if}
+				</span>
+				<input
+					value={amounts.get(c.key) ?? ''}
+					oninput={(e) => amounts.set(c.key, e.currentTarget.value)}
+					disabled={c.blocked === 'later' || !ticked.has(c.key)}
+					placeholder={c.amount === null ? 'Amount' : formatAmount(c.amount).replace('₱', '')}
+					aria-label="Amount for {c.label}"
+					class="w-28 rounded border-gray-300 py-0.5 text-right text-sm tabular-nums"
+				/>
+				{#if ticked.has(c.key) && c.blocked !== 'later' && centsOf(c.key) === null}
+					<span class="w-full text-right text-xs text-red-600">Enter an amount like 1,234.50</span>
+				{/if}
+			</div>
+		{/each}
+	</section>
+{/snippet}
 
 <main class="mx-auto max-w-4xl px-4 py-8">
 	{#if ledger.error}
@@ -129,6 +220,9 @@
 			<TransactionForm
 				{initial}
 				pays={round === 0 ? (recording?.pays ?? recordingRow?.pays) : undefined}
+				extra={round === 0 && charges.length ? plannedSection : undefined}
+				extraWrites={round === 0 && charges.length ? chargeWrites : undefined}
+				extraBlocked={round === 0 && chargesBlocked}
 				onsaved={(id) => {
 					// eslint-disable-next-line svelte/no-navigation-without-resolve -- checked /forecast path
 					if (back && round === 0 && (recording || recordingRow)) return goto(back);
