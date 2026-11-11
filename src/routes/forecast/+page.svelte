@@ -12,6 +12,7 @@
 	import {
 		buildForecast,
 		expectedAtEnd,
+		shortAtEnd,
 		cutoffOf,
 		formatAmount,
 		formatPicks,
@@ -59,6 +60,7 @@
 	const expected = $derived(
 		ledger.ready ? expectedAtEnd(input, cutoff) : new Map<string, number>()
 	);
+	const short = $derived(view ? shortAtEnd(view, expected) : 0);
 
 	const name = (id: string) =>
 		ledger.chart
@@ -320,11 +322,14 @@
 						Unfunded <b class="tabular-nums">{formatAmount(view.totals.unfunded)}</b>
 					</div>
 					<div
-						class="rounded-lg border px-3 py-1.5 {view.totals.short
+						class="rounded-lg border px-3 py-1.5 {short
 							? 'border-red-300 bg-red-50 text-red-700'
 							: 'bg-white'}"
+						title={expected.size
+							? 'Funding Accounts expected to end this Cut-off below zero, added up'
+							: 'Funding Accounts whose Planned left is below zero, added up'}
 					>
-						Short <b class="tabular-nums">{formatAmount(view.totals.short)}</b>
+						Short <b class="tabular-nums">{formatAmount(short)}</b>
 					</div>
 				</div>
 			</div>

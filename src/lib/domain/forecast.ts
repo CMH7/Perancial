@@ -818,6 +818,18 @@ export function expectedAtEnd(input: ForecastInput, cutoff: IsoDate): Map<string
 	return out;
 }
 
+/**
+ * Short: what the Funding Accounts are expected to end below zero by, added up (a negative
+ * amount, or 0). It reads Expected at end; a Cut-off already over has none, so it reads
+ * Planned left there (`totals.short`).
+ */
+export function shortAtEnd(view: ForecastView, expected: Map<string, number>): number {
+	if (expected.size === 0) return view.totals.short;
+	return view.lanes
+		.filter((l) => l.funding)
+		.reduce((s, l) => s + Math.min(0, expected.get(l.accountId) ?? l.plannedLeft), 0);
+}
+
 function buildLanes(
 	ctx: Ctx,
 	fundingAccounts: string[],
