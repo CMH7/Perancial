@@ -426,6 +426,15 @@ describe('Bill with next payment', () => {
 		expect(card.charges!.map((c) => c.label)).toEqual(['Music']);
 		expect(card.total).toBe(15_000);
 	});
+
+	it('keeps the purchase date of a recorded charge billed later', () => {
+		const later = { ...buffet, billOn: '2026-11-26' };
+		const chart = buildChart(accounts, [later, loanPayment, groceries]);
+		const f = buildForecast(input({ chart }), '2026-12-31');
+		const card = f.outflows.find((o) => o.key === 'scheduled:cardpay:2026-12-25')!;
+		const charge = card.charges!.find((c) => c.txId === 'buffet')!;
+		expect(charge).toMatchObject({ date: '2026-11-26', purchased: buffet.date });
+	});
 });
 
 describe('Sections', () => {
