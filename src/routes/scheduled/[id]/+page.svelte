@@ -25,7 +25,15 @@
 	const plan = $derived(ledger.scheduled.find((p) => p.id === page.params.id));
 	const v = $derived(plan?.versions.at(-1));
 	const next = $derived(plan && nextOccurrence(plan, { today: todayIso }));
-	const history = $derived(plan ? planHistory(chart, plan, { today: todayIso }) : []);
+	const history = $derived(
+		plan
+			? planHistory(chart, plan, {
+					today: todayIso,
+					scheduled: ledger.scheduled,
+					installments: ledger.installments
+				})
+			: []
+	);
 	const name = (id: string) => chart.account(id)?.name ?? '(deleted Account)';
 	const endText = $derived(
 		!plan

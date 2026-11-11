@@ -414,6 +414,39 @@ function derivedSection(list: ForecastSection[], name: string): SectionRef {
 		: { key: `derived:${name}`, name, kind: 'derived' };
 }
 
+/**
+ * An Occurrence's expected total and paid status. A Liability payment expects what was charged
+ * since the previous payment (plus additional Fees), unless an amount was set for this
+ * Occurrence, so a card payment whose amount varies can still be Paid. The Forecast and the
+ * Scheduled screens both judge it this way.
+ */
+export function expectedStatus(
+	input: ChargeInput,
+	plan: Scheduled,
+	occ: Occurrence,
+	{ today }: { today: IsoDate }
+): { total: number; varies: boolean; charges?: Charge[]; status: PaidStatus } {
+	const { chart } = input;
+	const lines = occ.version.lines;
+	const liability = lines.find(
+		(l) => l.side === 'to' && !l.fee && chart.account(l.accountId)?.type === 'liability'
+	);
+	const charges = liability ? chargesFor(input, liability.accountId, occ.date) : undefined;
+	let total = occ.total ?? 0;
+	if (charges && charges.length && !plan.occurrences[occ.due]?.amounts) {
+		const additional = lines.reduce(
+			(s, l, k) => s + (l.fee === 'additional' ? (occ.amounts[k] ?? 0) : 0),
+			0
+		);
+		total = charges.reduce((s, c) => s + c.amount, 0) + additional;
+	}
+	const varies = occ.total === null && !(charges && charges.length);
+	const status = varies
+		? occurrenceStatus(chart, occ, { today })
+		: paidStatus(chart, scheduledLink(plan.id, occ.due), { ...occ, total }, { today });
+	return { total, varies, charges, status };
+}
+
 function outflowFromOccurrence(ctx: Ctx, plan: Scheduled, occ: Occurrence): ForecastOutflow {
 	const { chart } = ctx.input;
 	const link = scheduledLink(plan.id, occ.due);
@@ -430,18 +463,10 @@ function outflowFromOccurrence(ctx: Ctx, plan: Scheduled, occ: Occurrence): Fore
 		lines.reduce((s, l, k) => s + (l.fee === mode ? (occ.amounts[k] ?? 0) : 0), 0);
 	const additional = feeSum('additional');
 	const less = feeSum('less');
-	const charges = liability ? chargesFor(ctx.input, liability.accountId, occ.date) : undefined;
 	const change = plan.occurrences[occ.due];
-	let total = occ.total ?? 0;
-	// A Liability payment expects what was charged, unless an amount was set for this Occurrence.
-	if (charges && charges.length && !change?.amounts)
-		total = charges.reduce((s, c) => s + c.amount, 0) + additional;
-	const varies = occ.total === null && !(charges && charges.length);
-
-	// Judged against the expected total, so a card payment whose amount varies can still be Paid.
-	const status = varies
-		? occurrenceStatus(chart, occ, { today: ctx.input.today })
-		: paidStatus(chart, link, { ...occ, total }, { today: ctx.input.today });
+	const { total, varies, charges, status } = expectedStatus(ctx.input, plan, occ, {
+		today: ctx.input.today
+	});
 	const from = lines.flatMap((l, k) => (l.side === 'from' ? [{ l, amount: occ.amounts[k] }] : []));
 	const defaults: PayingSource[] =
 		from.length === 1
