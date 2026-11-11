@@ -60,7 +60,9 @@
 	}
 
 	const chart = $derived(ledger.chart);
-	const allUpcoming = $derived(upcoming(chart, ledger.scheduled, { today: todayIso }));
+	const allUpcoming = $derived(
+		upcoming(chart, ledger.scheduled, { today: todayIso, installments: ledger.installments })
+	);
 	// Overdue (oldest first) gets its own tab; Upcoming keeps today and the next 30 days.
 	const allOverdue = $derived(allUpcoming.filter((v) => v.status.overdue));
 	const allDue = $derived(allUpcoming.filter((v) => !v.status.overdue));

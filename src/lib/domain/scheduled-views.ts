@@ -1,15 +1,17 @@
 // What the Scheduled screen shows (Upcoming, a plan's history, its next date) and the plan editor's
 // checks and writes. Pure TypeScript, no Firebase imports.
 import type { Chart, IsoDate } from './chart.ts';
+import { expectedStatus } from './forecast.ts';
 import { parseAmount } from './money.ts';
-import { PlanEnd, RepeatRule, type PlanLine, type PlanVersion, type Scheduled } from './schemas.ts';
 import {
-	addDays,
-	occurrencesOf,
-	occurrenceStatus,
-	type Occurrence,
-	type OccurrenceStatus
-} from './scheduled.ts';
+	PlanEnd,
+	RepeatRule,
+	type Installment,
+	type PlanLine,
+	type PlanVersion,
+	type Scheduled
+} from './schemas.ts';
+import { addDays, occurrencesOf, type Occurrence, type OccurrenceStatus } from './scheduled.ts';
 import {
 	lineAccountErrors,
 	normalizeTags,
@@ -28,15 +30,16 @@ export const UPCOMING_DAYS = 30;
 export function upcoming(
 	chart: Chart,
 	plans: Scheduled[],
-	{ today }: { today: IsoDate }
+	{ today, installments = [] }: { today: IsoDate; installments?: Installment[] }
 ): OccurrenceView[] {
 	const until = addDays(today, UPCOMING_DAYS);
+	const input = { chart, scheduled: plans, installments };
 	const views = plans.flatMap((plan) =>
 		occurrencesOf(plan, { from: EARLIEST, to: until })
 			.map((occurrence) => ({
 				plan,
 				occurrence,
-				status: occurrenceStatus(chart, occurrence, { today })
+				status: expectedStatus(input, plan, occurrence, { today }).status
 			}))
 			.filter(({ occurrence, status }) =>
 				status.status === 'paid' || status.status === 'skipped'
@@ -56,13 +59,18 @@ export function upcoming(
 export function planHistory(
 	chart: Chart,
 	plan: Scheduled,
-	{ today }: { today: IsoDate }
+	{
+		today,
+		scheduled = [plan],
+		installments = []
+	}: { today: IsoDate; scheduled?: Scheduled[]; installments?: Installment[] }
 ): OccurrenceView[] {
+	const input = { chart, scheduled, installments };
 	return occurrencesOf(plan, { from: EARLIEST, to: addDays(today, 3660) })
 		.map((occurrence) => ({
 			plan,
 			occurrence,
-			status: occurrenceStatus(chart, occurrence, { today })
+			status: expectedStatus(input, plan, occurrence, { today }).status
 		}))
 		.filter(({ occurrence, status }) => occurrence.date < today || status.status === 'paid')
 		.reverse();

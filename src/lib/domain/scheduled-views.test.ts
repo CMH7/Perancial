@@ -47,6 +47,7 @@ const accounts = [
 	account('banks', 'asset', 'asset'),
 	account('bpi', 'asset', 'banks'),
 	account('rent', 'expense', 'expense'),
+	account('card', 'liability', 'liability'),
 	account('bank-fees', 'expense', 'expense'),
 	account('old', 'asset', 'asset', { archived: true })
 ];
@@ -227,5 +228,55 @@ describe('describeRule', () => {
 			'Every 2 weeks on Friday'
 		);
 		expect(describeRule({ type: 'yearly', start: '2026-03-01' })).toBe('Yearly on 1 Mar');
+	});
+});
+
+describe('A card payment whose amount varies', () => {
+	// Pays the card on the 9th; the amount is whatever was charged since the last payment.
+	const cardPay = plan('cardpay', 9, {
+		versions: [
+			{
+				from: '2026-10-09',
+				description: 'Pay card',
+				note: '',
+				tags: [],
+				lines: [
+					{ accountId: 'bpi', side: 'from', amount: null },
+					{ accountId: 'card', side: 'to', amount: null }
+				],
+				rule: { type: 'monthly', day: 9, start: '2026-10-09' }
+			}
+		]
+	});
+	const soa = tx('soa', '2026-10-20', [
+		['rent', 3_167_813],
+		['card', -3_167_813]
+	]);
+	const paid = (amount: number) => ({
+		...tx('pay', '2026-11-07', [
+			['bpi', -amount],
+			['card', amount]
+		]),
+		pays: { plan: 'scheduled' as const, planId: 'cardpay', due: '2026-11-09' }
+	});
+	const context = { scheduled: [cardPay], installments: [] };
+
+	it('is Paid once its payments cover what was charged, as on the Forecast', () => {
+		const chart = buildChart(accounts, [soa, paid(3_167_813)]);
+		const nov = planHistory(chart, cardPay, { today, ...context }).find(
+			(h) => h.occurrence.due === '2026-11-09'
+		)!;
+		expect(nov.status).toMatchObject({ status: 'paid', remaining: 0, overdue: false });
+		expect(
+			upcoming(chart, [cardPay], { today, installments: [] }).map((u) => u.occurrence.due)
+		).not.toContain('2026-11-09');
+	});
+
+	it('is Partly paid while short of what was charged', () => {
+		const chart = buildChart(accounts, [soa, paid(1_000_000)]);
+		const nov = planHistory(chart, cardPay, { today, ...context }).find(
+			(h) => h.occurrence.due === '2026-11-09'
+		)!;
+		expect(nov.status).toMatchObject({ status: 'partly-paid', remaining: 2_167_813 });
 	});
 });
