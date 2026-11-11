@@ -61,7 +61,7 @@
 	const peso = (c: number) => formatAmount(c);
 </script>
 
-<main class="max-w-5xl px-8 py-6">
+<main class="page-pad">
 	<a href={resolve('/installments')} class="text-sm text-gray-500">← Installments</a>
 	{#if ledger.error}
 		<p class="mt-4 rounded-lg bg-red-50 p-4 text-sm text-red-800">{ledger.error}</p>
@@ -78,11 +78,15 @@
 						>Internal</span
 					>{/if}
 			</h1>
-			<div class="flex gap-3 text-sm">
-				<button class="text-gray-600 hover:text-gray-900" onclick={() => (dialog = 'terms')}
-					>Edit terms</button
+			<div class="flex gap-2 text-sm">
+				<button
+					class="rounded-md bg-gray-900 px-4 py-1.5 font-medium text-white hover:bg-gray-700"
+					onclick={() => (dialog = 'terms')}>Edit terms</button
 				>
-				<button class="text-red-700" onclick={() => (dialog = 'delete')}>Delete</button>
+				<button
+					class="rounded-md border border-red-200 bg-white px-4 py-1.5 text-red-700 hover:bg-red-50"
+					onclick={() => (dialog = 'delete')}>Delete</button
+				>
 			</div>
 		</div>
 		{#if plan.madeFrom}

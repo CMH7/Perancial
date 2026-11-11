@@ -43,12 +43,17 @@
 	}
 </script>
 
-<main class="max-w-4xl px-8 py-6">
+<main class="max-w-6xl page-pad">
 	{#if !ledger.ready}
 		<p class="text-sm text-gray-500">Loading your plans…</p>
 	{:else if !plan}
 		<p class="text-sm text-gray-500">This plan no longer exists.</p>
 	{:else}
+		<a
+			href={resolve('/scheduled/[id]', { id: plan.id })}
+			class="mb-3 inline-block text-sm text-sky-700 hover:underline"
+			>← {plan.versions.at(-1)!.description}</a
+		>
 		{#key `${plan.id}:${from}`}
 			<PlanEditor
 				initial={planDraftFrom(plan, from ?? undefined)}
@@ -61,6 +66,7 @@
 					? `${replaced} ${replaced === 1 ? 'occurrence has its' : 'occurrences have their'} own changes from ${shortDate(from!)} on; saving replaces them.`
 					: ''}
 				onsubmit={save}
+				oncancel={() => goto(resolve('/scheduled/[id]', { id: plan.id }))}
 			/>
 		{/key}
 	{/if}

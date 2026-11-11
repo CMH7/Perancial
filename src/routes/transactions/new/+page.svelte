@@ -184,7 +184,7 @@
 	</section>
 {/snippet}
 
-<main class="mx-auto max-w-4xl px-4 py-8">
+<main class="mx-auto max-w-5xl page-pad">
 	{#if ledger.error}
 		<p class="rounded-lg bg-red-50 p-4 text-sm text-red-800">{ledger.error}</p>
 	{:else if !ledger.ready}
@@ -219,6 +219,7 @@
 		{#key round}
 			<TransactionForm
 				{initial}
+				oncancel={() => history.back()}
 				pays={round === 0 ? (recording?.pays ?? recordingRow?.pays) : undefined}
 				extra={round === 0 && charges.length ? plannedSection : undefined}
 				extraWrites={round === 0 && charges.length ? chargeWrites : undefined}

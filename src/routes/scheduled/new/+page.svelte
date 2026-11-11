@@ -25,10 +25,19 @@
 	}
 </script>
 
-<main class="max-w-4xl px-8 py-6">
+<main class="max-w-6xl page-pad">
 	{#if !ledger.ready}
 		<p class="text-sm text-gray-500">Loading your accounts…</p>
 	{:else}
-		<PlanEditor {initial} heading="New plan" submitLabel="Create plan" onsubmit={create} />
+		<a href={resolve('/scheduled')} class="mb-3 inline-block text-sm text-sky-700 hover:underline"
+			>← Scheduled</a
+		>
+		<PlanEditor
+			{initial}
+			heading="New plan"
+			submitLabel="Create plan"
+			onsubmit={create}
+			oncancel={() => goto(resolve('/scheduled'))}
+		/>
 	{/if}
 </main>

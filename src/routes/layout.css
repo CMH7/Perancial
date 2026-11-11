@@ -167,3 +167,14 @@ dialog {
 .bg-white:is(.rounded-lg, .rounded-xl, .rounded-2xl):not([class*='shadow-']) {
 	box-shadow: var(--paper-shadow);
 }
+
+/* The main area's padding on every page except Forecast and Settings: roomier on wide screens. */
+@utility page-pad {
+	padding: 1.5rem 2rem;
+	@media (width >= 80rem) {
+		padding-inline: 3rem;
+	}
+	@media (width >= 96rem) {
+		padding-inline: 4.5rem;
+	}
+}

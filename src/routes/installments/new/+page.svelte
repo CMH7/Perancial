@@ -136,7 +136,7 @@
 	}
 </script>
 
-<main class="max-w-6xl px-8 py-6">
+<main class="page-pad">
 	{#if ledger.error}
 		<p class="rounded-lg bg-red-50 p-4 text-sm text-red-800">{ledger.error}</p>
 	{:else if !ledger.ready}
@@ -182,6 +182,7 @@
 					today={todayIso}
 					{startedOn}
 					onsubmit={create}
+					oncancel={() => history.back()}
 				/>
 			{/key}
 		{/if}

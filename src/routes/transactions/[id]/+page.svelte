@@ -15,7 +15,7 @@
 	);
 </script>
 
-<main class="mx-auto max-w-4xl px-4 py-8">
+<main class="mx-auto max-w-5xl page-pad">
 	{#if ledger.error}
 		<p class="rounded-lg bg-red-50 p-4 text-sm text-red-800">{ledger.error}</p>
 	{:else if !ledger.ready}
@@ -31,6 +31,10 @@
 			>
 		</p>
 	{:else}
+		<a
+			href={resolve('/transactions')}
+			class="mb-3 inline-block text-sm text-sky-700 hover:underline">← Journal</a
+		>
 		{#if saved}
 			<p class="mb-4 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-900">Saved.</p>
 		{/if}
@@ -39,6 +43,7 @@
 				initial={draftFromTransaction(tx)}
 				existing={tx}
 				onsaved={() => (saved = true)}
+				oncancel={() => history.back()}
 			/>
 		{/key}
 	{/if}
