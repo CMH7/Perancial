@@ -11,6 +11,8 @@
 		type PickerSort
 	} from '#lib/domain/index.ts';
 	import { tick } from 'svelte';
+	import CreateAccountForm from './CreateAccountForm.svelte';
+	import Modal from './Modal.svelte';
 
 	let {
 		value = $bindable(''),
@@ -21,6 +23,7 @@
 		note,
 		showBalance = true,
 		disabled = false,
+		creatable = true,
 		onchange,
 		class: klass = ''
 	}: {
@@ -35,6 +38,8 @@
 		note?: (id: string) => string | undefined;
 		showBalance?: boolean;
 		disabled?: boolean;
+		/** Offer "New Account" (a + by the search box) to create one and pick it. */
+		creatable?: boolean;
 		onchange?: (id: string) => void;
 		class?: string;
 	} = $props();
@@ -69,6 +74,15 @@
 		return out;
 	});
 	const choices = $derived(rows.filter((r) => !r.header));
+
+	// Creating an Account from the picker: the form opens over the page, named after the search,
+	// under the top-level Group of the filtered (or first) Account Type, then picks what it made.
+	let creating = $state<string | null>(null);
+	const newParent = $derived(type !== 'all' ? type : (items[0]?.type ?? 'asset'));
+	function startCreate() {
+		creating = query.trim();
+		close(false);
+	}
 
 	function place() {
 		if (!trigger) return;
@@ -123,6 +137,9 @@
 			const n = choices.length;
 			if (n) active = (active + (e.key === 'ArrowDown' ? 1 : -1) + n) % n;
 			scrollActive();
+		} else if (e.key === 'Enter' && creatable && !choices.length && query.trim()) {
+			e.preventDefault();
+			startCreate();
 		} else if (e.key === 'Enter' || (e.key === 'Tab' && !e.shiftKey && query)) {
 			const c = choices[active];
 			if (c) {
@@ -187,16 +204,27 @@
 		style:max-height="{pos.maxHeight}px"
 	>
 		<div class="space-y-2 border-b p-2">
-			<input
-				bind:this={search}
-				bind:value={query}
-				onkeydown={searchKey}
-				placeholder="Search Accounts…"
-				aria-label="Search Accounts"
-				aria-controls="{uid}-list"
-				aria-activedescendant={choices[active] ? `${uid}-${choices[active].id}` : undefined}
-				class="w-full rounded border-gray-300 py-1 text-sm"
-			/>
+			<div class="flex gap-1">
+				<input
+					bind:this={search}
+					bind:value={query}
+					onkeydown={searchKey}
+					placeholder="Search Accounts…"
+					aria-label="Search Accounts"
+					aria-controls="{uid}-list"
+					aria-activedescendant={choices[active] ? `${uid}-${choices[active].id}` : undefined}
+					class="w-full rounded border-gray-300 py-1 text-sm"
+				/>
+				{#if creatable}
+					<button
+						type="button"
+						class="shrink-0 rounded border border-gray-300 px-2 text-gray-600 hover:bg-gray-100"
+						title="New Account"
+						aria-label="New Account"
+						onpointerdown={(e) => (e.preventDefault(), startCreate())}>+</button
+					>
+				{/if}
+			</div>
 			<div class="flex flex-wrap items-center gap-1 text-xs">
 				{#if types.length > 1}
 					{#each [{ type: 'all' as const, label: 'All' }, ...types] as t (t.type)}
@@ -270,8 +298,33 @@
 					</li>
 				{/if}
 			{:else}
-				<li class="px-3 py-3 text-gray-500">No Account matches.</li>
+				<li class="px-3 py-3 text-gray-500">
+					No Account matches.
+					{#if creatable && query.trim()}
+						<button
+							type="button"
+							class="ml-1 text-gray-800 underline"
+							onpointerdown={(e) => (e.preventDefault(), startCreate())}
+							>Create “{query.trim()}”</button
+						>
+					{/if}
+				</li>
 			{/each}
 		</ul>
 	</div>
+{/if}
+
+{#if creating !== null}
+	<Modal onclose={() => (creating = null)}>
+		<CreateAccountForm
+			parentId={newParent}
+			name={creating}
+			types={[...new Set(items.map((i) => i.type))]}
+			onclose={() => (creating = null)}
+			oncreated={(_, leaves) => {
+				creating = null;
+				if (leaves[0]) pick(leaves[0]);
+			}}
+		/>
+	</Modal>
 {/if}

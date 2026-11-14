@@ -184,6 +184,18 @@ export function planCreateAccount(
 	return writes;
 }
 
+/**
+ * The Leaf Accounts a `planCreateAccount` result leaves behind, in order: the new Account, or its
+ * children when it is a Group. Lets a picker select what was just created.
+ */
+export function newLeafIds(writes: readonly ChartWrite[]): string[] {
+	const accounts = writes.filter(
+		(w): w is Extract<ChartWrite, { op: 'setAccount' }> => w.op === 'setAccount'
+	);
+	const parents = new Set(accounts.map((w) => w.data.parentId));
+	return accounts.filter((w) => !parents.has(w.id)).map((w) => w.id);
+}
+
 /** A typed amount (e.g. "₱1,234.50") as integer centavos; empty means zero. */
 export const AmountText = z.string().transform((text, ctx) => {
 	const centavos = parseAmount(text);

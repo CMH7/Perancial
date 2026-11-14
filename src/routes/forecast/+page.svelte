@@ -9,6 +9,8 @@
 	import ForecastAddPanel from '#lib/components/ForecastAddPanel.svelte';
 	import Drawer from '#lib/components/Drawer.svelte';
 	import ForecastDrawer from '#lib/components/ForecastDrawer.svelte';
+	import FundingWallet from '#lib/components/FundingWallet.svelte';
+	import PesoMark from '#lib/components/PesoMark.svelte';
 	import {
 		buildForecast,
 		expectedAtEnd,
@@ -33,6 +35,7 @@
 		type ForecastInput,
 		type ForecastOutflow
 	} from '#lib/domain/index.ts';
+	import { accountItems } from '#lib/account-items.svelte.ts';
 	import { ledger } from '#lib/ledger.svelte.ts';
 
 	const todayIso = today();
@@ -69,6 +72,13 @@
 			.map((a) => a.name)
 			.join(' › ') || '(deleted Account)';
 	const day = (d: string) => shortDate(d, { year: false });
+	/** The Group an Account sits in (its Account Type's top-level Group at the top). */
+	const groupOf = (id: string) =>
+		ledger.chart
+			.path(id)
+			.slice(0, -1)
+			.map((a) => a.name)
+			.at(-1) ?? '';
 
 	// Selecting, hovering and opening an Outflow: every card of it lights up in every lane.
 	// A card is one Paying source of an Outflow (`from`), or its Unfunded part (`from` null).
@@ -245,6 +255,8 @@
 	function manage() {
 		picked = [...(view?.fundingAccounts ?? [])];
 		fundingError = '';
+		adding = null;
+		openKey = null;
 		managing = true;
 	}
 	async function saveFunding(ids: string[]) {
@@ -256,10 +268,11 @@
 			fundingError = (err as Error).message;
 		}
 	}
-	const candidates = $derived(
-		fundingCandidates(ledger.chart)
-			.map((a) => ({ id: a.id, label: name(a.id) }))
-			.sort((a, b) => a.label.localeCompare(b.label))
+	// The wallet's cards: every Account that can be a Funding Account, in chart order.
+	const walletItems = $derived(
+		accountItems
+			.for(fundingCandidates(ledger.chart).map((a) => a.id))
+			.sort((a, b) => a.order - b.order)
 	);
 
 	function recordInflow(planId: string, due: string) {
@@ -356,11 +369,13 @@
 				>
 				<button
 					class="rounded border bg-white px-2 py-1"
-					onclick={() => ((adding = 'outflow'), (openKey = null))}>+ Outflow</button
+					onclick={() => ((adding = 'outflow'), (openKey = null), (managing = false))}
+					>+ Outflow</button
 				>
 				<button
 					class="rounded border bg-white px-2 py-1"
-					onclick={() => ((adding = 'inflow'), (openKey = null))}>+ Inflow</button
+					onclick={() => ((adding = 'inflow'), (openKey = null), (managing = false))}
+					>+ Inflow</button
 				>
 				{#if !view.storedFunding}<span class="text-xs text-gray-500"
 						>Same as the previous Cut-off until you change them.</span
@@ -379,37 +394,6 @@
 					{name}
 					onclose={() => (allocating = false)}
 				/>
-			{/if}
-
-			{#if managing}
-				<div class="mb-3 max-w-xl rounded-lg border bg-white p-3 text-sm">
-					<p class="mb-2 font-medium">Funding Accounts for {shortDate(cutoff)}</p>
-					<div class="grid gap-1 sm:grid-cols-2">
-						{#each candidates as c (c.id)}
-							<label class="flex items-center gap-2">
-								<input
-									type="checkbox"
-									checked={picked.includes(c.id)}
-									onchange={(e) =>
-										(picked = e.currentTarget.checked
-											? [...picked, c.id]
-											: picked.filter((x) => x !== c.id))}
-								/>
-								{c.label}
-							</label>
-						{:else}<span class="text-gray-500">No Asset Leaf Accounts yet.</span>{/each}
-					</div>
-					{#if fundingError}<p class="mt-2 text-red-600">{fundingError}</p>{/if}
-					<div class="mt-3 flex gap-2">
-						<button
-							class="rounded bg-gray-900 px-3 py-1 text-white"
-							onclick={() => saveFunding(picked)}>Save</button
-						>
-						<button class="rounded border px-3 py-1" onclick={() => (managing = false)}
-							>Cancel</button
-						>
-					</div>
-				</div>
 			{/if}
 
 			{#snippet card(
@@ -460,7 +444,7 @@
 						e.stopPropagation();
 						selected = { key: o.key, from };
 					}}
-					ondblclick={() => ((openKey = o.key), (adding = null))}
+					ondblclick={() => ((openKey = o.key), (adding = null), (managing = false))}
 					onmouseenter={() => (hovered = o.key)}
 					onmouseleave={() => {
 						hovered = null;
@@ -544,70 +528,87 @@
 						onclick={() => lane.funding && laneClick(lane.accountId)}
 					>
 						{#if lane.funding}
-							<!-- Drag the header (or arrow keys on it) to reorder the Funding Accounts. -->
-							<h2
-								class="flex cursor-grab items-center gap-1 font-semibold"
-								draggable="true"
-								ondragstart={(e) => {
-									e.stopPropagation();
-									laneDrag = lane.accountId;
-								}}
-								ondragend={() => ((laneDrag = null), (laneAt = null))}
+							{@const atEnd = expected.get(lane.accountId)}
+							{@const headline = atEnd ?? lane.plannedLeft}
+							<!-- The lane's head is drawn like its card in the Funding Accounts wallet:
+							     graphite, with the headline figure on it. The headline is Expected at end;
+							     a Cut-off already over has none, so Planned left leads there. -->
+							<div
+								class="relative -mx-3 -mt-3 mb-3 overflow-hidden rounded-t-xl p-3"
+								style="color:#f3f1ec;background:linear-gradient(155deg,#34332f 0%,#232321 60%,#191918 100%)"
 							>
-								<button
-									class="cursor-grab rounded px-0.5 text-gray-400 hover:bg-gray-100"
-									aria-label="Move {name(lane.accountId)} (arrow keys)"
-									title="Drag to reorder, or use the arrow keys"
-									onclick={(e) => e.stopPropagation()}
-									onkeydown={(e) => laneKey(e, lane.accountId)}>⠿</button
-								>{name(lane.accountId)}
-							</h2>
+								<div
+									class="pointer-events-none absolute inset-0"
+									style="background:linear-gradient(115deg, transparent 45%, rgb(255 255 255 / 0.05) 55%, transparent 65%)"
+								></div>
+								<!-- Drag the header (or arrow keys on it) to reorder the Funding Accounts. -->
+								<h2
+									class="relative flex cursor-grab items-center gap-1 font-medium"
+									draggable="true"
+									ondragstart={(e) => {
+										e.stopPropagation();
+										laneDrag = lane.accountId;
+									}}
+									ondragend={() => ((laneDrag = null), (laneAt = null))}
+								>
+									<button
+										class="cursor-grab rounded px-0.5 opacity-40 hover:bg-white/10 hover:opacity-80"
+										aria-label="Move {name(lane.accountId)} (arrow keys)"
+										title="Drag to reorder, or use the arrow keys"
+										onclick={(e) => e.stopPropagation()}
+										onkeydown={(e) => laneKey(e, lane.accountId)}>⠿</button
+									><span class="min-w-0 flex-1 truncate"
+										>{ledger.chart.account(lane.accountId)?.name ?? name(lane.accountId)}</span
+									><PesoMark size={14} class="shrink-0 opacity-40" />
+								</h2>
+								<p class="relative truncate text-[11px] opacity-60">
+									{groupOf(lane.accountId)} · Balance today {formatAmount(lane.balanceToday)}
+								</p>
+								<div class="relative mt-3">
+									<div
+										class="text-[11px] opacity-60"
+										title={atEnd !== undefined
+											? 'Balance today plus what is still to receive, minus what is still to pay, through the end of this Cut-off'
+											: undefined}
+									>
+										{atEnd !== undefined ? 'Expected at end' : 'Planned left'}
+									</div>
+									<div
+										class="text-2xl font-semibold tabular-nums"
+										style:color={headline < 0 ? '#fca5a5' : undefined}
+									>
+										{formatAmount(headline)}
+									</div>
+									<div class="text-[11px] opacity-60">
+										in {formatAmount(lane.inn)} − out {formatAmount(lane.forecastedExp)} · left now
+										{formatAmount(lane.left)}
+									</div>
+									{#if lane.forecastedEAlloc}<div class="text-[11px] opacity-60">
+											E.Alloc {formatAmount(lane.eAlloc)} of {formatAmount(lane.forecastedEAlloc)}
+										</div>{/if}
+									{#if atEnd !== undefined}
+										<div
+											class="mt-2 flex justify-between border-t pt-2 text-[11px]"
+											style="border-color:rgb(255 255 255 / 0.1)"
+										>
+											<span class="opacity-60">Planned left</span>
+											<span
+												class="font-medium tabular-nums"
+												style:color={lane.plannedLeft < 0 ? '#fca5a5' : undefined}
+												>{formatAmount(lane.plannedLeft)}</span
+											>
+										</div>
+									{/if}
+								</div>
+							</div>
 						{:else}
 							<h2 class="font-semibold">{name(lane.accountId)}</h2>
-						{/if}
-						<p class="text-xs text-gray-500">Balance today {formatAmount(lane.balanceToday)}</p>
-						{#if !lane.funding}
+							<p class="text-xs text-gray-500">Balance today {formatAmount(lane.balanceToday)}</p>
 							<button
 								class="mt-2 rounded border px-2 py-0.5 text-xs"
 								onclick={() => saveFunding([...view.fundingAccounts, lane.accountId])}
 								>Use as Funding Account</button
 							>
-						{:else}
-							{@const atEnd = expected.get(lane.accountId)}
-							<!-- The headline is Expected at end, and colours the header; a Cut-off already over
-							     has none, so Planned left leads there. -->
-							<div
-								class="my-3 rounded-lg p-2 text-center {(atEnd ?? lane.plannedLeft) < 0
-									? 'bg-red-50 text-red-700'
-									: 'bg-emerald-50 text-emerald-800'}"
-							>
-								{#if atEnd !== undefined}
-									<div
-										class="text-xs"
-										title="Balance today plus what is still to receive, minus what is still to pay, through the end of this Cut-off"
-									>
-										Expected at end
-									</div>
-									<div class="text-xl font-semibold tabular-nums">{formatAmount(atEnd)}</div>
-								{:else}
-									<div class="text-xs">Planned left</div>
-									<div class="text-xl font-semibold tabular-nums">
-										{formatAmount(lane.plannedLeft)}
-									</div>
-								{/if}
-								<div class="text-xs">
-									in {formatAmount(lane.inn)} − out {formatAmount(lane.forecastedExp)} · left now
-									{formatAmount(lane.left)}
-								</div>
-								{#if lane.forecastedEAlloc}<div class="text-xs">
-										E.Alloc {formatAmount(lane.eAlloc)} of {formatAmount(lane.forecastedEAlloc)}
-									</div>{/if}
-								{#if atEnd !== undefined}<div class="mt-1 border-t border-current/20 pt-1 text-xs">
-										Planned left <span class="font-semibold tabular-nums"
-											>{formatAmount(lane.plannedLeft)}</span
-										>
-									</div>{/if}
-							</div>
 						{/if}
 
 						<h3 class="mt-2 text-xs font-medium text-gray-500 uppercase">In</h3>
@@ -683,7 +684,23 @@
 		{/if}
 	</main>
 
-	{#if adding && view}
+	{#if managing && view}
+		<Drawer
+			id="forecast-wallet"
+			width={520}
+			label="Funding Accounts"
+			onclose={() => (managing = false)}
+		>
+			<FundingWallet
+				items={walletItems}
+				bind:picked
+				title="Funding Accounts for {shortDate(cutoff)}"
+				error={fundingError}
+				onsave={() => saveFunding(picked)}
+				oncancel={() => (managing = false)}
+			/>
+		</Drawer>
+	{:else if adding && view}
 		<Drawer
 			id="forecast-add"
 			width={512}
