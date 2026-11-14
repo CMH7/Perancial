@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { buildChart } from './chart.ts';
-import { CreateAccountForm, createFormRules, planCreateAccount } from './create-account.ts';
+import {
+	CreateAccountForm,
+	createFormRules,
+	newLeafIds,
+	planCreateAccount
+} from './create-account.ts';
 import { account, now, opening, roots, tx } from './test-fixtures.ts';
 
 const chart = buildChart(
@@ -237,6 +242,40 @@ describe('planCreateAccount', () => {
 				}
 			}
 		]);
+	});
+});
+
+describe('newLeafIds', () => {
+	const ids = (...list: string[]) => {
+		const queue = [...list];
+		return () => queue.shift()!;
+	};
+	const plan = (parentId: string, children: string[], newIds: string[]) =>
+		planCreateAccount(
+			chart,
+			{
+				parentId,
+				name: 'New',
+				description: '',
+				openingBalance: 0,
+				children: children.map((name) => ({ name, description: '', openingBalance: 0 }))
+			},
+			{ newId: ids(...newIds), now }
+		);
+
+	it('is the new Account when it has no children', () => {
+		expect(newLeafIds(plan('asset', [], ['bpi']))).toEqual(['bpi']);
+	});
+
+	it('is the children, in order, when the new Account is a Group', () => {
+		expect(newLeafIds(plan('asset', ['Savings', 'Checking'], ['bdo', 's', 'c']))).toEqual([
+			's',
+			'c'
+		]);
+	});
+
+	it('is the renamed existing Account when a Leaf with money becomes a Group (ADR 0002)', () => {
+		expect(newLeafIds(plan('cash', [], ['cash-group']))).toEqual(['cash']);
 	});
 });
 
