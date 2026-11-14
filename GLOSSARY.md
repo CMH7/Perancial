@@ -44,6 +44,24 @@ _Avoid_: posting account, detail account
 An Account nested directly under another Account.
 _Avoid_: sub account (fine informally)
 
+**Credit Card**
+A Liability Leaf Account that bills its charges in monthly Statements. It knows its Statement Day and Due Day, so the Forecast finds its payments without a Scheduled Transaction. Still one of the five Account Types: a Liability.
+_Avoid_: card account, card spending (as the concept)
+
+**Statement**
+One billing period of a Credit Card: the charges billed from the day after the previous Statement Date through this one, payable by its Due Date.
+_Avoid_: SOA (fine informally), billing cycle
+
+**Statement Date**
+The day a Statement closes. A charge dated on or before it bills in that Statement; one dated after it bills in the next. Falls on the card's Statement Day, or the month's last day when the month is shorter.
+
+**Due Date**
+The day a Statement must be paid by. Falls on the card's Due Day, in the month after the Statement Date when the Due Day is smaller than the Statement Day.
+
+**Statement Balance**
+What a Statement asks the owner to pay: the sum of the charges billed in it, less refunds billed in it and any overpayment carried from the previous Statement, until the owner enters the amount the real Statement shows. Paying a Credit Card in the Forecast means paying its full Statement Balance. Payments into the card fill the oldest unpaid Statement first; a refund is not a payment.
+_Avoid_: SOA amount, minimum due (a different, smaller amount)
+
 **Opening Balance**
 The amount a Leaf Account held before the first Transaction recorded in it. It has no date of its own and counts toward the Balance as of any date. Only Asset and Liability Leaf Accounts have one.
 _Avoid_: starting amount, opening date
@@ -117,6 +135,16 @@ The Balance of an Asset or Liability Account counting only Cleared Transactions.
 **Tag**
 A short label on a Transaction that gathers related Transactions across Accounts and kinds, such as a trip, an event or a project. A tag never says where money is or what kind of money it is; that is what Accounts are for.
 _Avoid_: category, label (as a stand-in for an Account)
+
+**Person**
+A human involved in a Transaction: the owner (Me), a partner, a parent, a friend. Purely descriptive: a Person never holds money and never changes a Balance; Accounts do that. Merchants and companies are not Persons; the Expense or Income Account already names them. A Person can be linked to the Accounts that track money between the owner and them, such as what they owe the owner or what the owner owes them.
+_Avoid_: actor, party, contact
+
+**Me**
+The built-in Person who stands for the owner. Cannot be renamed or removed.
+
+**From Persons / To Persons**
+The Persons who sent and who received the money in one Transaction, each list optional and allowing several. They describe who was involved, separately from which Accounts moved.
 
 **Scheduled Transaction**
 A plan for a Transaction that repeats or happens once later: its Accounts, amounts and description, plus a repeat rule such as every cut-off, monthly on a day, or yearly. It never affects Balances; only the Transactions recorded from it do.
