@@ -343,6 +343,12 @@ export function chargesFor(input: ChargeInput, liabilityId: string, date: IsoDat
 		.at(-1);
 	const range = { from: addDays(prev ?? addDays(date, -31), 1), to: date };
 	const charges: Charge[] = [];
+	const onLiability = chart.transactionsFor(liabilityId);
+	// What recorded Transactions already charged to this Liability for each Scheduled Occurrence.
+	const recorded = new Map<string, number>();
+	for (const tx of onLiability)
+		if (tx.date !== null && tx.pays?.plan === 'scheduled')
+			recorded.set(keyOf(tx.pays), (recorded.get(keyOf(tx.pays)) ?? 0) + outOf(tx, liabilityId));
 
 	for (const { plan, occ } of occurrencesIn(scheduled, range)) {
 		if (occ.skipped) continue;
@@ -350,11 +356,16 @@ export function chargesFor(input: ChargeInput, liabilityId: string, date: IsoDat
 		if (k < 0 || occ.version.lines.some((l) => l.side === 'from' && isAsset(chart, l.accountId)))
 			continue;
 		const link = scheduledLink(plan.id, occ.due);
+		// A recorded charge is listed as its Transaction (below), billed on its own `billOn`; only
+		// what is still planned beyond it stays here. An amount that varies has nothing beyond it.
+		const planned = occ.amounts[k] ?? occ.total;
+		const done = recorded.get(keyOf(link)) ?? 0;
+		if (done > 0 && (planned === null || planned <= done)) continue;
 		charges.push({
 			key: keyOf(link),
 			label: occ.version.description,
 			date: occ.date,
-			amount: occ.amounts[k] ?? occ.total ?? 0,
+			amount: (planned ?? 0) - done,
 			from: 'scheduled',
 			link
 		});
@@ -374,9 +385,10 @@ export function chargesFor(input: ChargeInput, liabilityId: string, date: IsoDat
 				});
 			}
 	}
-	for (const tx of chart.transactionsFor(liabilityId)) {
-		// A recorded Transaction paying a Scheduled charge or Row is already listed as that item.
-		if (tx.date === null || tx.pays) continue;
+	for (const tx of onLiability) {
+		// A recorded Transaction paying a Row is already listed as that Row. One paying a Scheduled
+		// charge is listed here, so its recorded amount and `billOn` count.
+		if (tx.date === null || tx.pays?.plan === 'installment') continue;
 		const billed = tx.billOn ?? tx.date;
 		const charged = outOf(tx, liabilityId);
 		const repaid = tx.entries.some((e) => e.accountId === liabilityId && e.amount > 0);
