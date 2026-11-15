@@ -6,6 +6,7 @@ import {
 	planArchivePerson,
 	planDeletePerson,
 	planFillFromLinks,
+	personDetail,
 	personLabel,
 	planSavePerson,
 	prefillPersons,
@@ -178,6 +179,18 @@ describe('planFillFromLinks', () => {
 		]);
 		expect(writes[0]).toMatchObject({ data: { updatedAt: later } });
 	});
+
+	it('never changes a side that already lists a Person, even someone else', () => {
+		const other = {
+			...tx('other', '2026-11-10', [
+				['owed-by-partner', 100],
+				['bank', -100]
+			]),
+			toPersons: ['sibling']
+		};
+		const filled = buildChart(chart.all(), [other]);
+		expect(planFillFromLinks(filled, 'partner', { now })).toEqual([]);
+	});
 });
 
 describe('withLinkedPersons', () => {
@@ -211,5 +224,41 @@ describe('personLabel', () => {
 			'Old friend (archived)',
 			'Unknown person'
 		]);
+	});
+});
+
+describe('personDetail', () => {
+	const named = buildChart(chart.all(), [
+		...chart.transactions(),
+		{
+			...tx('dinner', '2026-11-05', [
+				['food', 30000],
+				['bank', -30000]
+			]),
+			fromPersons: ['me'],
+			toPersons: ['parent']
+		},
+		{
+			...tx('gift', '2026-11-07', [
+				['food', 10000],
+				['bank', -10000]
+			]),
+			fromPersons: ['parent']
+		}
+	]);
+
+	it('lists the Leaf Accounts linked to them, own or through a Group, and their net position', () => {
+		const detail = personDetail(named, 'parent');
+		expect(detail.accounts.map((a) => a.id)).toEqual(['payables-15th']);
+		expect(detail).toMatchObject({ owesYou: 0, youOwe: 20000, net: -20000 });
+		expect(personDetail(named, 'partner').accounts.map((a) => a.id)).toEqual([
+			'owed-by-partner',
+			'owe-partner'
+		]);
+	});
+
+	it('lists the Transactions that name them on either side, newest first', () => {
+		expect(personDetail(named, 'parent').transactions.map((t) => t.id)).toEqual(['gift', 'dinner']);
+		expect(personDetail(named, 'nobody').transactions).toEqual([]);
 	});
 });

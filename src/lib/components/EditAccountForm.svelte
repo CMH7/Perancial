@@ -11,6 +11,7 @@
 		today
 	} from '#lib/domain/index.ts';
 	import { ledger } from '#lib/ledger.svelte.ts';
+	import AccountPersonField from './AccountPersonField.svelte';
 	import CardTermsFields from './CardTermsFields.svelte';
 
 	let { accountId, onclose }: { accountId: string; onclose: () => void } = $props();
@@ -34,6 +35,7 @@
 	let statementDay = $state(startCard ? String(startCard.statementDay) : '');
 	let dueDay = $state(startCard ? String(startCard.dueDay) : '');
 	let endPlans = $state(true);
+	let personId = $state(start.rules.person.kind === 'editable' ? start.rules.person.current : null);
 	let errors = $state<Record<string, string>>({});
 	let saveError = $state('');
 	let saving = $state(false);
@@ -55,7 +57,8 @@
 			name,
 			description,
 			openingBalance: rules.opening.kind === 'editable' ? openingBalance : '',
-			card: rules.card.kind !== 'editable' ? undefined : isCard ? { statementDay, dueDay } : null
+			card: rules.card.kind !== 'editable' ? undefined : isCard ? { statementDay, dueDay } : null,
+			personId: rules.person.kind === 'editable' ? personId : undefined
 		});
 		if (!parsed.success) {
 			errors = Object.fromEntries(parsed.error.issues.map((i) => [i.path.join('.'), i.message]));
@@ -127,6 +130,10 @@
 			/>
 			<span class="text-xs text-gray-500">Group Account: the sum of its children.</span>
 		</label>
+	{/if}
+
+	{#if rules.person.kind === 'editable'}
+		<AccountPersonField bind:value={personId} inherited={rules.person.inherited} />
 	{/if}
 
 	{#if rules.card.kind === 'editable'}

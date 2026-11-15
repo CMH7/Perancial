@@ -8,7 +8,9 @@
 		value = $bindable([]),
 		linked = [],
 		label,
-		onremove
+		onremove,
+		allowMe = true,
+		max = Infinity
 	}: {
 		value?: string[];
 		/** Persons the linked Accounts suggest; their chips show where they came from. */
@@ -16,7 +18,12 @@
 		label: string;
 		/** Called when the owner removes a Person (so a link doesn't add it back). */
 		onremove?: (id: string) => void;
+		/** False where Me makes no sense, such as an Account's link. */
+		allowMe?: boolean;
+		/** How many Persons the side takes; the name box hides once full. */
+		max?: number;
 	} = $props();
+	const me = $derived(allowMe ? [{ id: ME, name: 'Me' }] : []);
 
 	let text = $state('');
 	let error = $state('');
@@ -24,7 +31,7 @@
 
 	const choices = $derived(
 		[
-			{ id: ME, name: 'Me' },
+			...me,
 			...ledger.persons
 				.filter((p) => !p.archived)
 				.toSorted((a, b) => a.name.localeCompare(b.name))
@@ -36,10 +43,13 @@
 		const name = text.trim();
 		if (!name) return;
 		error = '';
-		const found = [
-			{ id: ME, name: 'Me' },
-			...ledger.persons.map((p) => ({ id: p.id, name: p.name }))
-		].find((c) => c.name.toLowerCase() === name.toLowerCase());
+		const found = [...me, ...ledger.persons.map((p) => ({ id: p.id, name: p.name }))].find(
+			(c) => c.name.toLowerCase() === name.toLowerCase()
+		);
+		if (!allowMe && name.toLowerCase() === 'me') {
+			error = 'Me cannot be linked here';
+			return;
+		}
 		if (found) {
 			if (!value.includes(found.id)) value = [...value, found.id];
 			text = '';
@@ -78,20 +88,20 @@
 			></span
 		>
 	{/each}
-	<input
-		bind:value={text}
-		onkeydown={(e) => {
-			if (e.key === 'Enter') {
-				e.preventDefault();
-				add();
-			}
-		}}
-		onblur={add}
-		list={listId}
-		placeholder="Add person"
-		aria-label="{label} person"
-		class="w-32 rounded border-gray-300 py-1 text-sm"
-	/>
+	{#if value.length < max}<input
+			bind:value={text}
+			onkeydown={(e) => {
+				if (e.key === 'Enter') {
+					e.preventDefault();
+					add();
+				}
+			}}
+			onblur={add}
+			list={listId}
+			placeholder="Add person"
+			aria-label="{label} person"
+			class="w-32 rounded border-gray-300 py-1 text-sm"
+		/>{/if}
 	<datalist id={listId}>
 		{#each choices as c (c.id)}<option value={c.name}></option>{/each}
 	</datalist>

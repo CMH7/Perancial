@@ -70,6 +70,7 @@
 			<a href={resolve('/scheduled')} class="text-gray-600 hover:text-gray-900">Scheduled</a>
 			<a href={resolve('/installments')} class="text-gray-600 hover:text-gray-900">Installments</a>
 			<a href={resolve('/forecast')} class="text-gray-600 hover:text-gray-900">Forecast</a>
+			<a href={resolve('/persons')} class="text-gray-600 hover:text-gray-900">Persons</a>
 			<button
 				data-overlay-keep
 				onclick={() => (recording = !recording)}

@@ -34,7 +34,8 @@ describe('createFormRules', () => {
 			opening: { kind: 'editable' },
 			childRowsAllowed: true,
 			confirm: null,
-			card: false
+			card: false,
+			person: { inherited: null }
 		});
 		expect(createFormRules(chart, 'ploan', 0).opening).toEqual({ kind: 'editable' });
 	});
@@ -50,7 +51,8 @@ describe('createFormRules', () => {
 			childRowsAllowed: false,
 			confirm:
 				'"Cash on Hand" has ₱3,250.00 recorded directly. It will move to the new account, and "Cash on Hand" becomes a Group Account.',
-			card: false
+			card: false,
+			person: { inherited: null }
 		});
 	});
 
@@ -66,7 +68,8 @@ describe('createFormRules', () => {
 			opening: { kind: 'editable' },
 			childRowsAllowed: true,
 			confirm: null,
-			card: false
+			card: false,
+			person: { inherited: null }
 		});
 	});
 
@@ -417,5 +420,81 @@ describe('Credit Card days on a new Account', () => {
 			['card.statementDay', 'Enter a day from 1 to 31'],
 			['card.dueDay', 'Enter a day from 1 to 31']
 		]);
+	});
+});
+
+describe('Persons on a new Account', () => {
+	const people = buildChart(
+		[
+			...roots,
+			account('owed', 'asset', 'asset', { personId: 'partner' }),
+			account('owed-lunch', 'asset', 'owed'),
+			account('lent', 'asset', 'asset', { personId: 'friend' }),
+			account('bank', 'asset', 'asset')
+		],
+		[
+			tx('lend', '2026-11-03', [
+				['lent', 100000],
+				['bank', -100000]
+			])
+		]
+	);
+	const input = { name: 'New', description: '', openingBalance: 0, children: [] };
+
+	it('says which Person the new Account inherits from its parent', () => {
+		expect(createFormRules(people, 'owed', 0).person).toEqual({ inherited: 'partner' });
+		expect(createFormRules(people, 'owed-lunch', 0).person).toEqual({ inherited: 'partner' });
+		expect(createFormRules(people, 'asset', 0).person).toEqual({ inherited: null });
+	});
+
+	it('links the new Account, or the new Group over child rows', () => {
+		const leaf = planCreateAccount(
+			people,
+			{ ...input, parentId: 'asset', personId: 'friend' },
+			{ newId: () => 'n', now }
+		);
+		expect(leaf[0]).toMatchObject({ id: 'n', data: { personId: 'friend' } });
+		const ids = ['group', 'a'];
+		const group = planCreateAccount(
+			people,
+			{
+				...input,
+				parentId: 'asset',
+				personId: 'friend',
+				children: [{ name: 'A', description: '', openingBalance: 0 }]
+			},
+			{ newId: () => ids.shift()!, now }
+		);
+		expect(group.find((w) => w.id === 'group')).toMatchObject({ data: { personId: 'friend' } });
+		expect(group.find((w) => w.id === 'a')).not.toHaveProperty('data.personId');
+		const plain = planCreateAccount(
+			people,
+			{ ...input, parentId: 'asset' },
+			{ newId: () => 'p', now }
+		);
+		expect(plain[0]).not.toHaveProperty('data.personId');
+	});
+
+	it('moves the link to the new Group when a linked Leaf with money becomes one (ADR 0002)', () => {
+		const writes = planCreateAccount(
+			people,
+			{ ...input, parentId: 'lent' },
+			{ newId: () => 'group', now }
+		);
+		expect(writes.find((w) => w.id === 'group')).toMatchObject({ data: { personId: 'friend' } });
+		expect(writes.find((w) => w.id === 'lent')).not.toHaveProperty('data.personId');
+		expect(createFormRules(people, 'lent', 0).person).toEqual({ inherited: 'friend' });
+	});
+
+	it('parses a picked Person, or none', () => {
+		const typed = {
+			name: 'X',
+			description: '',
+			openingBalance: '',
+			parentId: 'asset',
+			children: []
+		};
+		expect(CreateAccountForm.parse({ ...typed, personId: 'friend' }).personId).toBe('friend');
+		expect(CreateAccountForm.parse({ ...typed, personId: null }).personId).toBeNull();
 	});
 });

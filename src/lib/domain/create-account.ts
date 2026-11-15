@@ -2,6 +2,7 @@ import { takesOpeningBalance } from './account-types.ts';
 import { toStorage, type Chart } from './chart.ts';
 import { z } from 'zod';
 import { formatAmount, parseAmount } from './money.ts';
+import { linkedPerson } from './persons.ts';
 import type { AccountDoc, AccountType, CardTerms } from './schemas.ts';
 import { openingTransactionId, type ChartWrite } from './writes.ts';
 
@@ -18,6 +19,8 @@ export type CreateFormRules = {
 	confirm: string | null;
 	/** Whether the new Account can be a Credit Card: a single new Liability Leaf (ADR 0006). */
 	card: boolean;
+	/** The Person the new Account inherits from its parent's link, if any. */
+	person: { inherited: string | null };
 };
 
 /** Every Entry ever recorded, whatever its date: the money that moves on conversion. */
@@ -35,6 +38,7 @@ export function createFormRules(
 ): CreateFormRules {
 	const parent = chart.account(parentId);
 	const showsOpening = !!parent && takesOpeningBalance(parent.type);
+	const person = { inherited: parent ? linkedPerson(chart, parentId) : null };
 
 	if (parent && inheritsMoney(chart, parentId)) {
 		const amount = chart.balance(parentId, ALL_TIME);
@@ -42,6 +46,7 @@ export function createFormRules(
 			opening: showsOpening ? { kind: 'inherited', amount } : { kind: 'hidden' },
 			childRowsAllowed: false,
 			card: false,
+			person,
 			confirm: `"${parent.name}" has ${formatAmount(amount)} recorded directly. It will move to the new account, and "${parent.name}" becomes a Group Account.`
 		};
 	}
@@ -54,7 +59,8 @@ export function createFormRules(
 				: { kind: 'editable' },
 		childRowsAllowed: true,
 		confirm: null,
-		card: parent?.type === 'liability' && childRows === 0
+		card: parent?.type === 'liability' && childRows === 0,
+		person
 	};
 }
 
@@ -66,6 +72,8 @@ export type CreateAccountInput = NewChildAccount & {
 	children: NewChildAccount[];
 	/** Credit Card days for a single new Liability Leaf; ignored otherwise. */
 	card?: CardTerms | null;
+	/** The Person to link the new Account (or the new Group over child rows) to. */
+	personId?: string | null;
 };
 
 type PlanOptions = { newId: () => string; now: Date };
@@ -133,17 +141,21 @@ export function planCreateAccount(
 	if (inheritsMoney(chart, parent.id)) {
 		// ADR 0002: the existing document becomes the new child (keeping its ID, Entries, and
 		// Opening Balance); a new Group takes the old name, description, parent, and position.
+		// The Person link follows the old name onto the Group, so both children inherit it.
 		const groupId = newId();
 		return [
 			{
 				op: 'setAccount',
 				id: groupId,
-				data: accountDoc({
-					name: parent.name,
-					description: parent.description,
-					parentId: parent.parentId,
-					order: parent.order
-				})
+				data: {
+					...accountDoc({
+						name: parent.name,
+						description: parent.description,
+						parentId: parent.parentId,
+						order: parent.order
+					}),
+					...(parent.personId ? { personId: parent.personId } : {})
+				}
 			},
 			{
 				op: 'setAccount',
@@ -157,6 +169,7 @@ export function planCreateAccount(
 					archived: parent.archived,
 					order: 0,
 					...(parent.card ? { card: parent.card } : {}),
+					...(input.personId ? { personId: input.personId } : {}),
 					createdAt: parent.createdAt,
 					updatedAt: now
 				}
@@ -177,7 +190,8 @@ export function planCreateAccount(
 					parentId: parent.id,
 					order
 				}),
-				...(single && type === 'liability' && input.card ? { card: input.card } : {})
+				...(single && type === 'liability' && input.card ? { card: input.card } : {}),
+				...(input.personId ? { personId: input.personId } : {})
 			}
 		}
 	];
@@ -246,9 +260,13 @@ export const CardFields = z
 	.nullable()
 	.optional();
 
+/** The picked Person to link an Account to; null for none. */
+export const PersonField = z.string().min(1).nullable().optional();
+
 /** The create-Account form as typed; parses into a `CreateAccountInput`. */
 export const CreateAccountForm = AccountFields.extend({
 	parentId: z.string().min(1),
 	children: z.array(AccountFields),
-	card: CardFields
+	card: CardFields,
+	personId: PersonField
 });
