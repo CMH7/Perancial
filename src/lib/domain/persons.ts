@@ -1,7 +1,7 @@
 // Persons: the humans involved in Transactions, linked to the Accounts that track money between
 // the owner and them. Purely descriptive: a Person never holds money. Pure TypeScript.
 import type { Chart } from './chart.ts';
-import { ME, type Person, type Scheduled } from './schemas.ts';
+import { ME, type Account, type Person, type Scheduled, type Transaction } from './schemas.ts';
 import type { ChartWrite } from './writes.ts';
 
 /** The Account's own Person, else its nearest Group Account's; null when none is linked. */
@@ -74,6 +74,26 @@ export function netPosition(
 		else if (a.type === 'liability') youOwe += chart.balance(a.id);
 	}
 	return { owesYou, youOwe, net: owesYou - youOwe };
+}
+
+/**
+ * A Person's page: their linked Leaf Accounts (own link or a Group's), where the owner stands
+ * with them, and the Transactions that name them on either side, newest first.
+ */
+export function personDetail(
+	chart: Chart,
+	personId: string
+): ReturnType<typeof netPosition> & { accounts: Account[]; transactions: Transaction[] } {
+	return {
+		...netPosition(chart, personId),
+		accounts: chart
+			.all()
+			.filter((a) => !chart.isGroup(a.id) && linkedPerson(chart, a.id) === personId),
+		transactions: chart
+			.transactions()
+			.filter((tx) => tx.fromPersons.includes(personId) || tx.toPersons.includes(personId))
+			.sort((a, b) => (b.date ?? '').localeCompare(a.date ?? '') || b.id.localeCompare(a.id))
+	};
 }
 
 function assertNotMe(id: string, action: string) {

@@ -1,5 +1,5 @@
 <script lang="ts">
-	// Settings, one tab per area. Forecast: the owner's Inflow and Outflow Section lists. Tags.
+	// Settings, one tab per area. Forecast: the owner's Inflow and Outflow Section lists. Tags. Persons.
 	// Appearance: light, dark, or the system's. Account: who is signed in, and Sign out.
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
@@ -11,6 +11,7 @@
 		type SectionLists
 	} from '#lib/domain/index.ts';
 	import PesoMark from '#lib/components/PesoMark.svelte';
+	import PersonsSettings from '#lib/components/PersonsSettings.svelte';
 	import TagsSettings from '#lib/components/TagsSettings.svelte';
 	import { signOut } from '#lib/firebase/auth.ts';
 	import { theme, type ThemeChoice } from '#lib/theme.svelte.ts';
@@ -19,6 +20,7 @@
 	const TABS = [
 		['forecast', 'Forecast'],
 		['tags', 'Tags'],
+		['persons', 'Persons'],
 		['appearance', 'Appearance'],
 		['account', 'Account']
 	] as const;
@@ -31,6 +33,7 @@
 	function show(key: string) {
 		const url = new URL(page.url.href);
 		url.searchParams.set('tab', key);
+		url.searchParams.delete('person');
 		// eslint-disable-next-line svelte/no-navigation-without-resolve -- same route, query only
 		goto(url, { replaceState: true });
 	}
@@ -179,6 +182,8 @@
 		<p class="text-sm text-gray-500">Loading your settings…</p>
 	{:else if tab === 'tags'}
 		<TagsSettings />
+	{:else if tab === 'persons'}
+		<PersonsSettings />
 	{:else}
 		<p class="mb-4 max-w-2xl text-sm text-gray-600">
 			Sections group a Forecast's Inflows and Outflows. Pick one on a Scheduled Transaction or

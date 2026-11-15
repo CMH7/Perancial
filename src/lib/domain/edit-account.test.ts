@@ -27,7 +27,8 @@ describe('editFormRules', () => {
 			editable: true,
 			nameEditable: true,
 			opening: { kind: 'editable', current: 345000 },
-			card: { kind: 'hidden' }
+			card: { kind: 'hidden' },
+			person: { kind: 'editable', current: null, inherited: null }
 		});
 	});
 
@@ -44,7 +45,8 @@ describe('editFormRules', () => {
 			editable: true,
 			nameEditable: false,
 			opening: { kind: 'hidden' },
-			card: { kind: 'hidden' }
+			card: { kind: 'hidden' },
+			person: { kind: 'hidden' }
 		});
 		expect(editFormRules(chart, 'opening-balances').editable).toBe(false);
 	});
@@ -225,5 +227,57 @@ describe('Credit Card terms', () => {
 			{ now }
 		);
 		expect(kept[0]).toMatchObject({ data: { card: { statementDay: 20, dueDay: 9 } } });
+	});
+});
+
+describe('Person link', () => {
+	const people = buildChart(
+		[
+			...roots,
+			account('payables', 'liability', 'liability', { personId: 'parent' }),
+			account('payables-eom', 'liability', 'payables', { personId: 'sibling' }),
+			account('payables-15th', 'liability', 'payables'),
+			account('allowance', 'income', 'income')
+		],
+		[]
+	);
+	const base = { description: '', openingBalance: 0 };
+
+	it('is offered on any user Account, with its own and its inherited Person', () => {
+		expect(editFormRules(people, 'payables-eom').person).toEqual({
+			kind: 'editable',
+			current: 'sibling',
+			inherited: 'parent'
+		});
+		expect(editFormRules(people, 'payables-15th').person).toEqual({
+			kind: 'editable',
+			current: null,
+			inherited: 'parent'
+		});
+		expect(editFormRules(people, 'allowance').person).toEqual({
+			kind: 'editable',
+			current: null,
+			inherited: null
+		});
+		expect(editFormRules(people, 'income').person).toEqual({ kind: 'hidden' });
+		expect(editFormRules(people, 'opening-balances').person).toEqual({ kind: 'hidden' });
+	});
+
+	it('is set, removed with null, and left alone when not given', () => {
+		const edit = (id: string, personId?: string | null) =>
+			planEditAccount(people, id, { ...base, name: id, personId }, { now })[0];
+		expect(edit('allowance', 'parent')).toMatchObject({ data: { personId: 'parent' } });
+		expect(edit('payables-eom', null)).toMatchObject({ data: { personId: null } });
+		expect(edit('payables-eom')).toMatchObject({ data: { personId: 'sibling' } });
+	});
+
+	it('is never written on a Root Account', () => {
+		const writes = planEditAccount(
+			people,
+			'income',
+			{ ...base, name: 'Income', personId: 'parent' },
+			{ now }
+		);
+		expect(writes[0]).not.toHaveProperty('data.personId');
 	});
 });
