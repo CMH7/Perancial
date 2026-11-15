@@ -8,7 +8,7 @@ import {
 	type ForecastOutflow,
 	type ResolvedSource
 } from './forecast.ts';
-import type { Installment, PayingSource, Scheduled } from './schemas.ts';
+import { statementId, type Installment, type PayingSource, type Scheduled } from './schemas.ts';
 import type { DraftError } from './transactions.ts';
 import type { ChartWrite } from './writes.ts';
 
@@ -81,7 +81,7 @@ export function sourceEditErrors(
 }
 
 /**
- * Saves an Outflow's Paying sources on its Occurrence or Row. A Carried-over source gets back
+ * Saves an Outflow's Paying sources on its Occurrence, Row or Statement. A Carried-over source gets back
  * what it paid before, so the stored amount stays the source's whole share.
  */
 export function planSetSources(
@@ -103,6 +103,23 @@ export function planSetSources(
 	];
 	const { link } = outflow;
 
+	if (link.plan === 'statement') {
+		const prior = (input.statements ?? []).find(
+			(s) => s.cardId === link.planId && s.statementDate === link.due
+		);
+		return [
+			{
+				op: 'setStatement',
+				id: statementId(link.planId, link.due),
+				data: {
+					amount: prior?.amount ?? null,
+					sources: stored,
+					createdAt: prior?.createdAt ?? now,
+					updatedAt: now
+				}
+			}
+		];
+	}
 	if (link.plan === 'scheduled') {
 		const plan = input.scheduled.find((p) => p.id === link.planId);
 		if (!plan) throw new Error('This plan no longer exists');

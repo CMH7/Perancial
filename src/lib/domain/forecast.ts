@@ -7,6 +7,7 @@ import { cutoffOf } from './installment-views.ts';
 import { rowStatuses, rowTotal } from './installments.ts';
 import { paidStatus, paymentsFor, txTotal, type PaidStatus } from './payable.ts';
 import { addDays, occurrenceStatus, occurrencesOf, type Occurrence } from './scheduled.ts';
+import { statementPeriods, statementsOf, type CardStatement } from './statements.ts';
 import type {
 	Account,
 	Forecast,
@@ -16,6 +17,7 @@ import type {
 	PaidLink,
 	PayingSource,
 	Scheduled,
+	Statement,
 	Transaction
 } from './schemas.ts';
 import type { ChartWrite } from './writes.ts';
@@ -72,6 +74,8 @@ export type ForecastInput = {
 	scheduled: Scheduled[];
 	installments: Installment[];
 	forecasts: Forecast[];
+	/** Credit Card Statements' stored values: entered amounts and Paying sources (ADR 0006). */
+	statements?: Statement[];
 	/** The owner's Section lists; null until first saved (the defaults apply). */
 	settings: ForecastSettingsDoc | null;
 	today: IsoDate;
@@ -173,9 +177,15 @@ export type Charge = {
 	txId?: string;
 };
 
+/** What an Outflow is: a Scheduled Occurrence or Installment Row (paid link), or a Statement. */
+export type OutflowLink =
+	| PaidLink
+	/** `planId` is the card, `due` the Statement Date: the Statement's identity. */
+	| { plan: 'statement'; planId: string; due: IsoDate };
+
 export type ForecastOutflow = {
 	key: string;
-	link: PaidLink;
+	link: OutflowLink;
 	label: string;
 	/** The rule date: the Outflow's identity. */
 	due: IsoDate;
@@ -212,7 +222,20 @@ export type ForecastOutflow = {
 	allocatedPaid?: number;
 	/** `in`: carried into this Forecast; a date: carried out to that Cut-off's Forecast. */
 	carried?: 'in' | IsoDate;
-	plan: Scheduled | Installment;
+	/** The plan behind it; none for a Statement. */
+	plan?: Scheduled | Installment;
+	/** A Credit Card Statement's figures (ADR 0006). */
+	statement?: {
+		cardId: string;
+		statementDate: IsoDate;
+		computed: number;
+		/** The amount entered from the real Statement; null while estimated. */
+		entered: number | null;
+		/** Entered − computed; null while estimated. */
+		gap: number | null;
+		/** The payments that filled it, and how much of each went to it. */
+		payments: { txId: string; amount: number }[];
+	};
 };
 
 export type ForecastInflow = {
@@ -263,7 +286,7 @@ const scheduledLink = (planId: string, due: IsoDate): PaidLink => ({
 	planId,
 	due
 });
-const keyOf = (l: PaidLink) => `${l.plan}:${l.planId}:${l.due}`;
+const keyOf = (l: OutflowLink) => `${l.plan}:${l.planId}:${l.due}`;
 
 /** From amounts on an Account in a Transaction (money leaving it). */
 const outOf = (tx: Transaction, accountId: string) =>
@@ -333,7 +356,11 @@ export const laterPayments = (
 	input: ForecastInput,
 	liabilityId: string,
 	after: IsoDate
-): IsoDate[] => [...new Set(paymentDates(input, liabilityId, after).filter((d) => d > after))];
+): IsoDate[] => {
+	const terms = input.chart.account(liabilityId)?.card;
+	if (terms) return statementPeriods(terms, after, 12).map((p) => p.dueDate);
+	return [...new Set(paymentDates(input, liabilityId, after).filter((d) => d > after))];
+};
 
 /** Charges on a Liability billed with the payment due on `date`: since the previous payment. */
 export function chargesFor(input: ChargeInput, liabilityId: string, date: IsoDate): Charge[] {
@@ -443,7 +470,11 @@ export function expectedStatus(
 	const liability = lines.find(
 		(l) => l.side === 'to' && !l.fee && chart.account(l.accountId)?.type === 'liability'
 	);
-	const charges = liability ? chargesFor(input, liability.accountId, occ.date) : undefined;
+	// A Credit Card's charges belong to its Statements, not to a payment plan (ADR 0006).
+	const charges =
+		liability && !isCard(chart, liability.accountId)
+			? chargesFor(input, liability.accountId, occ.date)
+			: undefined;
 	let total = occ.total ?? 0;
 	if (charges && charges.length && !plan.occurrences[occ.due]?.amounts) {
 		const additional = lines.reduce(
@@ -610,7 +641,106 @@ function outflowsIn(ctx: Ctx, range: DateRange): ForecastOutflow[] {
 			({ occ }) => !occ.skipped && classify(ctx.input.chart, occ, ctx.funding).kind === 'outflow'
 		)
 		.map(({ plan, occ }) => outflowFromOccurrence(ctx, plan, occ));
-	return [...fromPlans, ...outflowsFromRows(ctx, range)];
+	return [...fromPlans, ...outflowsFromRows(ctx, range), ...outflowsFromStatements(ctx, range)];
+}
+
+/** Whether this Liability is a Credit Card: its Statements, not payment plans, bill it. */
+const isCard = (chart: Chart, id: string) => !!chart.account(id)?.card;
+
+/**
+ * Each Credit Card Statement with something owed whose Due Date falls in the range (ADR 0006).
+ * With no Paying sources picked, it is paid from the Account of the card's latest payment.
+ */
+function outflowsFromStatements(ctx: Ctx, range: DateRange): ForecastOutflow[] {
+	const { chart, today } = ctx.input;
+	const stored = ctx.input.statements ?? [];
+	return chart
+		.all()
+		.filter((a) => a.card && !a.archived && !chart.isGroup(a.id))
+		.flatMap((card) =>
+			statementsOf({ ...ctx.input, statements: stored }, card.id, { until: range.to, today })
+				.filter((st) => inRange(st.dueDate, range) && st.balance > 0)
+				.map((st) => {
+					const link: OutflowLink = { plan: 'statement', planId: card.id, due: st.statementDate };
+					const doc = stored.find(
+						(d) => d.cardId === card.id && d.statementDate === st.statementDate
+					);
+					const last = latestPaymentFrom(chart, card.id);
+					const { sources, usualAccounts } = resolveSources(
+						doc && doc.sources.length ? doc.sources : undefined,
+						last ? [{ accountId: last, amount: st.balance }] : [],
+						ctx.funding,
+						statementPayments(chart, card.id, st)
+					);
+					return finishOutflow(ctx, {
+						key: keyOf(link),
+						link,
+						label: `${card.name} Statement`,
+						due: st.statementDate,
+						date: st.dueDate,
+						amount: st.balance,
+						additional: 0,
+						less: 0,
+						total: st.balance,
+						varies: false,
+						kind: 'liability',
+						liabilityId: card.id,
+						charges: [...st.charges, ...st.refunds.map((r) => ({ ...r, amount: -r.amount }))].sort(
+							(a, b) => a.date.localeCompare(b.date)
+						),
+						section: {
+							key: `liability:${card.id}`,
+							name: card.name,
+							kind: 'liability'
+						},
+						sources,
+						usualAccounts,
+						status: st.status,
+						overdue: st.status !== 'paid' && st.dueDate < today,
+						paid: st.paid,
+						statement: {
+							cardId: card.id,
+							statementDate: st.statementDate,
+							computed: st.computed,
+							entered: st.entered,
+							gap: st.gap,
+							payments: st.payments
+						}
+					});
+				})
+		);
+}
+
+/** The Asset that paid the card most recently, if any. */
+function latestPaymentFrom(chart: Chart, cardId: string): string | undefined {
+	const payments = chart
+		.transactionsFor(cardId)
+		.filter((tx) => tx.date !== null)
+		.sort((a, b) => b.date!.localeCompare(a.date!));
+	for (const tx of payments) {
+		const from = tx.entries.find((e) => e.amount < 0 && isAsset(chart, e.accountId));
+		if (from && tx.entries.some((e) => e.accountId === cardId && e.amount > 0))
+			return from.accountId;
+	}
+	return undefined;
+}
+
+/**
+ * The payments that filled a Statement, each scaled to the part that went to it, so a payment
+ * spread across two Statements counts once in all.
+ */
+function statementPayments(chart: Chart, cardId: string, st: CardStatement): Transaction[] {
+	return st.payments.flatMap(({ txId, amount }) => {
+		const tx = chart.transaction(txId);
+		const whole = tx?.entries.find((e) => e.accountId === cardId)?.amount ?? 0;
+		if (!tx || whole <= 0) return [];
+		return [
+			{
+				...tx,
+				entries: tx.entries.map((e) => ({ ...e, amount: Math.round((e.amount * amount) / whole) }))
+			}
+		];
+	});
 }
 
 function inflowsIn(ctx: Ctx, range: DateRange): ForecastInflow[] {

@@ -6,6 +6,7 @@ import { chargesFor, type ChargeInput } from './forecast.ts';
 import { installmentRecordDraft } from './installment-paying.ts';
 import { rowStatuses } from './installments.ts';
 import { recordDraft } from './paying.ts';
+import { statementsOf } from './statements.ts';
 import { occurrenceStatus, occurrencesOf } from './scheduled.ts';
 import type { PayablePlan } from './payable.ts';
 import type { PaidLink, Transaction } from './schemas.ts';
@@ -37,7 +38,13 @@ export function plannedCharges(
 	{ today }: { today: IsoDate }
 ): PlannedCharge[] {
 	const { chart } = input;
-	return chargesFor(input, liabilityId, paymentDate).flatMap((c): PlannedCharge[] => {
+	// A Credit Card bills by Statement: the charges of the Statement due on `paymentDate`.
+	const charges = chart.account(liabilityId)?.card
+		? (statementsOf({ ...input, statements: [] }, liabilityId, { until: paymentDate, today })
+				.find((st) => st.dueDate === paymentDate)
+				?.charges.map((c) => ({ ...c })) ?? [])
+		: chargesFor(input, liabilityId, paymentDate);
+	return charges.flatMap((c): PlannedCharge[] => {
 		const link = c.link;
 		if (c.from === 'transaction' || !link) return [];
 		let draft: TransactionDraft;

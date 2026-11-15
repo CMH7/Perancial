@@ -140,6 +140,22 @@ describe('statementsOf', () => {
 		]);
 	});
 
+	it('names the payments that filled each Statement, and how much of each', () => {
+		const list = statementsOf(
+			input([nov, dec, pay('p1', '2026-12-08', 15000), pay('p2', '2026-12-10', 3000)]),
+			'visa',
+			opts
+		);
+		expect(list.map((s) => s.payments)).toEqual([
+			[{ txId: 'p1', amount: 10000 }],
+			[
+				{ txId: 'p1', amount: 5000 },
+				{ txId: 'p2', amount: 3000 }
+			],
+			[]
+		]);
+	});
+
 	it('carries an overpayment to the next Statement', () => {
 		const list = statementsOf(input([nov, dec, jan, pay('p', '2026-12-08', 32000)]), 'visa', opts);
 		expect(list.map((s) => [s.statementDate, s.paid, s.status])).toEqual([

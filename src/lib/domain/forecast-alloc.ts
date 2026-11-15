@@ -32,6 +32,7 @@ export function allocationCandidates(
 		for (const o of buildForecast(input, c).outflows)
 			if (
 				o.carried === undefined &&
+				o.link.plan !== 'statement' &&
 				(o.status === 'unpaid' || o.status === 'partly-paid') &&
 				!o.allocatedIn &&
 				!o.ealloc &&
@@ -109,7 +110,10 @@ export function planAllocateEarly(
 		throw new Error("Pay from one of this Cut-off's Funding Accounts");
 	if (fromId === reserveId) throw new Error('Move the money into a different Account');
 	if (target.remaining <= 0) throw new Error('Nothing is left to pay on that Outflow');
-	if (input.scheduled.some((p) => p.allocates && keyOf(p.allocates) === keyOf(target.link)))
+	const link = target.link;
+	if (link.plan === 'statement')
+		throw new Error('Early allocation does not work for Credit Card Statements yet');
+	if (input.scheduled.some((p) => p.allocates && keyOf(p.allocates) === keyOf(link)))
 		throw new Error('That Outflow is already allocated');
 
 	// The day this Cut-off's pay lands, or today when that has passed.
@@ -134,7 +138,7 @@ export function planAllocateEarly(
 			],
 			end: { type: 'never' },
 			occurrences: {},
-			allocates: target.link,
+			allocates: link,
 			createdAt: now,
 			updatedAt: now
 		}
@@ -146,8 +150,8 @@ export function planAllocateEarly(
 		.map((s) => ({ accountId: s.accountId, amount: s.paid }));
 	const sources = [...paid, { accountId: reserveId, amount }];
 
-	const writes: ChartWrite[] = [transfer, setTargetSources(input, target.link, sources, now)];
-	const targetCutoff = fundingCutoffOf(target.link.due);
+	const writes: ChartWrite[] = [transfer, setTargetSources(input, link, sources, now)];
+	const targetCutoff = fundingCutoffOf(link.due);
 	const funding = fundingAccountsFor(input, targetCutoff).ids;
 	if (!funding.includes(reserveId)) {
 		const existing = input.forecasts.find((f) => f.id === targetCutoff);
