@@ -8,7 +8,12 @@ export type AccountType = z.infer<typeof AccountType>;
 export const CardTerms = z.object({
 	statementDay: z.int().min(1).max(31),
 	/** In the month after the Statement Date when not after the Statement Day. */
-	dueDay: z.int().min(1).max(31)
+	dueDay: z.int().min(1).max(31),
+	/**
+	 * The day the owner plans to pay, on or before the Due Date (so a Forecast can fund it from an
+	 * earlier Cut-off); none means on the Due Date.
+	 */
+	payDay: z.int().min(1).max(31).optional()
 });
 export type CardTerms = z.infer<typeof CardTerms>;
 

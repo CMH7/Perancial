@@ -42,6 +42,8 @@ export type CardStatement = {
 	from: IsoDate;
 	statementDate: IsoDate;
 	dueDate: IsoDate;
+	/** When the owner plans to pay it (the card's Pay-on day); the Due Date without one. */
+	payDate: IsoDate;
 	charges: BilledItem[];
 	/** Money back onto the card from an Expense or Income Account: not a payment. */
 	refunds: BilledItem[];
@@ -98,6 +100,19 @@ function dueDateOf(terms: CardTerms, statementDate: IsoDate): IsoDate {
 	return terms.dueDay > terms.statementDay
 		? dayOf(y, m, terms.dueDay)
 		: dayOf(y, m + 1, terms.dueDay);
+}
+
+/**
+ * When the owner plans to pay a Statement: the last Pay-on day on or before its Due Date, but
+ * never before its Statement Date (then the Due Date); the Due Date when the card has no Pay-on day.
+ */
+function payDateOf(terms: CardTerms, statementDate: IsoDate): IsoDate {
+	const due = dueDateOf(terms, statementDate);
+	if (!terms.payDay) return due;
+	const [y, m] = parts(due);
+	let pay = dayOf(y, m, terms.payDay);
+	if (pay > due) pay = dayOf(y, m - 1, terms.payDay);
+	return pay < statementDate ? due : pay;
 }
 
 function addDay(d: IsoDate): IsoDate {
@@ -244,7 +259,7 @@ export function statementsOf(
 	const statements: CardStatement[] = [];
 	for (
 		let statementDate = statementDateFor(terms, first);
-		dueDateOf(terms, statementDate) <= until;
+		payDateOf(terms, statementDate) <= until;
 		statementDate = nextStatementDate(terms, statementDate)
 	) {
 		const from = addDay(previousStatementDate(terms, statementDate));
@@ -272,6 +287,7 @@ export function statementsOf(
 			from,
 			statementDate,
 			dueDate: dueDateOf(terms, statementDate),
+			payDate: payDateOf(terms, statementDate),
 			charges,
 			refunds: credits,
 			carried: opening,

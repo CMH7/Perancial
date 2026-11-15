@@ -412,6 +412,16 @@ describe('Credit Card days on a new Account', () => {
 			CreateAccountForm.parse({ ...typed, card: { statementDay: ' 5 ', dueDay: '25' } }).card
 		).toEqual(terms);
 		expect(CreateAccountForm.parse({ ...typed, card: null }).card).toBeNull();
+		expect(
+			CreateAccountForm.parse({
+				...typed,
+				card: { statementDay: '5', dueDay: '24', payDay: '15' }
+			}).card
+		).toEqual({ statementDay: 5, dueDay: 24, payDay: 15 });
+		expect(
+			CreateAccountForm.parse({ ...typed, card: { statementDay: '5', dueDay: '24', payDay: ' ' } })
+				.card
+		).toEqual({ statementDay: 5, dueDay: 24 });
 		const result = CreateAccountForm.safeParse({
 			...typed,
 			card: { statementDay: '0', dueDay: 'x' }
