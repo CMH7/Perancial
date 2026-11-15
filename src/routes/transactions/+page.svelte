@@ -1,6 +1,6 @@
 <script lang="ts">
 	// The Journal: every Transaction, newest first. The left pane filters: search, dates, kind,
-	// status, tag, and an Account picked from the Account tree (a Group covers its Accounts). A row
+	// status, tag, Persons, and an Account picked from the Account tree (a Group covers its Accounts). A row
 	// opens the detail side panel. Checkboxes select rows for bulk clear and date changes.
 	import { resolve } from '$app/paths';
 	import { KIND } from '#lib/components/kind.ts';
@@ -13,6 +13,7 @@
 		personLabel,
 		journal,
 		journalRow,
+		ME,
 		noFilters,
 		planBillOn,
 		planDeleteTransactions,
@@ -50,7 +51,18 @@
 		if (root && root !== treeRoot) treeRoot = root;
 	});
 	const kinds = Object.entries(KIND) as [TransactionKind, (typeof KIND)[TransactionKind]][];
-	const filtering = $derived(Object.values(f).some(Boolean));
+	const filtering = $derived(
+		Object.entries(f).some(([key, v]) =>
+			key === 'personSide' ? false : Array.isArray(v) ? v.length > 0 : Boolean(v)
+		)
+	);
+	/** Me first, then every Person by name (archived ones too: their history stays findable). */
+	const personChoices = $derived(
+		[
+			ME,
+			...ledger.persons.toSorted((a, b) => a.name.localeCompare(b.name)).map((p) => p.id)
+		].filter((id) => !f.persons.includes(id))
+	);
 
 	// Multi-select: only rows still shown count, so a filter change never acts on hidden rows.
 	let picked = $state(new Set<string>());
@@ -181,6 +193,44 @@
 				<option value="">Any tag</option>
 				{#each tags as tag (tag)}<option value={tag}>#{tag}</option>{/each}
 			</select>
+		</div>
+		<div class="flex flex-wrap items-center gap-2">
+			{#each f.persons as id (id)}
+				<span
+					class="flex items-center gap-1 rounded-full bg-violet-50 px-2 py-0.5 text-xs text-violet-800"
+					>{personLabel(ledger.persons, id)}<button
+						type="button"
+						class="text-violet-400 hover:text-red-600"
+						aria-label="Stop filtering by {personLabel(ledger.persons, id)}"
+						onclick={() => (f.persons = f.persons.filter((x) => x !== id))}>✕</button
+					></span
+				>
+			{/each}
+			<select
+				aria-label="Filter by Person"
+				class="min-w-0 flex-1 rounded border-gray-300 py-1 text-sm"
+				value=""
+				onchange={(e) => {
+					const id = e.currentTarget.value;
+					if (id) f.persons = [...f.persons, id];
+					e.currentTarget.value = '';
+				}}
+			>
+				<option value="">{f.persons.length ? '+ Person' : 'Any Person'}</option>
+				{#each personChoices as id (id)}<option value={id}>{personLabel(ledger.persons, id)}</option
+					>{/each}
+			</select>
+			{#if f.persons.length}
+				<select
+					bind:value={f.personSide}
+					aria-label="Person side"
+					class="rounded border-gray-300 py-1 text-sm"
+				>
+					<option value="either">From or To</option>
+					<option value="from">From</option>
+					<option value="to">To</option>
+				</select>
+			{/if}
 		</div>
 	</div>
 {/snippet}

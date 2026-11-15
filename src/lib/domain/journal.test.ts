@@ -30,7 +30,12 @@ const transactions = [
 			['bpi', -1200000],
 			['rent', 1200000]
 		],
-		{ description: 'Rent October', tags: ['house'], createdAt: at('2026-10-15T08:00:00Z') }
+		{
+			description: 'Rent October',
+			tags: ['house'],
+			createdAt: at('2026-10-15T08:00:00Z'),
+			fromPersons: ['partner']
+		}
 	),
 	t(
 		'send',
@@ -40,7 +45,12 @@ const transactions = [
 			['gcash', 500000],
 			['bank-fees', 1500]
 		],
-		{ description: 'Send to GCash', createdAt: at('2026-10-15T09:00:00Z') }
+		{
+			description: 'Send to GCash',
+			createdAt: at('2026-10-15T09:00:00Z'),
+			fromPersons: ['me'],
+			toPersons: ['partner']
+		}
 	),
 	t(
 		'salary',
@@ -49,7 +59,7 @@ const transactions = [
 			['salary', -2350000],
 			['bpi', 2350000]
 		],
-		{ description: 'Salary, 2nd cut-off', note: 'Net of tax', tags: ['work'] }
+		{ description: 'Salary, 2nd cut-off', note: 'Net of tax', tags: ['work'], toPersons: ['me'] }
 	),
 	t(
 		'grab',
@@ -103,6 +113,20 @@ describe('journal', () => {
 		expect(ids({ q: 'work' })).toEqual(['salary']);
 		expect(ids({ q: 'bank fees' })).toEqual(['send']);
 		expect(ids({ q: 'gcash', status: 'pending' })).toEqual(['grab']);
+	});
+
+	it('filters by Person on either side by default, finding one only in From and one only in To', () => {
+		expect(ids({ persons: ['partner'] })).toEqual(['send', 'rent']);
+	});
+
+	it('filters by Person on the From side or the To side only', () => {
+		expect(ids({ persons: ['partner'], personSide: 'from' })).toEqual(['rent']);
+		expect(ids({ persons: ['partner'], personSide: 'to' })).toEqual(['send']);
+	});
+
+	it('matches any of several Persons, together with the other filters', () => {
+		expect(ids({ persons: ['me', 'partner'] })).toEqual(['salary', 'send', 'rent']);
+		expect(ids({ persons: ['me'], kind: 'income' })).toEqual(['salary']);
 	});
 });
 
