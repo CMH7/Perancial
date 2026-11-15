@@ -1,6 +1,7 @@
 <script lang="ts">
 	// Record a new Transaction. `?copy=<id>` starts from a duplicate of that Transaction;
 	// `?plan=<id>&due=<date>` records that Scheduled Transaction occurrence (Record), linked to it;
+	// `?card=<id>&statement=<date>` pays that Credit Card Statement (no link: ADR 0006);
 	// `?takeOn=<installmentId>&variant=purchase|move-debt|card-payment[&to=<id>]` prefills taking on
 	// an Installment Plan (never linked); `?installment=<id>&due=<date>` records that row, linked.
 	// From the Forecast, `&sources=<account:centavos,…>` pays those Paying sources and
@@ -25,6 +26,8 @@
 		planRecordCharges,
 		recordDraft,
 		shortDate,
+		statementRecordDraft,
+		statementsOf,
 		takeOnDraft,
 		today,
 		type PaidLink,
@@ -66,6 +69,27 @@
 		const pays: PaidLink = { plan: 'installment', planId: plan.id, due: row.due };
 		return { plan, row, draft, pays };
 	});
+	const recordingStatement = $derived.by(() => {
+		const cardId = params.get('card') ?? '';
+		const statementDate = params.get('statement');
+		if (!statementDate || !ledger.chart.account(cardId)?.card) return undefined;
+		const input = {
+			chart: ledger.chart,
+			scheduled: ledger.scheduled,
+			installments: ledger.installments,
+			statements: ledger.statements
+		};
+		const st = statementsOf(input, cardId, {
+			until: addDays(statementDate, 62),
+			today: todayIso
+		}).find((s) => s.statementDate === statementDate);
+		if (!st) return undefined;
+		return {
+			cardId,
+			st,
+			draft: statementRecordDraft(ledger.chart, cardId, st.remaining, { today: todayIso })
+		};
+	});
 	const takingOn = $derived.by(() => {
 		const plan = ledger.installments.find((p) => p.id === params.get('takeOn'));
 		const variant = params.get('variant') as TakeOn | null;
@@ -87,8 +111,13 @@
 
 	// Recording a Liability payment: its planned charges not yet recorded, ticked by default.
 	const charges = $derived.by(() => {
-		if (!recording) return [];
 		const { chart } = ledger;
+		if (recordingStatement) {
+			const input = { chart, scheduled: ledger.scheduled, installments: ledger.installments };
+			const { cardId, st } = recordingStatement;
+			return plannedCharges(input, cardId, st.dueDate, { today: todayIso });
+		}
+		if (!recording) return [];
 		const occ = recording.view.occurrence;
 		const liability = occ.version.lines.find(
 			(l) => l.side === 'to' && !l.fee && chart.account(l.accountId)?.type === 'liability'
@@ -136,11 +165,13 @@
 			? fromForecast(recordDraft(recording.view, { today: todayIso }))
 			: round === 0 && recordingRow
 				? fromForecast(recordingRow.draft)
-				: round === 0 && takingOn
-					? takingOn.draft
-					: round === 0 && source
-						? duplicateDraft(source, { today: todayIso })
-						: emptyDraft({ today: todayIso })
+				: round === 0 && recordingStatement
+					? fromForecast(recordingStatement.draft)
+					: round === 0 && takingOn
+						? takingOn.draft
+						: round === 0 && source
+							? duplicateDraft(source, { today: todayIso })
+							: emptyDraft({ today: todayIso })
 	);
 </script>
 
@@ -211,6 +242,13 @@
 				)}. Change anything before saving.
 			</p>
 		{/if}
+		{#if recordingStatement && round === 0}
+			<p class="mb-4 rounded-lg bg-sky-50 p-3 text-sm text-sky-900">
+				Paying the {ledger.chart.account(recordingStatement.cardId)?.name} Statement closing {shortDate(
+					recordingStatement.st.statementDate
+				)}, due {shortDate(recordingStatement.st.dueDate)}. Change anything before saving.
+			</p>
+		{/if}
 		{#if takingOn && round === 0}
 			<p class="mb-4 rounded-lg bg-sky-50 p-3 text-sm text-sky-900">
 				Taking on {takingOn.plan.title}. Optional: change anything, or leave without saving.
@@ -225,8 +263,9 @@
 				extraWrites={round === 0 && charges.length ? chargeWrites : undefined}
 				extraBlocked={round === 0 && chargesBlocked}
 				onsaved={(id) => {
-					// eslint-disable-next-line svelte/no-navigation-without-resolve -- checked /forecast path
-					if (back && round === 0 && (recording || recordingRow)) return goto(back);
+					if (back && round === 0 && (recording || recordingRow || recordingStatement))
+						// eslint-disable-next-line svelte/no-navigation-without-resolve -- checked /forecast path
+						return goto(back);
 					if (recording && round === 0) return goto(resolve('/scheduled'));
 					if (recordingRow && round === 0)
 						return goto(resolve('/installments/[id]', { id: recordingRow.plan.id }));

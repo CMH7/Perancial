@@ -4,6 +4,7 @@ import type { IsoDate } from './chart.ts';
 import { paymentDates, type Charge, type ForecastInput } from './forecast.ts';
 import { planSaveInstallment } from './installments.ts';
 import { addDays, planChangeOccurrence } from './scheduled.ts';
+import { statementPeriods } from './statements.ts';
 import type { PlanDraft } from './scheduled-views.ts';
 import type { ChartWrite } from './writes.ts';
 
@@ -65,6 +66,14 @@ export function planBillWithPayment(
 	paymentDate: IsoDate,
 	now: Date
 ): ChartWrite[] {
+	// A Credit Card: bill from the first day of the Statement due on that date (ADR 0006).
+	const terms = input.chart.account(liabilityId)?.card;
+	if (terms) {
+		const period = statementPeriods(terms, addDays(paymentDate, -1), 1)[0];
+		if (period?.dueDate !== paymentDate)
+			throw new Error(`${paymentDate} is not a Due Date of this card`);
+		return planBillOn(input, charges, period.from, now);
+	}
 	const dates = paymentDates(input, liabilityId, paymentDate);
 	if (!dates.includes(paymentDate))
 		throw new Error(`${paymentDate} is not a payment of this Liability`);

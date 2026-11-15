@@ -24,6 +24,7 @@
 		planSetOutflowOrder,
 		planSetSources,
 		recordPicks,
+		recordQuery,
 		splitSource,
 		fundingCandidates,
 		nextCutoff,
@@ -55,6 +56,7 @@
 		scheduled: ledger.scheduled,
 		installments: ledger.installments,
 		forecasts: ledger.forecasts,
+		statements: ledger.statements,
 		settings: ledger.forecastSettings,
 		today: todayIso
 	});
@@ -211,16 +213,17 @@
 	function recordAll(o: ForecastOutflow) {
 		const picks = recordPicks(o, 'all');
 		if (!picks.length) return;
-		const key = o.link.plan === 'scheduled' ? 'plan' : 'installment';
 		const back = encodeURIComponent(`/forecast?cutoff=${cutoff}`);
-		const url = `${resolve('/transactions/new')}?${key}=${encodeURIComponent(o.link.planId)}&due=${o.link.due}&sources=${formatPicks(picks)}&back=${back}`;
+		const url = `${resolve('/transactions/new')}?${recordQuery(o.link)}&sources=${formatPicks(picks)}&back=${back}`;
 		// eslint-disable-next-line svelte/no-navigation-without-resolve -- resolved path plus a query
 		goto(url);
 	}
 	const planHref = (o: ForecastOutflow) =>
 		o.link.plan === 'scheduled'
 			? resolve('/scheduled/[id]', { id: o.link.planId })
-			: resolve('/installments/[id]', { id: o.link.planId });
+			: o.link.plan === 'installment'
+				? resolve('/installments/[id]', { id: o.link.planId })
+				: resolve('/accounts/[id]', { id: o.link.planId });
 	const open = $derived(view?.outflows.find((o) => o.key === openKey) ?? null);
 	const STRIPES = [
 		'border-l-sky-500',
@@ -455,12 +458,11 @@
 					>{o.label}
 					<span class="float-right tabular-nums">{formatAmount(amount)}</span>
 					<span class="block text-xs text-gray-500">
-						{o.section.name} · due {day(o.date)}{sourceNote}{o.ealloc
-							? ' · E.Alloc'
-							: ''}{o.allocatedIn ? ` · allocated in ${day(o.allocatedIn)}` : ''}{o.carried &&
-						o.carried !== 'in'
-							? ` · carried to ${day(o.carried)}`
-							: ''}
+						{o.section.name} · due {day(o.date)}{o.statement && o.statement.entered === null
+							? ' · estimated'
+							: ''}{sourceNote}{o.ealloc ? ' · E.Alloc' : ''}{o.allocatedIn
+							? ` · allocated in ${day(o.allocatedIn)}`
+							: ''}{o.carried && o.carried !== 'in' ? ` · carried to ${day(o.carried)}` : ''}
 					</span>
 					{#if o.charges?.length}<span class="block text-xs text-gray-500"
 							>{o.charges.length} {o.charges.length === 1 ? 'charge' : 'charges'}</span

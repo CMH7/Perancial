@@ -16,8 +16,10 @@
 		planBillLater,
 		planBillWithPayment,
 		planSetSources,
+		planSetStatementAmount,
 		planUndoAllocation,
 		recordPicks,
+		recordQuery,
 		shortDate,
 		sourceEditErrors,
 		type ActionCheck,
@@ -162,8 +164,45 @@
 	const planHref = $derived(
 		o.link.plan === 'scheduled'
 			? resolve('/scheduled/[id]', { id: o.link.planId })
-			: resolve('/installments/[id]', { id: o.link.planId })
+			: o.link.plan === 'installment'
+				? resolve('/installments/[id]', { id: o.link.planId })
+				: resolve('/accounts/[id]', { id: o.link.planId })
 	);
+
+	// A Statement's amount from the real Statement (ADR 0006); blank keeps it estimated.
+	let enteredText = $state('');
+	let enteredError = $state('');
+	$effect(() => {
+		const amount = o.statement?.entered ?? null;
+		enteredText = amount === null ? '' : formatAmount(amount).replace('₱', '');
+		enteredError = '';
+	});
+	async function saveEntered(amount: number | null) {
+		if (!o.statement) return;
+		enteredError = '';
+		try {
+			await ledger.commit(
+				planSetStatementAmount(
+					input.statements ?? [],
+					o.statement.cardId,
+					o.statement.statementDate,
+					amount,
+					{ now: new Date() }
+				)
+			);
+		} catch (err) {
+			enteredError = (err as Error).message;
+		}
+	}
+	function submitEntered(e: SubmitEvent) {
+		e.preventDefault();
+		const amount = enteredText.trim() ? parseAmount(enteredText) : null;
+		if (enteredText.trim() && amount === null) {
+			enteredError = 'Enter an amount like 1,234.56';
+			return;
+		}
+		saveEntered(amount);
+	}
 	const statusLabel = $derived(
 		o.status === 'paid' ? 'Paid' : o.status === 'partly-paid' ? 'Partly Paid' : 'Unpaid'
 	);
@@ -172,7 +211,13 @@
 	// it, can be deleted again (all together), so the Outflow and those charges become unpaid.
 	const plans = $derived([...input.scheduled, ...input.installments]);
 	const recorded = $derived(
-		paymentsFor(input.chart, o.link).map((tx) => ({
+		(o.link.plan === 'statement'
+			? (o.statement?.payments ?? []).flatMap(({ txId }) => {
+					const tx = input.chart.transaction(txId);
+					return tx ? [tx] : [];
+				})
+			: paymentsFor(input.chart, o.link)
+		).map((tx) => ({
 			tx,
 			charges: recordedWith(input.chart, tx.id)
 		}))
@@ -197,9 +242,8 @@
 	function record(which: 'all' | string) {
 		const picks = recordPicks(o, which);
 		if (!picks.length) return;
-		const key = o.link.plan === 'scheduled' ? 'plan' : 'installment';
 		const back = encodeURIComponent(`/forecast?cutoff=${cutoff}`);
-		const url = `${resolve('/transactions/new')}?${key}=${encodeURIComponent(o.link.planId)}&due=${o.link.due}&sources=${formatPicks(picks)}&back=${back}`;
+		const url = `${resolve('/transactions/new')}?${recordQuery(o.link)}&sources=${formatPicks(picks)}&back=${back}`;
 		// eslint-disable-next-line svelte/no-navigation-without-resolve -- resolved path plus a query
 		goto(url);
 	}
@@ -238,6 +282,41 @@
 	{#if o.varies}<p class="text-xs text-amber-700">
 			The amount varies. Set it for this occurrence on its plan.
 		</p>{/if}
+	{#if o.statement}
+		{@const st = o.statement}
+		<div class="space-y-2 rounded-lg bg-gray-50 p-3 text-xs">
+			<p class="text-gray-600">
+				Statement closing {shortDate(st.statementDate)} · charges add up to
+				<span class="tabular-nums">{formatAmount(st.computed)}</span>
+			</p>
+			{#if st.entered === null}
+				<p class="text-amber-700">
+					Estimated. Enter the amount on the real Statement when it arrives.
+				</p>
+			{:else if st.gap}
+				<p class="text-amber-700">
+					The real Statement is {formatAmount(Math.abs(st.gap))}
+					{st.gap > 0 ? 'more' : 'less'} than the charges here: a charge may be missing or wrong.
+				</p>
+			{/if}
+			<form class="flex items-center gap-2" onsubmit={submitEntered}>
+				<input
+					bind:value={enteredText}
+					inputmode="decimal"
+					placeholder="Amount on the Statement"
+					aria-label="Amount on the real Statement"
+					class="min-w-0 flex-1 rounded border-gray-300 py-1 text-right text-xs tabular-nums"
+				/>
+				<button class="rounded bg-gray-800 px-2 py-1 text-white">Save</button>
+				{#if st.entered !== null}
+					<button type="button" class="text-gray-500 underline" onclick={() => saveEntered(null)}
+						>Clear</button
+					>
+				{/if}
+			</form>
+			{#if enteredError}<p class="text-red-600">{enteredError}</p>{/if}
+		</div>
+	{/if}
 	{#if o.ealloc}<p class="text-xs text-violet-700">
 			E.Alloc: sets money aside for an Outflow due {shortDate(o.ealloc.due)}.
 		</p>{/if}
@@ -445,7 +524,9 @@
 				>Record all</button
 			>
 		{/if}
-		<a class="rounded border px-3 py-1.5" href={planHref}>Open plan ↗</a>
+		<a class="rounded border px-3 py-1.5" href={planHref}
+			>{o.statement ? 'Open card ↗' : 'Open plan ↗'}</a
+		>
 	</div>
 </aside>
 

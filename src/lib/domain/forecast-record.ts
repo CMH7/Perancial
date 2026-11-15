@@ -1,7 +1,7 @@
 // Recording an Outflow from the Forecast: which Paying sources to pay and the Transaction draft
 // for them. The draft goes through the existing Record flow and carries the usual `pays` link, so
 // paid status still comes only from Transactions (ADR 0003). Pure TypeScript, no Firebase imports.
-import type { ForecastOutflow } from './forecast.ts';
+import type { ForecastOutflow, OutflowLink } from './forecast.ts';
 import { parseAmount } from './money.ts';
 import type { PayingSource } from './schemas.ts';
 import type { TransactionDraft } from './transactions.ts';
@@ -15,6 +15,13 @@ export function recordPicks(
 		.filter((s) => s.valid && (which === 'all' || s.accountId === which))
 		.map((s) => ({ accountId: s.accountId, amount: s.amount - s.paid }))
 		.filter((s) => s.amount > 0);
+}
+
+/** The Record page's query for an Outflow: its plan and due date, or its card and Statement. */
+export function recordQuery(link: OutflowLink): string {
+	const key = { scheduled: 'plan', installment: 'installment', statement: 'card' }[link.plan];
+	const due = link.plan === 'statement' ? 'statement' : 'due';
+	return `${key}=${encodeURIComponent(link.planId)}&${due}=${link.due}`;
 }
 
 /** `account:centavos,…` for the Record link. */

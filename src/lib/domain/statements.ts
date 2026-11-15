@@ -12,6 +12,7 @@ import {
 	type Statement,
 	type Transaction
 } from './schemas.ts';
+import type { TransactionDraft } from './transactions.ts';
 import type { ChartWrite } from './writes.ts';
 
 export type StatementInput = {
@@ -56,6 +57,8 @@ export type CardStatement = {
 	gap: number | null;
 	/** Payments (and earlier credit) applied to it, oldest Statement first. */
 	paid: number;
+	/** The payments that filled it, and how much of each went to it. */
+	payments: { txId: string; amount: number }[];
 	/** What is left to pay; 0 once Paid or when nothing is owed. */
 	remaining: number;
 	status: 'unpaid' | 'partly-paid' | 'paid';
@@ -195,7 +198,9 @@ export function statementsOf(
 	const items: BilledItem[] = [];
 	const refunds: BilledItem[] = [];
 	// Payments fill the oldest Statement first, whatever their date (ADR 0006).
-	let pool = 0;
+	// Money available to pay Statements, oldest first: payments by date, then credit carried
+	// from a negative Statement (no Transaction).
+	const pool: { txId?: string; date: IsoDate; left: number }[] = [];
 	let carried = 0;
 	for (const tx of chart.transactionsFor(cardId)) {
 		const net = onCard(tx, cardId);
@@ -203,7 +208,7 @@ export function statementsOf(
 			carried += net;
 			continue;
 		}
-		if (net < 0 && isPayment(chart, tx)) pool += -net;
+		if (net < 0 && isPayment(chart, tx)) pool.push({ txId: tx.id, date: tx.date, left: -net });
 		if (net < 0 && !isPayment(chart, tx))
 			refunds.push({
 				key: `transaction:${tx.id}`,
@@ -229,6 +234,7 @@ export function statementsOf(
 	if (dated.length === 0 && carried === 0) return [];
 
 	// The first Statement bills the earliest dated item; with only an Opening Balance, today.
+	pool.sort((a, b) => a.date.localeCompare(b.date));
 	const first = dated.length
 		? dated.reduce((min, i) => (i.date < min ? i.date : min), dated[0].date)
 		: today;
@@ -250,8 +256,17 @@ export function statementsOf(
 		const entered = entries.get(statementDate) ?? null;
 		const balance = entered ?? computed;
 		// A negative balance is credit for the next Statement, like a payment.
-		const paid = balance > 0 ? Math.min(pool, balance) : 0;
-		pool += balance > 0 ? -paid : -balance;
+		const payments: { txId: string; amount: number }[] = [];
+		let paid = 0;
+		if (balance <= 0) pool.unshift({ date: statementDate, left: -balance });
+		for (const p of pool) {
+			if (paid >= balance) break;
+			const used = Math.min(p.left, balance - paid);
+			if (used <= 0) continue;
+			p.left -= used;
+			paid += used;
+			if (p.txId) payments.push({ txId: p.txId, amount: used });
+		}
 		const remaining = Math.max(0, balance - paid);
 		statements.push({
 			from,
@@ -266,6 +281,7 @@ export function statementsOf(
 			gap: entered === null ? null : entered - computed,
 			paid,
 			remaining,
+			payments,
 			status: remaining === 0 ? 'paid' : paid > 0 ? 'partly-paid' : 'unpaid'
 		});
 	}
@@ -339,4 +355,53 @@ export function planEndCardPaymentPlans(
 		id,
 		data: { ...data, end: { type: 'on', date: endOn }, updatedAt: now }
 	}));
+}
+
+const amountText = (cents: number) =>
+	`${Math.floor(cents / 100)}.${String(cents % 100).padStart(2, '0')}`;
+
+/**
+ * The Record draft for paying a Statement: To the card for what is left. From stays blank for
+ * the Forecast's picks; no paid link, since payments fill the oldest Statement first (ADR 0006).
+ */
+export function statementRecordDraft(
+	chart: Chart,
+	cardId: string,
+	remaining: number,
+	{ today }: { today: IsoDate }
+): TransactionDraft {
+	return {
+		date: today,
+		description: `${chart.account(cardId)?.name ?? 'Card'} payment`,
+		note: '',
+		status: 'cleared',
+		tags: [],
+		from: [{ accountId: '', amount: '' }],
+		to: [{ accountId: cardId, amount: amountText(remaining) }],
+		fees: []
+	};
+}
+
+/** A Statement's days, with or without anything billed in it. */
+export type StatementPeriod = { from: IsoDate; statementDate: IsoDate; dueDate: IsoDate };
+
+/** The next `count` Statements whose Due Date is after `after`, in order. */
+export function statementPeriods(
+	terms: CardTerms,
+	after: IsoDate,
+	count: number
+): StatementPeriod[] {
+	const out: StatementPeriod[] = [];
+	let statementDate = previousStatementDate(terms, statementDateFor(terms, after));
+	while (out.length < count) {
+		const dueDate = dueDateOf(terms, statementDate);
+		if (dueDate > after)
+			out.push({
+				from: addDay(previousStatementDate(terms, statementDate)),
+				statementDate,
+				dueDate
+			});
+		statementDate = nextStatementDate(terms, statementDate);
+	}
+	return out;
 }
