@@ -417,6 +417,48 @@ describe('A card payment whose amount varies', () => {
 	});
 });
 
+describe('An Inflow whose amount varies', () => {
+	const reimburse = plan('reimb', 'Reimbursement', { type: 'once', date: '2026-11-24' }, [
+		line('friend', 'from', null),
+		line('ewallet', 'to', null)
+	]);
+	const received: Transaction = {
+		...tx('reimbursed', '2026-11-15', [
+			['ewallet', 90_000],
+			['friend', -90_000]
+		]),
+		status: 'pending',
+		pays: { plan: 'scheduled', planId: 'reimb', due: '2026-11-24' }
+	};
+
+	it('is received in full by its first paying Transaction, counting what arrived', () => {
+		const base = input();
+		const chart = buildChart(accounts, [buffet, loanPayment, groceries, received]);
+		const f = buildForecast(
+			{ ...base, chart, scheduled: [...base.scheduled, reimburse] },
+			'2026-11-30'
+		);
+		expect(f.inflows.find((i) => i.key === 'scheduled:reimb:2026-11-24')).toMatchObject({
+			status: 'paid',
+			varies: true,
+			total: 90_000,
+			received: 90_000,
+			receivedOn: '2026-11-15',
+			paidBy: ['reimbursed']
+		});
+	});
+
+	it('stays expected with nothing to count until it arrives', () => {
+		const base = input();
+		const f = buildForecast({ ...base, scheduled: [...base.scheduled, reimburse] }, '2026-11-30');
+		expect(f.inflows.find((i) => i.key === 'scheduled:reimb:2026-11-24')).toMatchObject({
+			status: 'unpaid',
+			total: 0,
+			paidBy: []
+		});
+	});
+});
+
 describe('Bill with next payment', () => {
 	it('moves a recorded charge to the following card payment', () => {
 		const later = { ...buffet, billOn: '2026-11-26' };

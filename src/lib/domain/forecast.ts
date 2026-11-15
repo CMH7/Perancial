@@ -261,6 +261,8 @@ export type ForecastInflow = {
 	varies: boolean;
 	received: number;
 	receivedOn?: IsoDate;
+	/** The Transactions that received it, oldest first. */
+	paidBy: string[];
 	status: PaidStatus['status'];
 	/** Not received by the end of its own Cut-off; shown in the Forecast for today. */
 	late: boolean;
@@ -790,8 +792,11 @@ function inflowsIn(ctx: Ctx, range: DateRange): ForecastInflow[] {
 				(s, l, k) => s + (l.fee === 'additional' ? (occ.amounts[k] ?? 0) : 0),
 				0
 			);
-			const total = occ.total ?? 0;
 			const status = occurrenceStatus(chart, occ, { today });
+			// An amount that varies is known only once it arrives: the first receipt is all of it.
+			const varies = occ.total === null;
+			const total = varies ? status.paid : (occ.total ?? 0);
+			const done = varies && status.status === 'partly-paid' ? 'paid' : status.status;
 			const fromType = chart.account(from.accountId)?.type;
 			const derived =
 				fromType === 'income'
@@ -811,10 +816,11 @@ function inflowsIn(ctx: Ctx, range: DateRange): ForecastInflow[] {
 				amount: total - additional,
 				additional,
 				total,
-				varies: occ.total === null,
+				varies,
 				received: status.paid,
 				receivedOn: status.payments.at(-1)?.date ?? undefined,
-				status: status.status,
+				paidBy: status.payments.map((tx) => tx.id),
+				status: done,
 				late: false,
 				section:
 					ownerSection(lists.inflowSections, plan.section) ??

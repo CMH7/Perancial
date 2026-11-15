@@ -621,16 +621,18 @@
 											class="ml-1 rounded bg-amber-100 px-1 text-xs text-amber-800">Late</span
 										>{/if}
 									<span class="block text-xs text-gray-500"
-										>{i.received
-											? `received ${day(i.receivedOn ?? i.date)}`
-											: `expected ${day(i.due)}`}{#if i.status !== 'paid'}
+										>{#if i.paidBy.length}<a
+												class="underline"
+												href={resolve('/transactions/[id]', { id: i.paidBy.at(-1) ?? '' })}
+												>received {day(i.receivedOn ?? i.date)}</a
+											>{:else}expected {day(i.due)}{/if}{#if i.status !== 'paid'}
 											· <button class="underline" onclick={() => recordInflow(i.plan.id, i.due)}
 												>Record</button
 											>{/if}</span
 									></span
 								>
 								<span class="tabular-nums {i.status === 'paid' ? 'text-emerald-700' : ''}"
-									>{i.varies ? 'varies' : formatAmount(i.total)}</span
+									>{i.varies && !i.received ? 'varies' : formatAmount(i.total)}</span
 								>
 							</div>
 						{:else}<p class="text-xs text-gray-400">Nothing expected</p>{/each}
