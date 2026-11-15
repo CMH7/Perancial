@@ -278,11 +278,15 @@ type Classified =
  * What an Occurrence is to a Forecast with these Funding Accounts. Money from a Funding Account is
  * an Outflow; money into an Asset from anywhere else (Income, a Liability, an Asset tracking what
  * someone owes) is an Inflow; spending on a Liability is a charge, paid later with that Liability.
+ * Spending on a Credit Card is always a charge, even into an Asset (a purchase someone will pay back).
  */
 function classify(chart: Chart, occ: Occurrence, funding: Set<string>): Classified {
 	const from = occ.version.lines.filter((l) => l.side === 'from');
 	const to = occ.version.lines.filter((l) => l.side === 'to' && !l.fee);
 	if (from.some((l) => funding.has(l.accountId))) return { kind: 'outflow' };
+	const card = from.find((l) => isCard(chart, l.accountId));
+	if (card && !from.some((l) => isAsset(chart, l.accountId)))
+		return { kind: 'charge', liabilityId: card.accountId };
 	if (to.some((l) => isAsset(chart, l.accountId))) return { kind: 'inflow' };
 	if (from.some((l) => isAsset(chart, l.accountId))) return { kind: 'outflow' };
 	const liability = from.find((l) => chart.account(l.accountId)?.type === 'liability');

@@ -45,7 +45,7 @@ An Account nested directly under another Account.
 _Avoid_: sub account (fine informally)
 
 **Credit Card**
-A Liability Leaf Account that bills its charges in monthly Statements. It knows its Statement Day and Due Day, so the Forecast finds its payments without a Scheduled Transaction. Still one of the five Account Types: a Liability.
+A Liability Leaf Account that bills its charges in monthly Statements. It knows its Statement Day and Due Day, so the Forecast finds its payments without a Scheduled Transaction. Still one of the five Account Types: a Liability. Anything bought with it is a charge, even when it goes to an Asset, such as a purchase someone else will pay back; it is never an Inflow.
 _Avoid_: card account, card spending (as the concept)
 
 **Statement**
