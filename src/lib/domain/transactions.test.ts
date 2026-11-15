@@ -462,7 +462,9 @@ describe('draftFromTransaction and duplicateDraft', () => {
 			{ accountId: 'gcash', amount: 500000 },
 			{ accountId: 'bank-fees', amount: 1500, fee: 'additional' as const }
 		],
-		pays: { plan: 'scheduled' as const, planId: 'p1', due: '2026-11-01' }
+		pays: { plan: 'scheduled' as const, planId: 'p1', due: '2026-11-01' },
+		fromPersons: ['me'],
+		toPersons: ['partner']
 	};
 
 	it('puts fee lines back in the Fees section, with their mode, for editing', () => {
@@ -475,7 +477,9 @@ describe('draftFromTransaction and duplicateDraft', () => {
 			from: [{ accountId: 'bpi', amount: '5015.00' }],
 			to: [{ accountId: 'gcash', amount: '5000.00' }],
 			fees: [{ accountId: 'bank-fees', amount: '15.00', mode: 'additional' }],
-			billOn: null
+			billOn: null,
+			fromPersons: ['me'],
+			toPersons: ['partner']
 		});
 		expect(evaluateDraft(chart, draftFromTransaction(sent), { today }).entries).toEqual(
 			sent.entries

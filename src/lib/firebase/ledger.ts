@@ -293,6 +293,7 @@ export const newTransactionId = (db: Firestore, uid: string) =>
 	doc(collection(db, transactionsPath(uid))).id;
 export const newScheduledId = (db: Firestore, uid: string) =>
 	doc(collection(db, scheduledPath(uid))).id;
+export const newPersonId = (db: Firestore, uid: string) => doc(collection(db, personsPath(uid))).id;
 export const newInstallmentId = (db: Firestore, uid: string) =>
 	doc(collection(db, installmentsPath(uid))).id;
 

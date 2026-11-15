@@ -5,6 +5,7 @@
 	import { resolve } from '$app/paths';
 	import {
 		formatAmount,
+		personLabel,
 		journalRow,
 		paidLinkLabel,
 		planDeleteTransaction,
@@ -136,6 +137,14 @@
 		{/each}
 		<span class="ml-auto font-semibold tabular-nums">{formatAmount(row.total)}</span>
 	</div>
+	{#if tx.fromPersons.length || tx.toPersons.length}
+		<p class="text-xs text-violet-800">
+			<span class="text-gray-500">From</span>
+			{tx.fromPersons.map((p) => personLabel(ledger.persons, p)).join(', ') || '—'}
+			<span class="text-gray-500">· To</span>
+			{tx.toPersons.map((p) => personLabel(ledger.persons, p)).join(', ') || '—'}
+		</p>
+	{/if}
 	{#if row.pending}
 		<form
 			class="flex flex-wrap items-center gap-2 rounded bg-amber-50 p-2 text-amber-900"

@@ -186,13 +186,28 @@ export function planChangeFollowing(
 	};
 }
 
-/** From the Plans list: new details on every version. Rules change only from an occurrence. */
+/**
+ * From the Plans list: new details on every version, Persons included (none given clears them).
+ * Rules change only from an occurrence.
+ */
 export function planChangeAll(
 	plan: Scheduled,
-	details: Pick<PlanVersion, 'description' | 'note' | 'tags' | 'lines'>,
+	details: Pick<
+		PlanVersion,
+		'description' | 'note' | 'tags' | 'lines' | 'fromPersons' | 'toPersons'
+	>,
 	{ now }: { now: Date }
 ): ChartWrite[] {
-	return save(plan, { versions: plan.versions.map((v) => ({ ...v, ...details })) }, now);
+	const versions = plan.versions.map(({ fromPersons: _f, toPersons: _t, ...v }) => {
+		const { fromPersons, toPersons, ...rest } = details;
+		return {
+			...v,
+			...rest,
+			...(fromPersons?.length ? { fromPersons } : {}),
+			...(toPersons?.length ? { toPersons } : {})
+		};
+	});
+	return save(plan, { versions }, now);
 }
 
 /** Ends a plan today, keeping its history and paid links. */

@@ -5,6 +5,8 @@
 		ACCOUNT_TYPE_GUIDE,
 		evaluatePlanDraft,
 		normalizeTag,
+		prefillPersons,
+		withLinkedPersons,
 		type DraftLine,
 		type LineSide,
 		type PlanDraft,
@@ -13,6 +15,7 @@
 	import { accountItems } from '#lib/account-items.svelte.ts';
 	import { ledger } from '#lib/ledger.svelte.ts';
 	import AccountPicker from './AccountPicker.svelte';
+	import PersonPicker from './PersonPicker.svelte';
 	import SectionPicker from './SectionPicker.svelte';
 
 	let {
@@ -22,6 +25,7 @@
 		kept = new Set<string>(),
 		notice = '',
 		submitLabel = 'Save',
+		prefill = false,
 		onsubmit,
 		oncancel
 	}: {
@@ -33,6 +37,8 @@
 		kept?: ReadonlySet<string>;
 		notice?: string;
 		submitLabel?: string;
+		/** A new plan: linked Accounts pre-fill their Persons. */
+		prefill?: boolean;
 		onsubmit: (draft: PlanDraft) => Promise<void>;
 		/** Shows a Cancel button beside Save. */
 		oncancel?: () => void;
@@ -47,6 +53,30 @@
 
 	const chart = $derived(ledger.chart);
 	const ev = $derived(evaluatePlanDraft(chart, draft, { kept }));
+
+	// Persons: on a new plan, linked Accounts add their Person unless the owner removed it.
+	let dismissed = $state<{ from: string[]; to: string[] }>({ from: [], to: [] });
+	const sideAccounts = $derived({
+		from: draft.from.map((l) => l.accountId).filter(Boolean),
+		to: draft.to.map((l) => l.accountId).filter(Boolean)
+	});
+	const linked = $derived(prefillPersons(chart, sideAccounts));
+	const same = (a: string[] | undefined, b: string[]) =>
+		(a ?? []).length === b.length && b.every((x, i) => a?.[i] === x);
+	$effect(() => {
+		if (!prefill) return;
+		const next = withLinkedPersons(
+			chart,
+			sideAccounts,
+			{ from: draft.fromPersons ?? [], to: draft.toPersons ?? [] },
+			dismissed
+		);
+		if (!same(draft.fromPersons, next.from)) draft.fromPersons = next.from;
+		if (!same(draft.toPersons, next.to)) draft.toPersons = next.to;
+	});
+	const dismiss = (side: 'from' | 'to') => (id: string) => {
+		if (!dismissed[side].includes(id)) dismissed[side] = [...dismissed[side], id];
+	};
 	const errorAt = $derived(new Map(ev.errors.map((e) => [e.at, e.message])));
 	const shown = (at: string) => (tried ? errorAt.get(at) : undefined);
 
@@ -338,6 +368,24 @@
 			{#if shown('end')}<p class="w-full text-xs text-red-600">{shown('end')}</p>{/if}
 		</fieldset>
 	</div>
+
+	<section class="space-y-2 rounded-xl border bg-white p-4" aria-label="Persons">
+		<PersonPicker
+			label="From"
+			bind:value={() => draft.fromPersons ?? [], (v) => (draft.fromPersons = v)}
+			linked={linked.from}
+			onremove={dismiss('from')}
+		/>
+		<PersonPicker
+			label="To"
+			bind:value={() => draft.toPersons ?? [], (v) => (draft.toPersons = v)}
+			linked={linked.to}
+			onremove={dismiss('to')}
+		/>
+		<p class="text-xs text-gray-500">
+			Copied to each Transaction recorded from this plan. Optional.
+		</p>
+	</section>
 
 	<section class="space-y-3 rounded-xl border bg-white p-4">
 		<div class="flex flex-wrap items-center gap-2">

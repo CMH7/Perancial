@@ -19,6 +19,7 @@ import {
 	migrateLegacyTransactions,
 	newAccountId,
 	newInstallmentId,
+	newPersonId,
 	newScheduledId,
 	newTransactionId,
 	subscribeLedger
@@ -64,6 +65,12 @@ class Ledger {
 	}
 
 	/** A fresh ID for a new Scheduled Transaction. */
+	/** A fresh ID for a new Person. */
+	newPersonId() {
+		if (!this.#uid) throw new Error('Not signed in');
+		return newPersonId(db, this.#uid);
+	}
+
 	newScheduledId() {
 		if (!this.#uid) throw new Error('Not signed in');
 		return newScheduledId(db, this.#uid);

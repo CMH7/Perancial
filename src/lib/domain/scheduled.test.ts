@@ -345,6 +345,16 @@ describe('plan edits', () => {
 		]);
 	});
 
+	it('sets the Persons on every version from the Plans list, and clears them when none are given', () => {
+		const p = plan([{ ...monthly, fromPersons: ['me'], toPersons: ['landlord'] }]);
+		const details = { description: 'Rent', note: '', tags: [], lines: monthly.lines };
+		const cleared = saved(planChangeAll(p, details, { now: later })).versions[0];
+		expect('fromPersons' in cleared || 'toPersons' in cleared).toBe(false);
+		const set = saved(planChangeAll(p, { ...details, toPersons: ['owner'] }, { now: later }));
+		expect(set.versions[0]).toMatchObject({ toPersons: ['owner'] });
+		expect('fromPersons' in set.versions[0]).toBe(false);
+	});
+
 	it('ends a plan today, and deletes it only while nothing pays it', () => {
 		expect(saved(planEndPlan(plan([monthly]), { today: '2026-03-10', now: later })).end).toEqual({
 			type: 'on',
