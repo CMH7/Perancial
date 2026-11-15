@@ -2,7 +2,7 @@ import { takesOpeningBalance } from './account-types.ts';
 import { toStorage, type Chart } from './chart.ts';
 import { z } from 'zod';
 import { formatAmount, parseAmount } from './money.ts';
-import type { AccountDoc, AccountType } from './schemas.ts';
+import type { AccountDoc, AccountType, CardTerms } from './schemas.ts';
 import { openingTransactionId, type ChartWrite } from './writes.ts';
 
 export type OpeningField =
@@ -16,6 +16,8 @@ export type CreateFormRules = {
 	childRowsAllowed: boolean;
 	/** Confirmation to show before saving, or null when none is needed. */
 	confirm: string | null;
+	/** Whether the new Account can be a Credit Card: a single new Liability Leaf (ADR 0006). */
+	card: boolean;
 };
 
 /** Every Entry ever recorded, whatever its date: the money that moves on conversion. */
@@ -39,6 +41,7 @@ export function createFormRules(
 		return {
 			opening: showsOpening ? { kind: 'inherited', amount } : { kind: 'hidden' },
 			childRowsAllowed: false,
+			card: false,
 			confirm: `"${parent.name}" has ${formatAmount(amount)} recorded directly. It will move to the new account, and "${parent.name}" becomes a Group Account.`
 		};
 	}
@@ -50,7 +53,8 @@ export function createFormRules(
 				? { kind: 'sum' }
 				: { kind: 'editable' },
 		childRowsAllowed: true,
-		confirm: null
+		confirm: null,
+		card: parent?.type === 'liability' && childRows === 0
 	};
 }
 
@@ -60,6 +64,8 @@ export type CreateAccountInput = NewChildAccount & {
 	parentId: string;
 	/** Child rows, one level deep. Ignored when the parent inherits money. */
 	children: NewChildAccount[];
+	/** Credit Card days for a single new Liability Leaf; ignored otherwise. */
+	card?: CardTerms | null;
 };
 
 type PlanOptions = { newId: () => string; now: Date };
@@ -148,6 +154,7 @@ export function planCreateAccount(
 					system: parent.system,
 					archived: parent.archived,
 					order: 0,
+					...(parent.card ? { card: parent.card } : {}),
 					createdAt: parent.createdAt,
 					updatedAt: now
 				}
@@ -156,19 +163,28 @@ export function planCreateAccount(
 	}
 
 	const id = newId();
+	const single = input.children.length === 0;
 	const writes: ChartWrite[] = [
 		{
 			op: 'setAccount',
 			id,
-			data: accountDoc({
-				name: input.name,
-				description: input.description,
-				parentId: parent.id,
-				order
-			})
+			data: {
+				...accountDoc({
+					name: input.name,
+					description: input.description,
+					parentId: parent.id,
+					order
+				}),
+				...(single && type === 'liability' && input.card ? { card: input.card } : {})
+			}
 		}
 	];
-	if (input.children.length === 0) {
+	// A Group is never a Credit Card: a card Leaf that gains a child drops its days.
+	if (parent.card) {
+		const { id: parentId, ...data } = parent;
+		writes.push({ op: 'setAccount', id: parentId, data: { ...data, card: null, updatedAt: now } });
+	}
+	if (single) {
 		writes.push(...openingWrite(id, type, input.openingBalance, now));
 		return writes;
 	}
@@ -213,8 +229,24 @@ export const AccountFields = z.object({
 	openingBalance: AmountText
 });
 
+const DayText = z.string().transform((text, ctx) => {
+	const day = /^\d{1,2}$/.test(text.trim()) ? Number(text.trim()) : 0;
+	if (day < 1 || day > 31) {
+		ctx.addIssue({ code: 'custom', message: 'Enter a day from 1 to 31' });
+		return z.NEVER;
+	}
+	return day;
+});
+
+/** Credit Card days as typed; null when the Account is not a Credit Card. */
+export const CardFields = z
+	.object({ statementDay: DayText, dueDay: DayText })
+	.nullable()
+	.optional();
+
 /** The create-Account form as typed; parses into a `CreateAccountInput`. */
 export const CreateAccountForm = AccountFields.extend({
 	parentId: z.string().min(1),
-	children: z.array(AccountFields)
+	children: z.array(AccountFields),
+	card: CardFields
 });
