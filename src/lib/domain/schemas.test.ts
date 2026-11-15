@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { parseAccount, parseInstallment, parseScheduled, parseTransaction } from './schemas.ts';
+import {
+	parseAccount,
+	parseInstallment,
+	parseScheduled,
+	parseStatement,
+	parseTransaction
+} from './schemas.ts';
 
 const now = new Date('2026-11-09T00:00:00Z');
 
@@ -289,5 +295,63 @@ describe('parseInstallment', () => {
 			bad({ rows: [{ ...visa.rows[0], additionals: [{ description: 'x', amount: 0 }] }] })
 		).toThrow();
 		expect(bad({ rows: [{ ...visa.rows[0], due: '15 Nov' }] })).toThrow();
+	});
+});
+
+describe('Credit Card terms on an Account', () => {
+	const card = {
+		name: 'Visa',
+		description: '',
+		type: 'liability',
+		parentId: 'liability',
+		system: null,
+		archived: false,
+		order: 0,
+		createdAt: now,
+		updatedAt: now
+	};
+
+	it('keeps a Statement Day and a Due Day on a Liability', () => {
+		const parsed = parseAccount('visa', { ...card, card: { statementDay: 20, dueDay: 9 } });
+		expect(parsed.card).toEqual({ statementDay: 20, dueDay: 9 });
+	});
+
+	it('rejects days outside 1–31', () => {
+		expect(() => parseAccount('visa', { ...card, card: { statementDay: 0, dueDay: 9 } })).toThrow();
+		expect(() =>
+			parseAccount('visa', { ...card, card: { statementDay: 20, dueDay: 32 } })
+		).toThrow();
+	});
+
+	it('rejects card terms on an Account that is not a Liability', () => {
+		expect(() =>
+			parseAccount('bank', { ...card, type: 'asset', card: { statementDay: 20, dueDay: 9 } })
+		).toThrow();
+	});
+});
+
+describe('parseStatement', () => {
+	const doc = { amount: 1250000, sources: [], createdAt: now, updatedAt: now };
+
+	it('reads the card and Statement Date from the id', () => {
+		expect(parseStatement('visa_2026-11-20', doc)).toMatchObject({
+			id: 'visa_2026-11-20',
+			cardId: 'visa',
+			statementDate: '2026-11-20',
+			amount: 1250000
+		});
+	});
+
+	it('allows no entered amount yet, and defaults sources to none', () => {
+		const { sources: _, ...rest } = doc;
+		expect(parseStatement('visa_2026-11-20', { ...rest, amount: null })).toMatchObject({
+			amount: null,
+			sources: []
+		});
+	});
+
+	it('rejects a negative amount and an id without a Statement Date', () => {
+		expect(() => parseStatement('visa_2026-11-20', { ...doc, amount: -1 })).toThrow();
+		expect(() => parseStatement('visa', doc)).toThrow();
 	});
 });

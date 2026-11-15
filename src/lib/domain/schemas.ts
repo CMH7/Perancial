@@ -4,19 +4,34 @@ export const ACCOUNT_TYPES = ['asset', 'liability', 'equity', 'income', 'expense
 export const AccountType = z.enum(ACCOUNT_TYPES);
 export type AccountType = z.infer<typeof AccountType>;
 
-/** `users/{uid}/accounts/{accountId}` document data. Timestamps arrive as `Date`. */
-export const AccountDoc = z.object({
-	name: z.string(),
-	description: z.string(),
-	type: AccountType,
-	parentId: z.string().nullable(),
-	system: z.enum(['root', 'opening-balances']).nullable(),
-	archived: z.boolean(),
-	/** Manual position among siblings (ascending). */
-	order: z.number(),
-	createdAt: z.date(),
-	updatedAt: z.date()
+/** A Credit Card's billing days (ADR 0006): days of the month, clamped in shorter months. */
+export const CardTerms = z.object({
+	statementDay: z.int().min(1).max(31),
+	/** In the month after the Statement Date when not after the Statement Day. */
+	dueDay: z.int().min(1).max(31)
 });
+export type CardTerms = z.infer<typeof CardTerms>;
+
+/** `users/{uid}/accounts/{accountId}` document data. Timestamps arrive as `Date`. */
+export const AccountDoc = z
+	.object({
+		name: z.string(),
+		description: z.string(),
+		type: AccountType,
+		parentId: z.string().nullable(),
+		system: z.enum(['root', 'opening-balances']).nullable(),
+		archived: z.boolean(),
+		/** Manual position among siblings (ascending). */
+		order: z.number(),
+		/** Present on a Credit Card: a Liability Leaf billed in monthly Statements. */
+		card: CardTerms.nullable().optional(),
+		createdAt: z.date(),
+		updatedAt: z.date()
+	})
+	.refine((a) => !a.card || a.type === 'liability', {
+		message: 'Only a Liability can be a Credit Card',
+		path: ['card']
+	});
 export type AccountDoc = z.infer<typeof AccountDoc>;
 export type Account = AccountDoc & { id: string };
 
@@ -319,4 +334,28 @@ export type ForecastSettingsDoc = z.infer<typeof ForecastSettingsDoc>;
 
 export function parseForecastSettings(data: unknown): ForecastSettingsDoc {
 	return ForecastSettingsDoc.parse(data);
+}
+
+/**
+ * `users/{uid}/statements/{cardId}_{statementDate}`: what a Credit Card Statement can't derive
+ * (ADR 0006): the amount the real Statement shows, and its Paying sources (ADR 0005).
+ */
+export const StatementDoc = z.object({
+	/** Non-negative integer centavos; null until the owner enters it. */
+	amount: z.int().min(0).nullable(),
+	sources: PayingSources.default([]),
+	createdAt: z.date(),
+	updatedAt: z.date()
+});
+export type StatementDoc = z.infer<typeof StatementDoc>;
+export type Statement = StatementDoc & { id: string; cardId: string; statementDate: string };
+
+/** The id of a Credit Card's Statement document. */
+export const statementId = (cardId: string, statementDate: string) => `${cardId}_${statementDate}`;
+
+export function parseStatement(id: string, data: unknown): Statement {
+	const match = /^(.+)_(\d{4}-\d{2}-\d{2})$/.exec(id);
+	if (!match) throw new Error(`Not a Statement id: ${id}`);
+	const statementDate = z.iso.date().parse(match[2]);
+	return { id, cardId: match[1], statementDate, ...StatementDoc.parse(data) };
 }

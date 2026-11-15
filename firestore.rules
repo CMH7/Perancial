@@ -28,8 +28,18 @@ service cloud.firestore {
         function fields() {
           return ['name', 'description', 'type', 'parentId', 'system', 'archived', 'order', 'createdAt', 'updatedAt'];
         }
+        // A Credit Card's billing days (ADR 0006), on a Liability only.
+        function day(n) {
+          return n is int && n >= 1 && n <= 31;
+        }
+        function validCard(d) {
+          return !('card' in d) || d.card == null
+            || (d.card is map && d.card.keys().hasOnly(['statementDay', 'dueDay'])
+                && day(d.card.statementDay) && day(d.card.dueDay) && d.type == 'liability');
+        }
         function validShape(d) {
-          return d.keys().hasOnly(fields().concat(['madeFrom'])) && d.keys().hasAll(fields())
+          return d.keys().hasOnly(fields().concat(['madeFrom', 'card'])) && d.keys().hasAll(fields())
+            && validCard(d)
             && (!('madeFrom' in d) || d.madeFrom == null
               || (d.madeFrom is string && d.madeFrom.size() >= 1))
             && d.name is string && d.description is string
@@ -159,6 +169,22 @@ service cloud.firestore {
 
         allow read, delete: if isOwner(uid);
         allow create, update: if isOwner(uid) && validForecast(request.resource.data);
+      }
+
+      // Credit Card Statements are derived; only the entered amount and Paying sources are stored,
+      // keyed by card and Statement Date (ADR 0006).
+      match /statements/{statementId} {
+        function validStatement(d) {
+          return statementId.matches('^.+_[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+            && d.keys().hasOnly(['amount', 'sources', 'createdAt', 'updatedAt'])
+            && d.keys().hasAll(['amount', 'sources', 'createdAt', 'updatedAt'])
+            && (d.amount == null || (d.amount is int && d.amount >= 0))
+            && d.sources is list && d.sources.size() <= 20
+            && d.createdAt is timestamp && d.updatedAt is timestamp;
+        }
+
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid) && validStatement(request.resource.data);
       }
 
       // Settings, one document per area. Only `forecast` (the Section lists) exists so far.

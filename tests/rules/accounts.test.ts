@@ -70,3 +70,23 @@ describe('user Accounts', () => {
 		await assertSucceeds(deleteDoc(ref('cash')));
 	});
 });
+
+describe('Credit Card terms', () => {
+	const visa = (card: unknown) =>
+		accountData({ name: 'Visa', type: 'liability', parentId: 'liability', card } as never);
+
+	it('accept a Statement Day and a Due Day on a Liability, or none', async () => {
+		await assertSucceeds(setDoc(ref('visa'), visa({ statementDay: 20, dueDay: 9 })));
+		await assertSucceeds(setDoc(ref('visa'), visa(null)));
+	});
+
+	it('reject days outside 1–31, extra keys, and terms on another Account Type', async () => {
+		await assertFails(setDoc(ref('visa'), visa({ statementDay: 0, dueDay: 9 })));
+		await assertFails(setDoc(ref('visa'), visa({ statementDay: 20, dueDay: 32 })));
+		await assertFails(setDoc(ref('visa'), visa({ statementDay: 20, dueDay: 9, limit: 1 })));
+		await assertFails(setDoc(ref('visa'), visa({ statementDay: 20.5, dueDay: 9 })));
+		await assertFails(
+			setDoc(ref('cash'), accountData({ card: { statementDay: 20, dueDay: 9 } } as never))
+		);
+	});
+});
