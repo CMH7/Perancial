@@ -15,6 +15,9 @@ export type JournalFilters = {
 	kind: TransactionKind | '';
 	status: Transaction['status'] | '';
 	tag: string;
+	/** Persons to match: a Transaction naming any of them on `personSide`. */
+	persons: string[];
+	personSide: 'either' | 'from' | 'to';
 };
 
 export const noFilters = (): JournalFilters => ({
@@ -24,7 +27,9 @@ export const noFilters = (): JournalFilters => ({
 	accountId: '',
 	kind: '',
 	status: '',
-	tag: ''
+	tag: '',
+	persons: [],
+	personSide: 'either'
 });
 
 /** Newest first; on the same date, the one entered later first. */
@@ -45,6 +50,14 @@ export function journal(chart: Chart, f: JournalFilters): Transaction[] {
 		.filter((tx) => !f.kind || kindOf(chart, tx.entries) === f.kind)
 		.filter((tx) => !f.status || tx.status === f.status)
 		.filter((tx) => !f.tag || tx.tags.includes(f.tag))
+		.filter((tx) => {
+			if (!f.persons.length) return true;
+			const named = [
+				...(f.personSide !== 'to' ? tx.fromPersons : []),
+				...(f.personSide !== 'from' ? tx.toPersons : [])
+			];
+			return f.persons.some((p) => named.includes(p));
+		})
 		.filter(
 			(tx) =>
 				!q ||
