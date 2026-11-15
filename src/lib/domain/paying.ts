@@ -30,7 +30,9 @@ export function recordDraft(view: OccurrenceView, { today }: { today: IsoDate })
 		description: v.description,
 		note: v.note,
 		status: 'cleared' as const,
-		tags: [...v.tags]
+		tags: [...v.tags],
+		...(v.fromPersons?.length ? { fromPersons: [...v.fromPersons] } : {}),
+		...(v.toPersons?.length ? { toPersons: [...v.toPersons] } : {})
 	};
 	if (status.status === 'partly-paid') {
 		const first =

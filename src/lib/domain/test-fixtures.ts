@@ -54,6 +54,8 @@ export function opening(accountId: string, amount: number): Transaction {
 		pays: null,
 		billOn: null,
 		recordedWith: null,
+		fromPersons: [],
+		toPersons: [],
 		createdAt: now,
 		updatedAt: now
 	};
@@ -73,6 +75,8 @@ export function tx(id: string, date: string, entries: [string, number][]): Trans
 		pays: null,
 		billOn: null,
 		recordedWith: null,
+		fromPersons: [],
+		toPersons: [],
 		createdAt: now,
 		updatedAt: now
 	};

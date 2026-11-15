@@ -90,3 +90,16 @@ describe('Credit Card terms', () => {
 		);
 	});
 });
+
+describe('Person links', () => {
+	it('accept a linked Person, or none', async () => {
+		await assertSucceeds(setDoc(ref('cash'), accountData({ personId: 'p1' } as never)));
+		await assertSucceeds(setDoc(ref('cash'), accountData({ personId: null } as never)));
+	});
+
+	it('reject Me, an empty id and a non-string', async () => {
+		await assertFails(setDoc(ref('cash'), accountData({ personId: 'me' } as never)));
+		await assertFails(setDoc(ref('cash'), accountData({ personId: '' } as never)));
+		await assertFails(setDoc(ref('cash'), accountData({ personId: 5 } as never)));
+	});
+});

@@ -67,6 +67,20 @@ describe('recordDraft', () => {
 		});
 	});
 
+	it('brings the plan’s From and To Persons along', () => {
+		const chart = buildChart(accounts, []);
+		const withPersons: Scheduled = {
+			...rent,
+			versions: [{ ...rent.versions[0], fromPersons: ['me'], toPersons: ['landlord'] }]
+		};
+		const occurrence = occurrencesOf(withPersons, { from: '2026-12-05', to: '2026-12-05' })[0];
+		const status = occurrenceStatus(chart, occurrence, { today });
+		expect(recordDraft({ plan: withPersons, occurrence, status }, { today })).toMatchObject({
+			fromPersons: ['me'],
+			toPersons: ['landlord']
+		});
+	});
+
 	it('asks only for what is left when partly paid, without the fees', () => {
 		const chart = buildChart(accounts, [
 			t(
