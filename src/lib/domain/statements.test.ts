@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { buildChart } from './chart.ts';
-import { planSetStatementAmount, statementsOf, type StatementInput } from './statements.ts';
+import {
+	cardPaymentPlans,
+	planEndCardPaymentPlans,
+	planSetStatementAmount,
+	statementsOf,
+	type StatementInput
+} from './statements.ts';
 import type { Installment, Scheduled, Transaction } from './schemas.ts';
 import { account, now, opening, roots, tx } from './test-fixtures.ts';
 
@@ -323,6 +329,87 @@ describe('planSetStatementAmount', () => {
 				op: 'setStatement',
 				id: 'visa_2026-12-20',
 				data: { amount: null, sources: [], createdAt: now, updatedAt: now }
+			}
+		]);
+	});
+});
+
+describe('card payment plans', () => {
+	const terms = { statementDay: 20, dueDay: 9 };
+	const payPlan = (
+		id: string,
+		lines: Scheduled['versions'][0]['lines'],
+		extra: Partial<Scheduled> = {}
+	): Scheduled => ({
+		id,
+		versions: [
+			{
+				from: '2026-10-09',
+				description: id,
+				note: '',
+				tags: [],
+				lines,
+				rule: { type: 'monthly', day: 9, start: '2026-10-09' }
+			}
+		],
+		end: { type: 'never' },
+		occurrences: { '2026-11-09': { amounts: [5000, 5000] } },
+		createdAt: now,
+		updatedAt: now,
+		...extra
+	});
+	const payCard = payPlan('pay', [
+		{ accountId: 'bank', side: 'from', amount: null },
+		{ accountId: 'visa', side: 'to', amount: null }
+	]);
+	const ended = payPlan(
+		'ended',
+		[
+			{ accountId: 'bank', side: 'from', amount: null },
+			{ accountId: 'visa', side: 'to', amount: null }
+		],
+		{ end: { type: 'on', date: '2026-11-30' } }
+	);
+	const chargeOnCard = payPlan('charge', [
+		{ accountId: 'visa', side: 'from', amount: 100 },
+		{ accountId: 'food', side: 'to', amount: 100 }
+	]);
+	const fromLoan = payPlan('from-loan', [
+		{ accountId: 'gadget', side: 'from', amount: 100 },
+		{ accountId: 'visa', side: 'to', amount: 100 }
+	]);
+	const plans = {
+		chart: buildChart(accounts(), []),
+		scheduled: [payCard, ended, chargeOnCard, fromLoan]
+	};
+
+	it('finds plans that still pay the card from an Asset on or after its next Due Date', () => {
+		expect(
+			cardPaymentPlans(plans, 'visa', terms, { today: '2026-11-25' }).map((p) => [
+				p.plan.id,
+				p.endOn
+			])
+		).toEqual([['pay', '2026-12-08']]);
+	});
+
+	it('looks to the following Statement once this Due Date has passed', () => {
+		expect(
+			cardPaymentPlans(plans, 'visa', terms, { today: '2026-12-15' }).map((p) => p.endOn)
+		).toEqual(['2027-01-08']);
+	});
+
+	it('ends each plan the day before the next Due Date, keeping earlier Occurrences', () => {
+		const found = cardPaymentPlans(plans, 'visa', terms, { today: '2026-11-25' });
+		const later = new Date('2026-11-25T00:00:00Z');
+		expect(planEndCardPaymentPlans(found, { now: later })).toEqual([
+			{
+				op: 'setScheduled',
+				id: 'pay',
+				data: expect.objectContaining({
+					end: { type: 'on', date: '2026-12-08' },
+					occurrences: payCard.occurrences,
+					updatedAt: later
+				})
 			}
 		]);
 	});

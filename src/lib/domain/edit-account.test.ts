@@ -26,7 +26,8 @@ describe('editFormRules', () => {
 		expect(editFormRules(chart, 'cash')).toEqual({
 			editable: true,
 			nameEditable: true,
-			opening: { kind: 'editable', current: 345000 }
+			opening: { kind: 'editable', current: 345000 },
+			card: { kind: 'hidden' }
 		});
 	});
 
@@ -42,7 +43,8 @@ describe('editFormRules', () => {
 		expect(editFormRules(chart, 'asset')).toEqual({
 			editable: true,
 			nameEditable: false,
-			opening: { kind: 'hidden' }
+			opening: { kind: 'hidden' },
+			card: { kind: 'hidden' }
 		});
 		expect(editFormRules(chart, 'opening-balances').editable).toBe(false);
 	});
@@ -154,5 +156,72 @@ describe('EditAccountForm', () => {
 			['name', 'Name is required'],
 			['openingBalance', 'Enter an amount like 1,234.56']
 		]);
+	});
+});
+
+describe('Credit Card terms', () => {
+	const cards = buildChart(
+		[
+			...roots,
+			account('visa', 'liability', 'liability', { card: { statementDay: 20, dueDay: 9 } }),
+			account('loan', 'liability', 'liability'),
+			account('banks', 'liability', 'liability'),
+			account('bpi', 'liability', 'banks'),
+			account('cash', 'asset', 'asset')
+		],
+		[
+			opening('loan', -500000),
+			tx('lunch', '2026-11-03', [
+				['cash', 20000],
+				['loan', -20000]
+			])
+		]
+	);
+	const base = { name: 'Loan', description: '', openingBalance: 500000 };
+
+	it('are offered on a Liability Leaf, with its current days', () => {
+		expect(editFormRules(cards, 'visa').card).toEqual({
+			kind: 'editable',
+			current: { statementDay: 20, dueDay: 9 }
+		});
+		expect(editFormRules(cards, 'loan').card).toEqual({ kind: 'editable', current: null });
+	});
+
+	it('are not offered on a Group, a Root Account, or another Account Type', () => {
+		for (const id of ['banks', 'liability', 'cash'])
+			expect(editFormRules(cards, id).card).toEqual({ kind: 'hidden' });
+	});
+
+	it('turn a Liability into a Credit Card in place, keeping its history', () => {
+		const writes = planEditAccount(
+			cards,
+			'loan',
+			{ ...base, card: { statementDay: 5, dueDay: 25 } },
+			{ now }
+		);
+		expect(writes).toEqual([
+			{
+				op: 'setAccount',
+				id: 'loan',
+				data: expect.objectContaining({ card: { statementDay: 5, dueDay: 25 } })
+			}
+		]);
+	});
+
+	it('are removed with null, and left alone when not given', () => {
+		const cleared = planEditAccount(
+			cards,
+			'visa',
+			{ ...base, name: 'Visa', openingBalance: 0, card: null },
+			{ now }
+		);
+		expect(cleared[0]).toMatchObject({ op: 'setAccount', data: { card: null } });
+		const kept = planEditAccount(
+			cards,
+			'visa',
+			{ ...base, name: 'Visa', openingBalance: 0 },
+			{ now }
+		);
+		expect(kept[0]).toMatchObject({ data: { card: { statementDay: 20, dueDay: 9 } } });
 	});
 });

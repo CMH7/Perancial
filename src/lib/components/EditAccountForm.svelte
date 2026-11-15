@@ -1,12 +1,17 @@
 <script lang="ts">
 	// Edit an Account's name, description, and Opening Balance. Rules come from the domain module.
 	import {
+		cardPaymentPlans,
+		CardFields,
 		EditAccountForm,
 		editFormRules,
 		formatAmount,
-		planEditAccount
+		planEditAccount,
+		planEndCardPaymentPlans,
+		today
 	} from '#lib/domain/index.ts';
 	import { ledger } from '#lib/ledger.svelte.ts';
+	import CardTermsFields from './CardTermsFields.svelte';
 
 	let { accountId, onclose }: { accountId: string; onclose: () => void } = $props();
 
@@ -24,9 +29,24 @@
 			? formatAmount(start.rules.opening.current).replace('₱', '')
 			: ''
 	);
+	const startCard = start.rules.card.kind === 'editable' ? start.rules.card.current : null;
+	let isCard = $state(!!startCard);
+	let statementDay = $state(startCard ? String(startCard.statementDay) : '');
+	let dueDay = $state(startCard ? String(startCard.dueDay) : '');
+	let endPlans = $state(true);
 	let errors = $state<Record<string, string>>({});
 	let saveError = $state('');
 	let saving = $state(false);
+
+	// With valid days, Scheduled Transactions that still pay this card would plan payments twice.
+	const typedCard = $derived(
+		rules.card.kind === 'editable' && isCard
+			? CardFields.safeParse({ statementDay, dueDay }).data
+			: undefined
+	);
+	const duplicates = $derived(
+		typedCard ? cardPaymentPlans(ledger, accountId, typedCard, { today: today() }) : []
+	);
 
 	async function submit(e: SubmitEvent) {
 		e.preventDefault();
@@ -34,7 +54,8 @@
 		const parsed = EditAccountForm.safeParse({
 			name,
 			description,
-			openingBalance: rules.opening.kind === 'editable' ? openingBalance : ''
+			openingBalance: rules.opening.kind === 'editable' ? openingBalance : '',
+			card: rules.card.kind !== 'editable' ? undefined : isCard ? { statementDay, dueDay } : null
 		});
 		if (!parsed.success) {
 			errors = Object.fromEntries(parsed.error.issues.map((i) => [i.path.join('.'), i.message]));
@@ -43,7 +64,11 @@
 		errors = {};
 		saving = true;
 		try {
-			await ledger.commit(planEditAccount(chart, accountId, parsed.data, { now: new Date() }));
+			const now = new Date();
+			await ledger.commit([
+				...planEditAccount(chart, accountId, parsed.data, { now }),
+				...(endPlans ? planEndCardPaymentPlans(duplicates, { now }) : [])
+			]);
 			onclose();
 		} catch (err) {
 			saveError = `Could not save: ${(err as Error).message}`;
@@ -102,6 +127,32 @@
 			/>
 			<span class="text-xs text-gray-500">Group Account: the sum of its children.</span>
 		</label>
+	{/if}
+
+	{#if rules.card.kind === 'editable'}
+		<CardTermsFields bind:enabled={isCard} bind:statementDay bind:dueDay {errors} />
+		{#if duplicates.length}
+			<div class="space-y-2 rounded-lg bg-amber-50 p-3 text-amber-900">
+				<p>
+					{duplicates.length === 1
+						? 'This Scheduled Transaction still pays'
+						: 'These Scheduled Transactions still pay'}
+					this card, so its Statements would plan the same payments twice:
+				</p>
+				<ul class="list-disc pl-5">
+					{#each duplicates as { plan } (plan.id)}
+						<li>{plan.versions.at(-1)?.description}</li>
+					{/each}
+				</ul>
+				<label class="flex items-start gap-2">
+					<input type="checkbox" bind:checked={endPlans} class="mt-0.5 rounded border-amber-400" />
+					<span
+						>End {duplicates.length === 1 ? 'it' : 'them'} on {duplicates[0].endOn}, the day before
+						the next Due Date. Earlier payments stay recorded.</span
+					>
+				</label>
+			</div>
+		{/if}
 	{/if}
 
 	{#if saveError}<p class="text-red-600">{saveError}</p>{/if}

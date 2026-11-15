@@ -2,7 +2,7 @@
 // Transactions, never stored. Pure TypeScript, no Firebase imports.
 import type { Chart, IsoDate } from './chart.ts';
 import { rowStatuses } from './installments.ts';
-import { occurrencesOf } from './scheduled.ts';
+import { addDays, occurrencesOf } from './scheduled.ts';
 import {
 	statementId,
 	type CardTerms,
@@ -293,4 +293,50 @@ export function planSetStatementAmount(
 			}
 		}
 	];
+}
+
+/** The first Due Date on or after `today`. */
+export function nextDueDate(terms: CardTerms, today: IsoDate): IsoDate {
+	const open = statementDateFor(terms, today);
+	const closed = dueDateOf(terms, previousStatementDate(terms, open));
+	return closed >= today ? closed : dueDateOf(terms, open);
+}
+
+/** A Scheduled Transaction that still plans paying the card, and the day to end it on. */
+export type CardPaymentPlan = { plan: Scheduled; endOn: IsoDate };
+
+/**
+ * Scheduled Transactions that still pay the card from an Asset on or after its next Due Date.
+ * Once the card has its days, its Statements plan those payments, so these would plan them twice.
+ */
+export function cardPaymentPlans(
+	input: Pick<StatementInput, 'chart' | 'scheduled'>,
+	cardId: string,
+	terms: CardTerms,
+	{ today }: { today: IsoDate }
+): CardPaymentPlan[] {
+	const { chart } = input;
+	const due = nextDueDate(terms, today);
+	const range = { from: due, to: addDays(due, 400) };
+	return input.scheduled.flatMap((plan) => {
+		const pays = occurrencesOf(plan, range).some(
+			({ skipped, version: { lines } }) =>
+				!skipped &&
+				lines.some((l) => l.side === 'to' && !l.fee && l.accountId === cardId) &&
+				lines.some((l) => l.side === 'from' && chart.account(l.accountId)?.type === 'asset')
+		);
+		return pays ? [{ plan, endOn: addDays(due, -1) }] : [];
+	});
+}
+
+/** Ends each plan the day before the card's next Due Date; earlier Occurrences and links stay. */
+export function planEndCardPaymentPlans(
+	found: CardPaymentPlan[],
+	{ now }: { now: Date }
+): ChartWrite[] {
+	return found.map(({ plan: { id, ...data }, endOn }) => ({
+		op: 'setScheduled',
+		id,
+		data: { ...data, end: { type: 'on', date: endOn }, updatedAt: now }
+	}));
 }

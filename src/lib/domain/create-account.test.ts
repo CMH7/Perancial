@@ -33,7 +33,8 @@ describe('createFormRules', () => {
 		expect(createFormRules(chart, 'asset', 0)).toEqual({
 			opening: { kind: 'editable' },
 			childRowsAllowed: true,
-			confirm: null
+			confirm: null,
+			card: false
 		});
 		expect(createFormRules(chart, 'ploan', 0).opening).toEqual({ kind: 'editable' });
 	});
@@ -48,7 +49,8 @@ describe('createFormRules', () => {
 			opening: { kind: 'inherited', amount: 325000 },
 			childRowsAllowed: false,
 			confirm:
-				'"Cash on Hand" has ₱3,250.00 recorded directly. It will move to the new account, and "Cash on Hand" becomes a Group Account.'
+				'"Cash on Hand" has ₱3,250.00 recorded directly. It will move to the new account, and "Cash on Hand" becomes a Group Account.',
+			card: false
 		});
 	});
 
@@ -63,7 +65,8 @@ describe('createFormRules', () => {
 		expect(createFormRules(chart, 'gcash', 0)).toEqual({
 			opening: { kind: 'editable' },
 			childRowsAllowed: true,
-			confirm: null
+			confirm: null,
+			card: false
 		});
 	});
 
@@ -315,5 +318,102 @@ describe('CreateAccountForm', () => {
 			'children.0.name': 'Name is required',
 			'children.0.openingBalance': 'Enter an amount like 1,234.56'
 		});
+	});
+});
+
+describe('Credit Card days on a new Account', () => {
+	const cards = buildChart(
+		[
+			...roots,
+			account('visa', 'liability', 'liability', { card: { statementDay: 20, dueDay: 9 } }),
+			account('food', 'expense', 'expense')
+		],
+		[
+			tx('lunch', '2026-11-03', [
+				['food', 20000],
+				['visa', -20000]
+			])
+		]
+	);
+	const terms = { statementDay: 5, dueDay: 25 };
+	const input = { name: 'Mastercard', description: '', openingBalance: 0, children: [] };
+
+	it('are offered for a single new Liability Leaf only', () => {
+		expect(createFormRules(cards, 'liability', 0).card).toBe(true);
+		expect(createFormRules(cards, 'liability', 2).card).toBe(false);
+		expect(createFormRules(cards, 'asset', 0).card).toBe(false);
+		expect(createFormRules(cards, 'visa', 0).card).toBe(false);
+	});
+
+	it('are written on the new Leaf, and ignored with child rows', () => {
+		const leaf = planCreateAccount(
+			cards,
+			{ ...input, parentId: 'liability', card: terms },
+			{ newId: () => 'mc', now }
+		);
+		expect(leaf[0]).toMatchObject({ op: 'setAccount', id: 'mc', data: { card: terms } });
+		const ids = ['group', 'a'];
+		const group = planCreateAccount(
+			cards,
+			{
+				...input,
+				parentId: 'liability',
+				card: terms,
+				children: [{ name: 'A', description: '', openingBalance: 0 }]
+			},
+			{ newId: () => ids.shift()!, now }
+		);
+		for (const w of group) expect(w).not.toHaveProperty('data.card');
+	});
+
+	it('stay with a card that becomes the child when a Group is made over it (ADR 0002)', () => {
+		const writes = planCreateAccount(
+			cards,
+			{ ...input, parentId: 'visa' },
+			{ newId: () => 'group', now }
+		);
+		expect(writes.find((w) => w.id === 'visa')).toMatchObject({
+			data: { card: { statementDay: 20, dueDay: 9 } }
+		});
+		expect(writes.find((w) => w.id === 'group')).not.toHaveProperty('data.card');
+	});
+
+	it('drop from a card Leaf with no Entries that gains a child and becomes a Group', () => {
+		const empty = buildChart(
+			[
+				...roots,
+				account('amex', 'liability', 'liability', { card: { statementDay: 1, dueDay: 20 } })
+			],
+			[]
+		);
+		const writes = planCreateAccount(
+			empty,
+			{ ...input, parentId: 'amex' },
+			{ newId: () => 'a', now }
+		);
+		expect(writes.find((w) => w.id === 'amex')).toMatchObject({ data: { card: null } });
+		expect(newLeafIds(writes)).toEqual(['a']);
+	});
+
+	it('parse typed days, and explain a day outside 1–31', () => {
+		const typed = {
+			parentId: 'liability',
+			name: 'MC',
+			description: '',
+			openingBalance: '',
+			children: []
+		};
+		expect(
+			CreateAccountForm.parse({ ...typed, card: { statementDay: ' 5 ', dueDay: '25' } }).card
+		).toEqual(terms);
+		expect(CreateAccountForm.parse({ ...typed, card: null }).card).toBeNull();
+		const result = CreateAccountForm.safeParse({
+			...typed,
+			card: { statementDay: '0', dueDay: 'x' }
+		});
+		expect(result.error?.issues.map((i) => [i.path.join('.'), i.message])).toEqual([
+			['card.statementDay', 'Enter a day from 1 to 31'],
+			['card.dueDay', 'Enter a day from 1 to 31']
+		]);
 	});
 });

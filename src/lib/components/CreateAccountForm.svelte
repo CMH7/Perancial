@@ -14,6 +14,7 @@
 	import { tick } from 'svelte';
 	import { accountItems } from '#lib/account-items.svelte.ts';
 	import AccountPicker from './AccountPicker.svelte';
+	import CardTermsFields from './CardTermsFields.svelte';
 	import WalletCard from './WalletCard.svelte';
 	import { ledger } from '#lib/ledger.svelte.ts';
 
@@ -48,6 +49,9 @@
 	let description = $state('');
 	let openingBalance = $state('');
 	let children = $state<{ name: string; description: string; openingBalance: string }[]>([]);
+	let isCard = $state(false);
+	let statementDay = $state('');
+	let dueDay = $state('');
 	let errors = $state<Record<string, string>>({});
 	let saveError = $state('');
 	let saving = $state(false);
@@ -105,7 +109,8 @@
 			name,
 			description,
 			openingBalance: rules.opening.kind === 'editable' ? openingBalance : '',
-			children: rules.childRowsAllowed ? children : []
+			children: rules.childRowsAllowed ? children : [],
+			card: rules.card && isCard ? { statementDay, dueDay } : null
 		});
 		if (!parsed.success) {
 			errors = Object.fromEntries(parsed.error.issues.map((i) => [i.path.join('.'), i.message]));
@@ -234,6 +239,10 @@
 				</span>
 			{/if}
 		</label>
+	{/if}
+
+	{#if rules.card}
+		<CardTermsFields bind:enabled={isCard} bind:statementDay bind:dueDay {errors} />
 	{/if}
 
 	{#if rules.childRowsAllowed}
