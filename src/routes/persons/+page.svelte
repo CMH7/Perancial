@@ -15,7 +15,7 @@
 	const total = (list: typeof rows) => list.reduce((s, r) => s + Math.abs(r.net), 0);
 </script>
 
-<main class="max-w-4xl space-y-6 page-pad">
+<main class="space-y-6 page-pad">
 	{#if ledger.error}
 		<p class="rounded-lg bg-red-50 p-4 text-sm text-red-800">{ledger.error}</p>
 	{:else if !ledger.ready}

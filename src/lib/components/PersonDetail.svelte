@@ -128,102 +128,108 @@
 			{#if error}<p class="text-sm text-red-600">{error}</p>{/if}
 		</header>
 
-		<section class="grid grid-cols-3 gap-3 rounded-xl border bg-white p-4 text-sm">
-			<div>
-				<div class="text-xs text-gray-500">Owes you</div>
-				<div class="tabular-nums">{formatAmount(detail.owesYou)}</div>
-			</div>
-			<div>
-				<div class="text-xs text-gray-500">You owe</div>
-				<div class="tabular-nums">{formatAmount(detail.youOwe)}</div>
-			</div>
-			<div>
-				<div class="text-xs text-gray-500">Net</div>
-				<div
-					class="font-semibold tabular-nums {detail.net > 0
-						? 'text-green-700'
-						: detail.net < 0
-							? 'text-amber-700'
-							: ''}"
-				>
-					{standing(detail.net)}
-				</div>
-			</div>
-		</section>
+		<div class="grid items-start gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+			<div class="space-y-6">
+				<section class="grid grid-cols-3 gap-3 rounded-xl border bg-white p-4 text-sm">
+					<div>
+						<div class="text-xs text-gray-500">Owes you</div>
+						<div class="tabular-nums">{formatAmount(detail.owesYou)}</div>
+					</div>
+					<div>
+						<div class="text-xs text-gray-500">You owe</div>
+						<div class="tabular-nums">{formatAmount(detail.youOwe)}</div>
+					</div>
+					<div>
+						<div class="text-xs text-gray-500">Net</div>
+						<div
+							class="font-semibold tabular-nums {detail.net > 0
+								? 'text-green-700'
+								: detail.net < 0
+									? 'text-amber-700'
+									: ''}"
+						>
+							{standing(detail.net)}
+						</div>
+					</div>
+				</section>
 
-		<section>
-			<h3 class="mb-1 text-sm font-semibold text-gray-500 uppercase">Linked Accounts</h3>
-			{#if detail.accounts.length}
-				<ul class="divide-y rounded-xl border bg-white">
-					{#each detail.accounts as a (a.id)}
-						<li class="flex items-baseline gap-3 px-4 py-2 text-sm">
-							<a class="flex-1 hover:underline" href={resolve('/accounts/[id]', { id: a.id })}
-								>{path(a.id)}</a
-							>
-							<span class="tabular-nums">{formatAmount(chart.balance(a.id))}</span>
-						</li>
-					{/each}
-				</ul>
-				<div class="mt-2 text-sm">
-					{#if confirmFill}
-						<span class="text-gray-700"
-							>Add {person.name} to {plural(fill.length)}? Sides that already list someone stay as
-							they are.</span
-						>
-						<button
-							class="ml-2 rounded bg-gray-900 px-2 py-0.5 text-xs text-white"
-							disabled={busy}
-							onclick={async () => {
-								const writes = fill;
-								if (await run(() => writes)) confirmFill = false;
-							}}>Fill</button
-						>
-						<button class="ml-1 text-xs text-gray-500" onclick={() => (confirmFill = false)}
-							>Cancel</button
-						>
-					{:else if fill.length}
-						<button
-							class="rounded border px-2 py-0.5 text-xs hover:bg-gray-50"
-							onclick={() => (confirmFill = true)}>Fill from links…</button
-						>
-						<span class="text-xs text-gray-500"
-							>{plural(fill.length)} on these Accounts name nobody on that side.</span
-						>
+				<section>
+					<h3 class="mb-1 text-sm font-semibold text-gray-500 uppercase">Linked Accounts</h3>
+					{#if detail.accounts.length}
+						<ul class="divide-y rounded-xl border bg-white">
+							{#each detail.accounts as a (a.id)}
+								<li class="flex items-baseline gap-3 px-4 py-2 text-sm">
+									<a class="flex-1 hover:underline" href={resolve('/accounts/[id]', { id: a.id })}
+										>{path(a.id)}</a
+									>
+									<span class="tabular-nums">{formatAmount(chart.balance(a.id))}</span>
+								</li>
+							{/each}
+						</ul>
+						<div class="mt-2 text-sm">
+							{#if confirmFill}
+								<span class="text-gray-700"
+									>Add {person.name} to {plural(fill.length)}? Sides that already list someone stay
+									as they are.</span
+								>
+								<button
+									class="ml-2 rounded bg-gray-900 px-2 py-0.5 text-xs text-white"
+									disabled={busy}
+									onclick={async () => {
+										const writes = fill;
+										if (await run(() => writes)) confirmFill = false;
+									}}>Fill</button
+								>
+								<button class="ml-1 text-xs text-gray-500" onclick={() => (confirmFill = false)}
+									>Cancel</button
+								>
+							{:else if fill.length}
+								<button
+									class="rounded border px-2 py-0.5 text-xs hover:bg-gray-50"
+									onclick={() => (confirmFill = true)}>Fill from links…</button
+								>
+								<span class="text-xs text-gray-500"
+									>{plural(fill.length)} on these Accounts name nobody on that side.</span
+								>
+							{:else}
+								<span class="text-xs text-gray-500"
+									>Every past Transaction on these Accounts names someone.</span
+								>
+							{/if}
+						</div>
 					{:else}
-						<span class="text-xs text-gray-500"
-							>Every past Transaction on these Accounts names someone.</span
-						>
+						<p class="text-sm text-gray-500">
+							No Accounts linked. Edit an Account and pick {person.name} as its Person.
+						</p>
 					{/if}
-				</div>
-			{:else}
-				<p class="text-sm text-gray-500">
-					No Accounts linked. Edit an Account and pick {person.name} as its Person.
-				</p>
-			{/if}
-		</section>
+				</section>
+			</div>
 
-		<section>
-			<h3 class="mb-1 text-sm font-semibold text-gray-500 uppercase">Transactions</h3>
-			{#if detail.transactions.length}
-				<ul class="divide-y rounded-xl border bg-white">
-					{#each detail.transactions as tx (tx.id)}
-						<li class="flex items-baseline gap-3 px-4 py-2 text-sm">
-							<span class="w-24 text-gray-500">{tx.date ? shortDate(tx.date) : ''}</span>
-							<a
-								class="min-w-0 flex-1 truncate hover:underline"
-								href={resolve('/transactions/[id]', { id: tx.id })}
-								>{tx.description || '(no description)'}</a
-							>
-							<span class="text-xs text-violet-700"
-								>{names(tx.fromPersons) || '—'} → {names(tx.toPersons) || '—'}</span
-							>
-							<span class="w-28 text-right tabular-nums">{formatAmount(amountOf(tx.entries))}</span>
-						</li>
-					{/each}
-				</ul>
-			{:else}
-				<p class="text-sm text-gray-500">No Transactions name {person.name} yet.</p>
-			{/if}
-		</section>
+			<section>
+				<h3 class="mb-1 text-sm font-semibold text-gray-500 uppercase">Transactions</h3>
+				{#if detail.transactions.length}
+					<ul class="divide-y rounded-xl border bg-white">
+						{#each detail.transactions as tx (tx.id)}
+							<li class="flex items-baseline gap-3 px-4 py-2 text-sm">
+								<span class="w-24 text-gray-500">{tx.date ? shortDate(tx.date) : ''}</span>
+								<a
+									class="min-w-0 flex-1 truncate hover:underline"
+									href={resolve('/transactions/[id]', { id: tx.id })}
+									>{tx.description || '(no description)'}</a
+								>
+								<span class="text-xs text-violet-700"
+									>{names(tx.fromPersons) || '—'} → {names(tx.toPersons) || '—'}</span
+								>
+								<span class="w-28 text-right tabular-nums"
+									>{formatAmount(amountOf(tx.entries))}</span
+								>
+							</li>
+						{/each}
+					</ul>
+				{:else}
+					<p class="text-sm text-gray-500">No Transactions name {person.name} yet.</p>
+				{/if}
+			</section>
+		</div>
 	{/if}
 </div>

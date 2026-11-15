@@ -7,7 +7,7 @@
 	import { ledger } from '#lib/ledger.svelte.ts';
 </script>
 
-<main class="max-w-4xl page-pad">
+<main class="page-pad">
 	{#if ledger.error}
 		<p class="rounded-lg bg-red-50 p-4 text-sm text-red-800">{ledger.error}</p>
 	{:else if !ledger.ready}
