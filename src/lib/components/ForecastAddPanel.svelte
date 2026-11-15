@@ -171,6 +171,7 @@
 			<PlanEditor
 				initial={repeatInitial}
 				heading="New repeating plan"
+				prefill
 				submitLabel="Create plan"
 				onsubmit={save}
 			/>

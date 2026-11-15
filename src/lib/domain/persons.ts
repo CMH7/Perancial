@@ -33,6 +33,32 @@ export function prefillPersons(
 }
 
 /**
+ * The form's pre-fill: the picked Persons plus each linked Account's Person on its side, except
+ * ones the owner removed. `linked` says which Persons the Accounts' links suggest.
+ */
+export function withLinkedPersons(
+	chart: Chart,
+	accounts: Sides,
+	picked: Sides,
+	dismissed: Sides = { from: [], to: [] }
+): Sides & { linked: Sides } {
+	const linked = prefillPersons(chart, accounts);
+	const side = (key: keyof Sides) => [
+		...picked[key],
+		...linked[key].filter((p) => !picked[key].includes(p) && !dismissed[key].includes(p))
+	];
+	return { from: side('from'), to: side('to'), linked };
+}
+
+/** How a Person shows: Me, their name, or their name marked archived. */
+export function personLabel(persons: Person[], id: string): string {
+	if (id === ME) return 'Me';
+	const p = persons.find((x) => x.id === id);
+	if (!p) return 'Unknown person';
+	return p.archived ? `${p.name} (archived)` : p.name;
+}
+
+/**
  * Where the owner stands with a Person, from their linked Leaf Accounts: what they owe the owner
  * (Assets), what the owner owes them (Liabilities), and the difference. Derived, never stored.
  */

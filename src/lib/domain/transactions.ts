@@ -397,7 +397,9 @@ export function draftFromTransaction(tx: Transaction): TransactionDraft {
 		fees: tx.entries
 			.filter((e) => e.amount > 0 && e.fee)
 			.map((e) => ({ ...line(e), mode: e.fee! })),
-		billOn: tx.billOn ?? null
+		billOn: tx.billOn ?? null,
+		fromPersons: [...tx.fromPersons],
+		toPersons: [...tx.toPersons]
 	};
 }
 

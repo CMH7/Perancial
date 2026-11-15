@@ -10,6 +10,7 @@
 	import TransactionPanel from '#lib/components/TransactionPanel.svelte';
 	import {
 		formatAmount,
+		personLabel,
 		journal,
 		journalRow,
 		noFilters,
@@ -371,7 +372,16 @@
 										>
 									{/each}
 								</td>
-								<td class="pr-3 text-gray-500">{row.from.join(' + ')} → {row.to.join(' + ')}</td>
+								<td class="pr-3 text-gray-500"
+									>{row.from.join(' + ')} → {row.to.join(
+										' + '
+									)}{#if tx.fromPersons.length || tx.toPersons.length}<span
+											class="block text-xs text-violet-700"
+											>{tx.fromPersons.map((p) => personLabel(ledger.persons, p)).join(', ') || '—'} →
+											{tx.toPersons.map((p) => personLabel(ledger.persons, p)).join(', ') ||
+												'—'}</span
+										>{/if}</td
+								>
 								<td class="pr-3">
 									<span class="rounded-full px-2 py-0.5 text-xs not-italic {KIND[row.kind].style}"
 										>{KIND[row.kind].label}</span

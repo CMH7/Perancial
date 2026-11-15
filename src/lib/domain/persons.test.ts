@@ -6,8 +6,10 @@ import {
 	planArchivePerson,
 	planDeletePerson,
 	planFillFromLinks,
+	personLabel,
 	planSavePerson,
-	prefillPersons
+	prefillPersons,
+	withLinkedPersons
 } from './persons.ts';
 import type { Person, Scheduled } from './schemas.ts';
 import { account, now, opening, roots, tx } from './test-fixtures.ts';
@@ -175,5 +177,39 @@ describe('planFillFromLinks', () => {
 			['repaid', [['partner'], []]]
 		]);
 		expect(writes[0]).toMatchObject({ data: { updatedAt: later } });
+	});
+});
+
+describe('withLinkedPersons', () => {
+	const accounts = { from: ['bank'], to: ['owed-by-partner'] };
+
+	it('adds linked Persons, and says which came from a link', () => {
+		expect(withLinkedPersons(chart, accounts, { from: ['me'], to: [] })).toEqual({
+			from: ['me'],
+			to: ['partner'],
+			linked: { from: [], to: ['partner'] }
+		});
+	});
+
+	it('leaves out a linked Person the owner removed', () => {
+		expect(
+			withLinkedPersons(chart, accounts, { from: [], to: [] }, { from: [], to: ['partner'] })
+		).toEqual({ from: [], to: [], linked: { from: [], to: ['partner'] } });
+	});
+});
+
+describe('personLabel', () => {
+	const people: Person[] = [
+		{ id: 'partner', name: 'Partner', archived: false, createdAt: now, updatedAt: now },
+		{ id: 'old', name: 'Old friend', archived: true, createdAt: now, updatedAt: now }
+	];
+
+	it('names Me, a Person, an archived Person, and an unknown id', () => {
+		expect(['me', 'partner', 'old', 'gone'].map((id) => personLabel(people, id))).toEqual([
+			'Me',
+			'Partner',
+			'Old friend (archived)',
+			'Unknown person'
+		]);
 	});
 });

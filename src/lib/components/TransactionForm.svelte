@@ -10,7 +10,9 @@
 		formatAmount,
 		normalizeTag,
 		planSaveTransaction,
+		prefillPersons,
 		today,
+		withLinkedPersons,
 		type ChartWrite,
 		type DraftLine,
 		type LineSide,
@@ -21,6 +23,7 @@
 	import { accountItems } from '#lib/account-items.svelte.ts';
 	import { ledger } from '#lib/ledger.svelte.ts';
 	import AccountPicker from './AccountPicker.svelte';
+	import PersonPicker from './PersonPicker.svelte';
 	import { KIND } from './kind.ts';
 	import { SvelteSet } from 'svelte/reactivity';
 	import type { Snippet } from 'svelte';
@@ -97,11 +100,37 @@
 			.sort()
 	);
 
+	// Persons: a new Transaction gets the Persons its linked Accounts suggest, except ones the
+	// owner removed. An edit keeps exactly what was saved.
+	let dismissed = $state<{ from: string[]; to: string[] }>({ from: [], to: [] });
+	const sideAccounts = $derived({
+		from: draft.from.map((l) => l.accountId).filter(Boolean),
+		to: draft.to.map((l) => l.accountId).filter(Boolean)
+	});
+	const linked = $derived(prefillPersons(chart, sideAccounts));
+	const same = (a: string[] | undefined, b: string[]) =>
+		(a ?? []).length === b.length && b.every((x, i) => a?.[i] === x);
+	$effect(() => {
+		if (existing) return;
+		const next = withLinkedPersons(
+			chart,
+			sideAccounts,
+			{ from: draft.fromPersons ?? [], to: draft.toPersons ?? [] },
+			dismissed
+		);
+		if (!same(draft.fromPersons, next.from)) draft.fromPersons = next.from;
+		if (!same(draft.toPersons, next.to)) draft.toPersons = next.to;
+	});
+	const dismiss = (side: 'from' | 'to') => (id: string) => {
+		if (!dismissed[side].includes(id)) dismissed[side] = [...dismissed[side], id];
+	};
+
 	function copy() {
 		const tx = ledger.transactions.find((t) => t.id === copyFrom);
 		copyFrom = '';
 		if (!tx) return;
 		draft = duplicateDraft(tx, { today: todayIso });
+		dismissed = { from: [], to: [] };
 		touched.clear();
 	}
 
@@ -327,6 +356,24 @@
 				{/if}
 			</p>
 		</div>
+	</section>
+
+	<section class="space-y-2 rounded-xl border bg-white p-4" aria-label="Persons">
+		<PersonPicker
+			label="From"
+			bind:value={() => draft.fromPersons ?? [], (v) => (draft.fromPersons = v)}
+			linked={linked.from}
+			onremove={dismiss('from')}
+		/>
+		<PersonPicker
+			label="To"
+			bind:value={() => draft.toPersons ?? [], (v) => (draft.toPersons = v)}
+			linked={linked.to}
+			onremove={dismiss('to')}
+		/>
+		<p class="text-xs text-gray-500">
+			Who sent and who received it. Optional; leave blank when only you are involved.
+		</p>
 	</section>
 
 	<section class="space-y-3 rounded-xl border bg-white p-4">

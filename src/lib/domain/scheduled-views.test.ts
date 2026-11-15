@@ -145,6 +145,21 @@ describe('planCreatePlan and planDraftFrom', () => {
 		expect(plain.op === 'setScheduled' && 'section' in plain.data).toBe(false);
 	});
 
+	it('keeps the From and To Persons through create and edit', () => {
+		const [w] = planCreatePlan(chart, draft({ fromPersons: ['me'], toPersons: ['landlord'] }), {
+			id: 'p9',
+			now
+		});
+		if (w.op !== 'setScheduled') throw new Error('expected a plan');
+		expect(w.data.versions[0]).toMatchObject({ fromPersons: ['me'], toPersons: ['landlord'] });
+		expect(planDraftFrom({ id: 'p9', ...w.data })).toMatchObject({
+			fromPersons: ['me'],
+			toPersons: ['landlord']
+		});
+		const [plain] = planCreatePlan(chart, draft(), { id: 'p8', now });
+		expect(plain.op === 'setScheduled' && 'fromPersons' in plain.data.versions[0]).toBe(false);
+	});
+
 	it('writes a plan whose first version starts with the rule, lines From, To, then fees', () => {
 		const writes = planCreatePlan(
 			chart,

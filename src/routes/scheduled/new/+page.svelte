@@ -35,6 +35,7 @@
 		<PlanEditor
 			{initial}
 			heading="New plan"
+			prefill
 			submitLabel="Create plan"
 			onsubmit={create}
 			oncancel={() => goto(resolve('/scheduled'))}

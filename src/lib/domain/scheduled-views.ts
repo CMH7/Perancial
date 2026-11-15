@@ -96,6 +96,9 @@ export type PlanDraft = {
 	end: PlanEnd;
 	/** The owner's Forecast Section; none (or null) means the derived default. */
 	section?: string | null;
+	/** Persons copied to each Transaction recorded from the plan. */
+	fromPersons?: string[];
+	toPersons?: string[];
 };
 
 /** Where the rule starts: its start date, or the date of a one-off. */
@@ -175,7 +178,9 @@ export function versionFromDraft(
 		note: draft.note,
 		tags: normalizeTags(draft.tags),
 		lines,
-		rule: draft.rule
+		rule: draft.rule,
+		...(draft.fromPersons?.length ? { fromPersons: [...new Set(draft.fromPersons)] } : {}),
+		...(draft.toPersons?.length ? { toPersons: [...new Set(draft.toPersons)] } : {})
 	};
 }
 
@@ -222,7 +227,9 @@ export function planDraftFrom(plan: Scheduled, date?: IsoDate): PlanDraft {
 		fees: version.lines.filter((l) => l.fee).map((l) => ({ ...line(l), mode: l.fee! })),
 		rule: version.rule,
 		end: plan.end,
-		...(plan.section ? { section: plan.section } : {})
+		...(plan.section ? { section: plan.section } : {}),
+		...(version.fromPersons?.length ? { fromPersons: [...version.fromPersons] } : {}),
+		...(version.toPersons?.length ? { toPersons: [...version.toPersons] } : {})
 	};
 }
 
