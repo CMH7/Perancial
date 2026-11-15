@@ -96,11 +96,11 @@
 				</form>
 			{:else}
 				<div class="flex flex-wrap items-baseline gap-3">
-					<h2 class="text-xl font-semibold">
+					<h1 class="text-2xl font-semibold">
 						{person.name}{#if person.archived}<span class="ml-2 text-sm text-gray-400"
 								>archived</span
 							>{/if}
-					</h2>
+					</h1>
 					<button
 						class="text-sm text-gray-500 hover:underline"
 						onclick={() => {
