@@ -97,6 +97,34 @@ describe('statementsOf', () => {
 		expect([s.statementDate, s.dueDate]).toEqual(['2026-11-05', '2026-11-25']);
 	});
 
+	it('plans the payment on the Pay-on day before the Due Date, never before the Statement Date', () => {
+		const card = (terms: { statementDay: number; dueDay: number; payDay?: number }) =>
+			buildChart(
+				[
+					...roots,
+					account('visa', 'liability', 'liability', { card: terms }),
+					account('food', 'expense', 'expense')
+				],
+				[charge('lunch', '2026-11-03', 100)]
+			);
+		const first = (terms: Parameters<typeof card>[0]) =>
+			statementsOf(input([], { chart: card(terms) }), 'visa', {
+				until: '2026-12-31',
+				today: '2026-11-15'
+			})[0];
+		expect(first({ statementDay: 5, dueDay: 24, payDay: 15 })).toMatchObject({
+			statementDate: '2026-11-05',
+			payDate: '2026-11-15',
+			dueDate: '2026-11-24'
+		});
+		expect(first({ statementDay: 5, dueDay: 24 }).payDate).toBe('2026-11-24');
+		// The 15th before 9 Dec is 15 Nov, before the 20 Nov Statement Date: pay on the Due Date.
+		expect(first({ statementDay: 20, dueDay: 9, payDay: 15 })).toMatchObject({
+			payDate: '2026-12-09',
+			dueDate: '2026-12-09'
+		});
+	});
+
 	it('lowers the Statement Balance by a refund, but not by a payment', () => {
 		const refund = tx('refund', '2026-11-08', [
 			['visa', 30000],

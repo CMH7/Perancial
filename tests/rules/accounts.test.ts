@@ -80,6 +80,12 @@ describe('Credit Card terms', () => {
 		await assertSucceeds(setDoc(ref('visa'), visa(null)));
 	});
 
+	it('accept an optional Pay-on day from 1 to 31', async () => {
+		await assertSucceeds(setDoc(ref('visa'), visa({ statementDay: 5, dueDay: 24, payDay: 15 })));
+		await assertFails(setDoc(ref('visa'), visa({ statementDay: 5, dueDay: 24, payDay: 0 })));
+		await assertFails(setDoc(ref('visa'), visa({ statementDay: 5, dueDay: 24, payDay: '15' })));
+	});
+
 	it('reject days outside 1–31, extra keys, and terms on another Account Type', async () => {
 		await assertFails(setDoc(ref('visa'), visa({ statementDay: 0, dueDay: 9 })));
 		await assertFails(setDoc(ref('visa'), visa({ statementDay: 20, dueDay: 32 })));

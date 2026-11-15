@@ -280,7 +280,11 @@
 						? 'bg-amber-100 text-amber-800'
 						: 'bg-gray-100 text-gray-700'}">{o.overdue ? 'Overdue' : statusLabel}</span
 		>
-		<span class="text-gray-500">due {shortDate(o.date)}</span>
+		<span class="text-gray-500"
+			>{#if o.statement && o.statement.dueDate !== o.date}pay {shortDate(o.date)} · due {shortDate(
+					o.statement.dueDate
+				)}{:else}due {shortDate(o.date)}{/if}</span
+		>
 		<span class="ml-auto font-semibold tabular-nums">{formatAmount(o.total)}</span>
 	</div>
 	{#if o.additional || o.less}

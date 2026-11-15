@@ -34,8 +34,9 @@ service cloud.firestore {
         }
         function validCard(d) {
           return !('card' in d) || d.card == null
-            || (d.card is map && d.card.keys().hasOnly(['statementDay', 'dueDay'])
-                && day(d.card.statementDay) && day(d.card.dueDay) && d.type == 'liability');
+            || (d.card is map && d.card.keys().hasOnly(['statementDay', 'dueDay', 'payDay'])
+                && day(d.card.statementDay) && day(d.card.dueDay)
+                && (!('payDay' in d.card) || day(d.card.payDay)) && d.type == 'liability');
         }
         function validShape(d) {
           return d.keys().hasOnly(fields().concat(['madeFrom', 'card', 'personId']))

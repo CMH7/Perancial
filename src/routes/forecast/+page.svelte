@@ -454,7 +454,9 @@
 					>{o.label}
 					<span class="float-right tabular-nums">{formatAmount(amount)}</span>
 					<span class="block text-xs text-gray-500">
-						{o.section.name} · due {day(o.date)}{o.statement && o.statement.entered === null
+						{o.section.name} · {o.statement && o.statement.dueDate !== o.date
+							? `pay ${day(o.date)} · due ${day(o.statement.dueDate)}`
+							: `due ${day(o.date)}`}{o.statement && o.statement.entered === null
 							? ' · estimated'
 							: ''}{sourceNote}{o.ealloc ? ' · E.Alloc' : ''}{o.allocatedIn
 							? ` · allocated in ${day(o.allocatedIn)}`

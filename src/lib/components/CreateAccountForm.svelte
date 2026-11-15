@@ -53,6 +53,7 @@
 	let isCard = $state(false);
 	let statementDay = $state('');
 	let dueDay = $state('');
+	let payDay = $state('');
 	let personId = $state<string | null>(null);
 	let errors = $state<Record<string, string>>({});
 	let saveError = $state('');
@@ -112,7 +113,7 @@
 			description,
 			openingBalance: rules.opening.kind === 'editable' ? openingBalance : '',
 			children: rules.childRowsAllowed ? children : [],
-			card: rules.card && isCard ? { statementDay, dueDay } : null,
+			card: rules.card && isCard ? { statementDay, dueDay, payDay } : null,
 			personId
 		});
 		if (!parsed.success) {
@@ -247,7 +248,7 @@
 	<AccountPersonField bind:value={personId} inherited={rules.person.inherited} />
 
 	{#if rules.card}
-		<CardTermsFields bind:enabled={isCard} bind:statementDay bind:dueDay {errors} />
+		<CardTermsFields bind:enabled={isCard} bind:statementDay bind:dueDay bind:payDay {errors} />
 	{/if}
 
 	{#if rules.childRowsAllowed}

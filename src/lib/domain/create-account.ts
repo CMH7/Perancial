@@ -254,9 +254,22 @@ const DayText = z.string().transform((text, ctx) => {
 	return day;
 });
 
+/** An optional day as typed: blank means none. */
+const OptionalDayText = z.string().transform((text, ctx) => {
+	if (!text.trim()) return undefined;
+	const day = /^\d{1,2}$/.test(text.trim()) ? Number(text.trim()) : 0;
+	if (day < 1 || day > 31) {
+		ctx.addIssue({ code: 'custom', message: 'Enter a day from 1 to 31, or leave it blank' });
+		return z.NEVER;
+	}
+	return day;
+});
+
 /** Credit Card days as typed; null when the Account is not a Credit Card. */
 export const CardFields = z
-	.object({ statementDay: DayText, dueDay: DayText })
+	.object({ statementDay: DayText, dueDay: DayText, payDay: OptionalDayText.optional() })
+	// A blank Pay-on day is left out, never stored as undefined.
+	.transform(({ payDay, ...days }) => (payDay ? { ...days, payDay } : days))
 	.nullable()
 	.optional();
 

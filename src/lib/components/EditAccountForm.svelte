@@ -34,6 +34,7 @@
 	let isCard = $state(!!startCard);
 	let statementDay = $state(startCard ? String(startCard.statementDay) : '');
 	let dueDay = $state(startCard ? String(startCard.dueDay) : '');
+	let payDay = $state(startCard?.payDay ? String(startCard.payDay) : '');
 	let endPlans = $state(true);
 	let personId = $state(start.rules.person.kind === 'editable' ? start.rules.person.current : null);
 	let errors = $state<Record<string, string>>({});
@@ -43,7 +44,7 @@
 	// With valid days, Scheduled Transactions that still pay this card would plan payments twice.
 	const typedCard = $derived(
 		rules.card.kind === 'editable' && isCard
-			? CardFields.safeParse({ statementDay, dueDay }).data
+			? CardFields.safeParse({ statementDay, dueDay, payDay }).data
 			: undefined
 	);
 	const duplicates = $derived(
@@ -57,7 +58,12 @@
 			name,
 			description,
 			openingBalance: rules.opening.kind === 'editable' ? openingBalance : '',
-			card: rules.card.kind !== 'editable' ? undefined : isCard ? { statementDay, dueDay } : null,
+			card:
+				rules.card.kind !== 'editable'
+					? undefined
+					: isCard
+						? { statementDay, dueDay, payDay }
+						: null,
 			personId: rules.person.kind === 'editable' ? personId : undefined
 		});
 		if (!parsed.success) {
@@ -137,7 +143,7 @@
 	{/if}
 
 	{#if rules.card.kind === 'editable'}
-		<CardTermsFields bind:enabled={isCard} bind:statementDay bind:dueDay {errors} />
+		<CardTermsFields bind:enabled={isCard} bind:statementDay bind:dueDay bind:payDay {errors} />
 		{#if duplicates.length}
 			<div class="space-y-2 rounded-lg bg-amber-50 p-3 text-amber-900">
 				<p>

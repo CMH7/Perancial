@@ -235,6 +235,8 @@ export type ForecastOutflow = {
 	statement?: {
 		cardId: string;
 		statementDate: IsoDate;
+		/** The bank's Due Date; the Outflow's `date` is the planned pay date. */
+		dueDate: IsoDate;
 		computed: number;
 		/** The amount entered from the real Statement; null while estimated. */
 		entered: number | null;
@@ -675,7 +677,8 @@ function outflowsFromStatements(ctx: Ctx, range: DateRange): ForecastOutflow[] {
 		.filter((a) => a.card && !a.archived && !chart.isGroup(a.id))
 		.flatMap((card) =>
 			statementsOf({ ...ctx.input, statements: stored }, card.id, { until: range.to, today })
-				.filter((st) => inRange(st.dueDate, range) && st.balance > 0)
+				// The planned pay date (Pay-on day, else Due Date) decides the Cut-off.
+				.filter((st) => inRange(st.payDate, range) && st.balance > 0)
 				.map((st) => {
 					const link: OutflowLink = { plan: 'statement', planId: card.id, due: st.statementDate };
 					const doc = stored.find(
@@ -693,7 +696,7 @@ function outflowsFromStatements(ctx: Ctx, range: DateRange): ForecastOutflow[] {
 						link,
 						label: `${card.name} Statement`,
 						due: st.statementDate,
-						date: st.dueDate,
+						date: st.payDate,
 						amount: st.balance,
 						additional: 0,
 						less: 0,
@@ -717,6 +720,7 @@ function outflowsFromStatements(ctx: Ctx, range: DateRange): ForecastOutflow[] {
 						statement: {
 							cardId: card.id,
 							statementDate: st.statementDate,
+							dueDate: st.dueDate,
 							computed: st.computed,
 							entered: st.entered,
 							gap: st.gap,

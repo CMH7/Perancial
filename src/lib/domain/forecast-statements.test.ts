@@ -68,6 +68,32 @@ describe('Credit Card Statements in a Forecast', () => {
 		expect(o.charges?.map((c) => [c.key, c.amount])).toEqual([['transaction:lunch', 50000]]);
 	});
 
+	it('fall in the Cut-off of the card’s Pay-on day, still due and overdue by the Due Date', () => {
+		const chart = buildChart(
+			[
+				...accounts,
+				account('mc', 'liability', 'liability', {
+					name: 'MC',
+					card: { statementDay: 5, dueDay: 24, payDay: 15 }
+				})
+			],
+			[
+				tx('dinner', '2026-11-03', [
+					['food', 30000],
+					['mc', -30000]
+				])
+			]
+		);
+		const at = (cutoff: string) =>
+			buildForecast(input([], { chart, today: '2026-11-10' }), cutoff).outflows.filter(
+				(o) => o.liabilityId === 'mc'
+			);
+		expect(at('2026-11-15')).toMatchObject([
+			{ key: 'statement:mc:2026-11-05', date: '2026-11-15', overdue: false }
+		]);
+		expect(at('2026-11-30')).toEqual([]);
+	});
+
 	const entered = (amount: number | null, sources: Statement['sources'] = []): Statement => ({
 		id: 'visa_2026-11-20',
 		cardId: 'visa',

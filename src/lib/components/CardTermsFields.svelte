@@ -1,14 +1,18 @@
 <script lang="ts">
-	// Credit Card section of the Account forms: an on/off switch plus Statement Day and Due Day.
+	// Credit Card section of the Account forms: an on/off switch plus Statement Day, Due Day and an
+	// optional Pay-on day.
 	let {
 		enabled = $bindable(false),
 		statementDay = $bindable(''),
 		dueDay = $bindable(''),
+		payDay = $bindable(''),
 		errors = {}
 	}: {
 		enabled?: boolean;
 		statementDay?: string;
 		dueDay?: string;
+		/** Optional: the day the owner plans to pay, on or before the Due Date. */
+		payDay?: string;
 		/** Messages keyed `card.statementDay` / `card.dueDay`. */
 		errors?: Record<string, string>;
 	} = $props();
@@ -51,6 +55,23 @@
 					<span class="text-xs text-red-600">{errors['card.dueDay']}</span>
 				{:else}
 					<span class="text-xs text-gray-500">Pay by this day; next month if not after it.</span>
+				{/if}
+			</label>
+			<label class="col-span-2 block">
+				<span class="text-gray-600">Pay on day <span class="text-gray-400">(optional)</span></span>
+				<input
+					bind:value={payDay}
+					inputmode="numeric"
+					placeholder="e.g. 15"
+					class="mt-1 w-full rounded border-gray-300 text-sm tabular-nums"
+				/>
+				{#if errors['card.payDay']}
+					<span class="text-xs text-red-600">{errors['card.payDay']}</span>
+				{:else}
+					<span class="text-xs text-gray-500"
+						>The day you plan to pay, on or before the Due Date. The Forecast puts each Statement in
+						the Cut-off of this day; blank means the Due Date.</span
+					>
 				{/if}
 			</label>
 		</div>
