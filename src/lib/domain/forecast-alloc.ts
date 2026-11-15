@@ -8,13 +8,14 @@ import {
 	fundingCutoffOf,
 	nextCutoff,
 	type ForecastInput,
-	type ForecastOutflow
+	type ForecastOutflow,
+	type OutflowLink
 } from './forecast.ts';
 import { planHasPayments } from './payable.ts';
-import type { Installment, PaidLink, PayingSource, Scheduled } from './schemas.ts';
+import { statementId, type Installment, type PayingSource, type Scheduled } from './schemas.ts';
 import type { ChartWrite } from './writes.ts';
 
-const keyOf = (l: PaidLink) => `${l.plan}:${l.planId}:${l.due}`;
+const keyOf = (l: OutflowLink) => `${l.plan}:${l.planId}:${l.due}`;
 
 /**
  * Outflows from the next Cut-offs (one by default) that can be allocated early: open, not
@@ -32,7 +33,6 @@ export function allocationCandidates(
 		for (const o of buildForecast(input, c).outflows)
 			if (
 				o.carried === undefined &&
-				o.link.plan !== 'statement' &&
 				(o.status === 'unpaid' || o.status === 'partly-paid') &&
 				!o.allocatedIn &&
 				!o.ealloc &&
@@ -54,13 +54,31 @@ export function lastReserve(scheduled: Scheduled[]): string | null {
 const isAssetLeaf = (input: ForecastInput, id: string) =>
 	input.chart.account(id)?.type === 'asset' && !input.chart.isGroup(id);
 
-/** Writes the target's Paying sources on its Occurrence or Row (undefined = plan defaults). */
+/**
+ * Writes the target's Paying sources on its Occurrence, Row or Statement (undefined = the
+ * defaults again).
+ */
 function setTargetSources(
 	input: ForecastInput,
-	link: PaidLink,
+	link: OutflowLink,
 	sources: PayingSource[] | undefined,
 	now: Date
 ): ChartWrite {
+	if (link.plan === 'statement') {
+		const prior = (input.statements ?? []).find(
+			(s) => s.cardId === link.planId && s.statementDate === link.due
+		);
+		return {
+			op: 'setStatement',
+			id: statementId(link.planId, link.due),
+			data: {
+				amount: prior?.amount ?? null,
+				sources: sources ?? [],
+				createdAt: prior?.createdAt ?? now,
+				updatedAt: now
+			}
+		};
+	}
 	if (link.plan === 'scheduled') {
 		const plan = input.scheduled.find((p) => p.id === link.planId);
 		if (!plan) throw new Error('The Outflow’s plan no longer exists');
@@ -98,7 +116,7 @@ export function planAllocateEarly(
 		now
 	}: {
 		cutoff: IsoDate;
-		target: Pick<ForecastOutflow, 'link' | 'label' | 'remaining' | 'sources'>;
+		target: Pick<ForecastOutflow, 'link' | 'label' | 'remaining' | 'sources' | 'date'>;
 		reserveId: string;
 		fromId: string;
 		transferId: string;
@@ -111,8 +129,6 @@ export function planAllocateEarly(
 	if (fromId === reserveId) throw new Error('Move the money into a different Account');
 	if (target.remaining <= 0) throw new Error('Nothing is left to pay on that Outflow');
 	const link = target.link;
-	if (link.plan === 'statement')
-		throw new Error('Early allocation does not work for Credit Card Statements yet');
 	if (input.scheduled.some((p) => p.allocates && keyOf(p.allocates) === keyOf(link)))
 		throw new Error('That Outflow is already allocated');
 
@@ -151,7 +167,8 @@ export function planAllocateEarly(
 	const sources = [...paid, { accountId: reserveId, amount }];
 
 	const writes: ChartWrite[] = [transfer, setTargetSources(input, link, sources, now)];
-	const targetCutoff = fundingCutoffOf(link.due);
+	// A Statement is identified by its Statement Date but paid by its Due Date.
+	const targetCutoff = fundingCutoffOf(link.plan === 'statement' ? target.date : link.due);
 	const funding = fundingAccountsFor(input, targetCutoff).ids;
 	if (!funding.includes(reserveId)) {
 		const existing = input.forecasts.find((f) => f.id === targetCutoff);
@@ -188,4 +205,41 @@ export function planUndoAllocation(
 		// The target's plan is gone; deleting the transfer is all that is left to do.
 	}
 	return writes;
+}
+
+/**
+ * Resizes an Early allocation to what its Outflow now costs (a Statement's entered amount, a late
+ * charge): the transfer and the reserve source both change by the gap. Refused once the money has
+ * moved; move the difference with a normal transfer instead.
+ */
+export function planResizeAllocation(
+	input: ForecastInput,
+	target: Pick<ForecastOutflow, 'key' | 'link' | 'sources' | 'allocationGap'>,
+	now: Date
+): ChartWrite[] {
+	const transfer = input.scheduled.find((p) => p.allocates && keyOf(p.allocates) === target.key);
+	if (!transfer) throw new Error('That Outflow is not allocated early');
+	const gap = target.allocationGap ?? 0;
+	if (gap === 0) throw new Error('The reserve already matches the Outflow');
+	if (planHasPayments(input.chart, 'scheduled', transfer.id))
+		throw new Error('The money has moved already. Move the difference with a normal transfer.');
+	const { id, ...data } = transfer;
+	const [version, ...later] = data.versions;
+	const reserveId = version.lines.find((l) => l.side === 'to')?.accountId;
+	const amount = (version.lines.find((l) => l.side === 'to')?.amount ?? 0) + gap;
+	if (!reserveId || amount <= 0)
+		throw new Error('Nothing is left to set aside; undo the allocation instead');
+	const lines = version.lines.map((l) => ({ ...l, amount }));
+	const sources = target.sources.map((s) => ({
+		accountId: s.accountId,
+		amount: s.accountId === reserveId ? s.amount + gap : s.amount
+	}));
+	return [
+		{
+			op: 'setScheduled',
+			id,
+			data: { ...data, versions: [{ ...version, lines }, ...later], updatedAt: now }
+		},
+		setTargetSources(input, target.link, sources, now)
+	];
 }

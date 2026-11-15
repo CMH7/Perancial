@@ -5,9 +5,11 @@ import {
 	allocationCandidates,
 	lastReserve,
 	planAllocateEarly,
+	planResizeAllocation,
 	planUndoAllocation
 } from './forecast-alloc.ts';
-import type { Scheduled, Transaction } from './schemas.ts';
+import { statementId, type Scheduled, type Statement, type Transaction } from './schemas.ts';
+import type { ChartWrite } from './writes.ts';
 import { account, now, roots, tx } from './test-fixtures.ts';
 
 const accounts = [
@@ -196,5 +198,173 @@ describe('Undo allocation', () => {
 		expect(() =>
 			planUndoAllocation(input({ scheduled, chart: buildChart(accounts, [paid]) }), transfer, now)
 		).toThrow(/moved/);
+	});
+});
+
+describe('Early allocation for a Credit Card Statement', () => {
+	// Visa closes on the 20th and is due on the 9th: the 20 Nov Statement is due 9 Dec, in the
+	// 15 Dec Cut-off, so it is allocated from the 30 Nov Cut-off.
+	const cardAccounts = [
+		...accounts,
+		account('visa', 'liability', 'liability', { card: { statementDay: 20, dueDay: 9 } }),
+		account('dining', 'expense', 'expense')
+	];
+	const dinner = tx('dinner', '2026-11-10', [
+		['dining', 300_000],
+		['visa', -300_000]
+	]);
+	const cardInput = (over: Partial<ForecastInput> = {}) =>
+		input({ chart: buildChart(cardAccounts, [dinner]), statements: [], ...over });
+	const key = 'statement:visa:2026-11-20';
+	const statementOf = (i: ForecastInput) =>
+		buildForecast(i, '2026-12-15').outflows.find((o) => o.key === key)!;
+
+	/** The input after the writes are applied. */
+	function applied(i: ForecastInput, writes: ChartWrite[]): ForecastInput {
+		let { scheduled, forecasts } = i;
+		let statements = i.statements ?? [];
+		for (const w of writes) {
+			if (w.op === 'setScheduled')
+				scheduled = [...scheduled.filter((p) => p.id !== w.id), { id: w.id, ...w.data }];
+			if (w.op === 'deleteScheduled') scheduled = scheduled.filter((p) => p.id !== w.id);
+			if (w.op === 'setForecast')
+				forecasts = [...forecasts.filter((f) => f.id !== w.id), { id: w.id, ...w.data }];
+			if (w.op === 'setStatement') {
+				const [cardId, statementDate] = [w.id.slice(0, -11), w.id.slice(-10)];
+				const doc: Statement = { id: w.id, cardId, statementDate, ...w.data };
+				statements = [...statements.filter((d) => d.id !== w.id), doc];
+			}
+		}
+		return { ...i, scheduled, forecasts, statements };
+	}
+	const allocate = (i: ForecastInput) =>
+		planAllocateEarly(i, {
+			cutoff: '2026-11-30',
+			target: statementOf(i),
+			reserveId: 'reserve',
+			fromId: 'everyday',
+			transferId: 'ea1',
+			now
+		});
+	const enter = (i: ForecastInput, amount: number): ForecastInput => ({
+		...i,
+		statements: (i.statements ?? []).map((d) => ({ ...d, amount }))
+	});
+
+	it('is offered from the Cut-off before the Statement is due', () => {
+		expect(allocationCandidates(cardInput(), '2026-11-30').map((o) => o.key)).toContain(key);
+	});
+
+	it('writes the transfer for the Statement, its reserve source, and the reserve as funding', () => {
+		const writes = allocate(cardInput());
+		expect(writes[0]).toMatchObject({
+			op: 'setScheduled',
+			id: 'ea1',
+			data: {
+				allocates: { plan: 'statement', planId: 'visa', due: '2026-11-20' },
+				versions: [
+					{
+						lines: [
+							{ accountId: 'everyday', side: 'from', amount: 300_000 },
+							{ accountId: 'reserve', side: 'to', amount: 300_000 }
+						]
+					}
+				]
+			}
+		});
+		expect(writes[1]).toEqual({
+			op: 'setStatement',
+			id: statementId('visa', '2026-11-20'),
+			data: {
+				amount: null,
+				sources: [{ accountId: 'reserve', amount: 300_000 }],
+				createdAt: now,
+				updatedAt: now
+			}
+		});
+		expect(writes[2]).toMatchObject({
+			op: 'setForecast',
+			id: '2026-12-15',
+			data: { fundingAccounts: ['everyday', 'reserve'] }
+		});
+	});
+
+	it('shows as paid from the reserve in its own Cut-off, and says when the reserve is short or over', () => {
+		const after = applied(cardInput(), allocate(cardInput()));
+		const o = statementOf(after);
+		expect(o.sources).toMatchObject([{ accountId: 'reserve', amount: 300_000, valid: true }]);
+		expect(o).toMatchObject({ allocatedIn: '2026-11-30', allocationGap: 0 });
+		expect(statementOf(enter(after, 350_000)).allocationGap).toBe(50_000);
+		expect(statementOf(enter(after, 250_000)).allocationGap).toBe(-50_000);
+		expect(statementOf(cardInput()).allocationGap).toBeUndefined();
+	});
+
+	it('counts only the reserve as allocated earlier, not a part already paid elsewhere', () => {
+		const part = tx('part', '2026-11-21', [
+			['visa', 100_000],
+			['everyday', -100_000]
+		]);
+		const before = cardInput({ chart: buildChart(cardAccounts, [dinner, part]) });
+		const after = applied(before, allocate(before));
+		expect(statementOf(after).sources).toMatchObject([
+			{ accountId: 'everyday', amount: 100_000, paid: 100_000 },
+			{ accountId: 'reserve', amount: 200_000 }
+		]);
+		const lanes = buildForecast(after, '2026-12-15').lanes;
+		const lane = (id: string) => lanes.find((l) => l.accountId === id)!;
+		expect(lane('everyday').allocatedFor).toBe(0);
+		expect(lane('reserve').allocatedFor).toBe(200_000);
+	});
+
+	it('undo deletes the transfer and clears the Statement’s reserve source', () => {
+		const after = enter(applied(cardInput(), allocate(cardInput())), 320_000);
+		const transfer = after.scheduled.find((p) => p.id === 'ea1')!;
+		expect(planUndoAllocation(after, transfer, now)).toEqual([
+			{ op: 'deleteScheduled', id: 'ea1' },
+			expect.objectContaining({
+				op: 'setStatement',
+				id: statementId('visa', '2026-11-20'),
+				data: expect.objectContaining({ amount: 320_000, sources: [] })
+			})
+		]);
+	});
+
+	it('resizes the transfer and the reserve source to a changed Statement, up or down', () => {
+		const after = applied(cardInput(), allocate(cardInput()));
+		for (const amount of [350_000, 250_000]) {
+			const changed = enter(after, amount);
+			const writes = planResizeAllocation(changed, statementOf(changed), now);
+			expect(writes[0]).toMatchObject({
+				id: 'ea1',
+				data: {
+					versions: [
+						{
+							lines: [
+								{ accountId: 'everyday', amount },
+								{ accountId: 'reserve', amount }
+							]
+						}
+					]
+				}
+			});
+			expect(writes[1]).toMatchObject({
+				op: 'setStatement',
+				data: { sources: [{ accountId: 'reserve', amount }] }
+			});
+			expect(statementOf(applied(changed, writes)).allocationGap).toBe(0);
+		}
+	});
+
+	it('refuses to resize once the money has moved', () => {
+		const after = enter(applied(cardInput(), allocate(cardInput())), 350_000);
+		const moved: Transaction = {
+			...tx('move', '2026-11-30', [
+				['reserve', 300_000],
+				['everyday', -300_000]
+			]),
+			pays: { plan: 'scheduled', planId: 'ea1', due: '2026-11-30' }
+		};
+		const paid = { ...after, chart: buildChart(cardAccounts, [dinner, moved]) };
+		expect(() => planResizeAllocation(paid, statementOf(paid), now)).toThrow(/moved/);
 	});
 });

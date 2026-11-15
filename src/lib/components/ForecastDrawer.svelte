@@ -17,6 +17,7 @@
 		planBillWithPayment,
 		planSetSources,
 		planSetStatementAmount,
+		planResizeAllocation,
 		planUndoAllocation,
 		recordPicks,
 		recordQuery,
@@ -147,6 +148,16 @@
 			undoError = (err as Error).message;
 		}
 	}
+	// The Outflow's amount changed after allocating: set aside the difference, or give it back.
+	async function resize() {
+		undoError = '';
+		try {
+			await ledger.commit(planResizeAllocation(input, o, new Date()));
+		} catch (err) {
+			undoError = (err as Error).message;
+		}
+	}
+	const gap = $derived(o.allocationGap ?? 0);
 
 	async function saveSources() {
 		saveError = '';
@@ -318,11 +329,28 @@
 		</div>
 	{/if}
 	{#if o.ealloc}<p class="text-xs text-violet-700">
-			E.Alloc: sets money aside for an Outflow due {shortDate(o.ealloc.due)}.
+			{#if o.ealloc.plan === 'statement'}
+				E.Alloc: sets money aside for the {input.chart.account(o.ealloc.planId)?.name ?? 'card'}
+				Statement of {shortDate(o.ealloc.due)}.
+			{:else}
+				E.Alloc: sets money aside for an Outflow due {shortDate(o.ealloc.due)}.
+			{/if}
 		</p>{/if}
 	{#if o.allocatedIn}<p class="text-xs text-violet-700">
 			Allocated in the {shortDate(o.allocatedIn)} Cut-off.
 		</p>{/if}
+	{#if gap !== 0}
+		<p class="rounded bg-amber-50 px-2 py-1 text-xs text-amber-900">
+			{#if gap > 0}
+				The reserve is {formatAmount(gap)} short: this Outflow grew after it was allocated.
+			{:else}
+				The reserve holds {formatAmount(-gap)} more than needed: this Outflow shrank after it was allocated.
+			{/if}
+			<button class="ml-1 underline" onclick={resize}
+				>{gap > 0 ? `Top up ${formatAmount(gap)}` : `Reduce by ${formatAmount(-gap)}`}</button
+			>
+		</p>
+	{/if}
 	{#if transfer}
 		<p class="text-xs">
 			<button class="underline" onclick={undo}>Undo allocation</button>

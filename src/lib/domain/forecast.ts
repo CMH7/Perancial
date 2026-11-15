@@ -215,11 +215,18 @@ export type ForecastOutflow = {
 	paid: number;
 	remaining: number;
 	/** This transfer is an Early allocation for that Outflow. */
-	ealloc?: PaidLink;
+	ealloc?: OutflowLink;
 	/** The Cut-off whose Early allocation set this Outflow's money aside. */
 	allocatedIn?: IsoDate;
 	/** How much of that Early allocation's transfer has been recorded (money in the reserve). */
 	allocatedPaid?: number;
+	/** The reserve that Early allocation moved money into. */
+	allocatedTo?: string;
+	/**
+	 * With an Early allocation: what the Outflow now costs beyond its Paying sources (positive:
+	 * the reserve is short; negative: it holds more than needed). Its amount can change later.
+	 */
+	allocationGap?: number;
 	/** `in`: carried into this Forecast; a date: carried out to that Cut-off's Forecast. */
 	carried?: 'in' | IsoDate;
 	/** The plan behind it; none for a Statement. */
@@ -607,7 +614,13 @@ function outflowsFromRows(ctx: Ctx, range: DateRange): ForecastOutflow[] {
 
 type Partial_ = Omit<
 	ForecastOutflow,
-	'unfunded' | 'remaining' | 'allocatedIn' | 'allocatedPaid' | 'carried'
+	| 'unfunded'
+	| 'remaining'
+	| 'allocatedIn'
+	| 'allocatedPaid'
+	| 'allocatedTo'
+	| 'allocationGap'
+	| 'carried'
 >;
 
 function finishOutflow(ctx: Ctx, o: Partial_): ForecastOutflow {
@@ -630,7 +643,10 @@ function finishOutflow(ctx: Ctx, o: Partial_): ForecastOutflow {
 		unfunded: done ? 0 : Math.max(0, o.total - covered),
 		remaining: done ? 0 : Math.max(0, o.total - o.paid),
 		allocatedIn,
-		allocatedPaid
+		allocatedPaid,
+		allocatedTo: allocator?.versions[0].lines.find((l) => l.side === 'to')?.accountId,
+		allocationGap:
+			allocator && !done ? o.total - o.sources.reduce((s, x) => s + x.amount, 0) : undefined
 	};
 }
 
@@ -1006,7 +1022,8 @@ function buildLanes(
 		const transfers = outflows.filter(
 			(o) => o.kind === 'transfer' && o.transferTo === accountId && !o.ealloc && o.carried !== 'in'
 		);
-		const allocated = outflows.filter((o) => o.allocatedIn);
+		// Only the reserve's share was set aside; a part paid from elsewhere before is not.
+		const allocated = outflows.filter((o) => o.allocatedIn && o.allocatedTo === accountId);
 		const allocations = allocated.flatMap((o) =>
 			o.sources.filter((s) => s.accountId === accountId)
 		);

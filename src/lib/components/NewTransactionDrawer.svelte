@@ -23,7 +23,7 @@
 	});
 </script>
 
-<Drawer id="new-transaction" width={640} label="New Transaction" {onclose}>
+<Drawer label="New Transaction" {onclose}>
 	<div bind:this={body}>
 		<!-- The form brings its own heading; only the close button is added. -->
 		<div class="-mb-2 flex justify-end">

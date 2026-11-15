@@ -36,7 +36,7 @@
 </button>
 
 {#if open}
-	<Drawer id="notifications" width={360} label="Notifications" onclose={() => (open = false)}>
+	<Drawer label="Notifications" onclose={() => (open = false)}>
 		<div class="mb-4 flex items-center justify-between">
 			<h2 class="text-lg font-semibold">Notifications</h2>
 			<button
