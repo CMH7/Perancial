@@ -11,36 +11,38 @@ import {
 	type ForecastOutflow,
 	type OutflowLink
 } from './forecast.ts';
+import { formatAmount } from './money.ts';
 import { planHasPayments } from './payable.ts';
 import { statementId, type Installment, type PayingSource, type Scheduled } from './schemas.ts';
 import type { ChartWrite } from './writes.ts';
 
 const keyOf = (l: OutflowLink) => `${l.plan}:${l.planId}:${l.due}`;
 
+/** The next Cut-offs after this one, to allocate early for. */
+export function upcomingCutoffs(cutoff: IsoDate, count = 12): IsoDate[] {
+	const out: IsoDate[] = [];
+	for (let c = nextCutoff(cutoff); out.length < count; c = nextCutoff(c)) out.push(c);
+	return out;
+}
+
 /**
- * Outflows from the next Cut-offs (one by default) that can be allocated early: open, not
- * already allocated, not themselves an allocation, with something left to pay.
+ * Outflows of a later Cut-off (the next one by default) that can be allocated early from this
+ * one: open, not already allocated, not themselves an allocation, with something left to pay.
  */
 export function allocationCandidates(
 	input: ForecastInput,
 	cutoff: IsoDate,
-	{ cutoffs = 1 }: { cutoffs?: number } = {}
+	{ target = nextCutoff(cutoff) }: { target?: IsoDate } = {}
 ): ForecastOutflow[] {
-	const out: ForecastOutflow[] = [];
-	let c = cutoff;
-	for (let i = 0; i < cutoffs; i++) {
-		c = nextCutoff(c);
-		for (const o of buildForecast(input, c).outflows)
-			if (
-				o.carried === undefined &&
-				(o.status === 'unpaid' || o.status === 'partly-paid') &&
-				!o.allocatedIn &&
-				!o.ealloc &&
-				o.remaining > 0
-			)
-				out.push(o);
-	}
-	return out;
+	if (target <= cutoff) return [];
+	return buildForecast(input, target).outflows.filter(
+		(o) =>
+			o.carried === undefined &&
+			(o.status === 'unpaid' || o.status === 'partly-paid') &&
+			!o.allocatedIn &&
+			!o.ealloc &&
+			o.remaining > 0
+	);
 }
 
 /** The reserve the latest Early allocation moved money into, to pick it again. */
@@ -112,22 +114,33 @@ export function planAllocateEarly(
 		target,
 		reserveId,
 		fromId,
+		from: split,
 		transferId,
 		now
 	}: {
 		cutoff: IsoDate;
 		target: Pick<ForecastOutflow, 'link' | 'label' | 'remaining' | 'sources' | 'date'>;
 		reserveId: string;
-		fromId: string;
+		/** One Account paying the whole Outflow... */
+		fromId?: string;
+		/** ...or several, with what each pays; together they pay what is left. */
+		from?: PayingSource[];
 		transferId: string;
 		now: Date;
 	}
 ): ChartWrite[] {
 	if (!isAssetLeaf(input, reserveId)) throw new Error('The reserve must be an Asset Leaf Account');
-	if (!fundingAccountsFor(input, cutoff).ids.includes(fromId))
-		throw new Error("Pay from one of this Cut-off's Funding Accounts");
-	if (fromId === reserveId) throw new Error('Move the money into a different Account');
 	if (target.remaining <= 0) throw new Error('Nothing is left to pay on that Outflow');
+	const from = split ?? (fromId ? [{ accountId: fromId, amount: target.remaining }] : []);
+	if (!from.length) throw new Error('Pick an Account to pay from');
+	const funding = fundingAccountsFor(input, cutoff).ids;
+	for (const f of from) {
+		if (!funding.includes(f.accountId))
+			throw new Error("Pay from one of this Cut-off's Funding Accounts");
+		if (f.accountId === reserveId) throw new Error('Move the money into a different Account');
+	}
+	if (from.reduce((s, f) => s + f.amount, 0) !== target.remaining)
+		throw new Error('The Pay-from amounts must add up to what is left on the Outflow');
 	const link = target.link;
 	if (input.scheduled.some((p) => p.allocates && keyOf(p.allocates) === keyOf(link)))
 		throw new Error('That Outflow is already allocated');
@@ -146,7 +159,11 @@ export function planAllocateEarly(
 					note: '',
 					tags: [],
 					lines: [
-						{ accountId: fromId, side: 'from', amount },
+						...from.map((f) => ({
+							accountId: f.accountId,
+							side: 'from' as const,
+							amount: f.amount
+						})),
 						{ accountId: reserveId, side: 'to', amount }
 					],
 					rule: { type: 'once', date }
@@ -169,14 +186,14 @@ export function planAllocateEarly(
 	const writes: ChartWrite[] = [transfer, setTargetSources(input, link, sources, now)];
 	// A Statement is identified by its Statement Date but paid by its Due Date.
 	const targetCutoff = fundingCutoffOf(link.plan === 'statement' ? target.date : link.due);
-	const funding = fundingAccountsFor(input, targetCutoff).ids;
-	if (!funding.includes(reserveId)) {
+	const targetFunding = fundingAccountsFor(input, targetCutoff).ids;
+	if (!targetFunding.includes(reserveId)) {
 		const existing = input.forecasts.find((f) => f.id === targetCutoff);
 		writes.push({
 			op: 'setForecast',
 			id: targetCutoff,
 			data: {
-				fundingAccounts: [...funding, reserveId],
+				fundingAccounts: [...targetFunding, reserveId],
 				...(existing?.outflowOrder ? { outflowOrder: existing.outflowOrder } : {}),
 				createdAt: existing?.createdAt ?? now,
 				updatedAt: now
@@ -184,6 +201,104 @@ export function planAllocateEarly(
 		});
 	}
 	return writes;
+}
+
+/** The input with these writes applied, so a later pick sees what an earlier one changed. */
+function withWrites(input: ForecastInput, writes: ChartWrite[]): ForecastInput {
+	let { scheduled, installments, forecasts } = input;
+	let statements = input.statements ?? [];
+	for (const w of writes) {
+		if (w.op === 'setScheduled')
+			scheduled = [...scheduled.filter((p) => p.id !== w.id), { id: w.id, ...w.data }];
+		else if (w.op === 'setInstallment')
+			installments = [...installments.filter((p) => p.id !== w.id), { id: w.id, ...w.data }];
+		else if (w.op === 'setForecast')
+			forecasts = [...forecasts.filter((f) => f.id !== w.id), { id: w.id, ...w.data }];
+		else if (w.op === 'setStatement') {
+			// The id is `{cardId}_{statementDate}`: the date is its last 10 characters.
+			const doc = {
+				id: w.id,
+				cardId: w.id.slice(0, -11),
+				statementDate: w.id.slice(-10),
+				...w.data
+			};
+			statements = [...statements.filter((d) => d.id !== w.id), doc];
+		}
+	}
+	return { ...input, scheduled, installments, forecasts, statements };
+}
+
+/**
+ * Allocates several Outflows early from several Accounts: each pick gets its own transfer, paid
+ * from the Accounts in order (one may leave its amount blank to take the rest). The amounts must
+ * add up to what the picks have left. A document two picks change is written once, with both.
+ */
+export function planAllocateMany(
+	input: ForecastInput,
+	{
+		cutoff,
+		targets,
+		from,
+		reserveId,
+		newId,
+		now
+	}: {
+		cutoff: IsoDate;
+		targets: Pick<ForecastOutflow, 'key' | 'link' | 'label' | 'remaining' | 'sources' | 'date'>[];
+		from: { accountId: string; amount: number | null }[];
+		reserveId: string;
+		newId: () => string;
+		now: Date;
+	}
+): ChartWrite[] {
+	if (!targets.length) throw new Error('Pick an Outflow to allocate');
+	if (!from.length) throw new Error('Pick an Account to pay from');
+	if (from.filter((f) => f.amount === null).length > 1)
+		throw new Error('Leave at most one Pay-from amount blank');
+	const need = targets.reduce((s, t) => s + t.remaining, 0);
+	const fixed = from.reduce((s, f) => s + (f.amount ?? 0), 0);
+	const amounts = from.map((f) => ({ accountId: f.accountId, amount: f.amount ?? need - fixed }));
+	if (amounts.reduce((s, a) => s + a.amount, 0) !== need || amounts.some((a) => a.amount <= 0))
+		throw new Error(
+			`The Pay-from amounts add up to ${formatAmount(fixed)}; the picks need ${formatAmount(need)}`
+		);
+
+	const queue = amounts.map((a) => ({ ...a }));
+	let state = input;
+	const all: ChartWrite[] = [];
+	for (const target of targets) {
+		const lines: PayingSource[] = [];
+		let left = target.remaining;
+		while (left > 0) {
+			const head = queue[0];
+			const take = Math.min(head.amount, left);
+			const same = lines.find((l) => l.accountId === head.accountId);
+			if (same) same.amount += take;
+			else lines.push({ accountId: head.accountId, amount: take });
+			head.amount -= take;
+			left -= take;
+			if (head.amount === 0) queue.shift();
+		}
+		const writes = planAllocateEarly(state, {
+			cutoff,
+			target,
+			reserveId,
+			from: lines,
+			transferId: newId(),
+			now
+		});
+		state = withWrites(state, writes);
+		all.push(...writes);
+	}
+	// One write per document: the last, which carries every pick's change.
+	const last = new Map(all.map((w) => [`${w.op}:${w.id}`, w]));
+	const seen = new Set<string>();
+	return all.flatMap((w) => {
+		const k = `${w.op}:${w.id}`;
+		if (seen.has(k)) return [];
+		seen.add(k);
+		return [last.get(k)!];
+	});
 }
 
 /**

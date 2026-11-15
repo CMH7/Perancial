@@ -5,8 +5,10 @@ import {
 	allocationCandidates,
 	lastReserve,
 	planAllocateEarly,
+	planAllocateMany,
 	planResizeAllocation,
-	planUndoAllocation
+	planUndoAllocation,
+	upcomingCutoffs
 } from './forecast-alloc.ts';
 import { statementId, type Scheduled, type Statement, type Transaction } from './schemas.ts';
 import type { ChartWrite } from './writes.ts';
@@ -16,6 +18,7 @@ const accounts = [
 	...roots,
 	account('everyday', 'asset', 'asset'),
 	account('reserve', 'asset', 'asset'),
+	account('savings', 'asset', 'asset'),
 	account('card', 'liability', 'liability'),
 	account('insurance', 'expense', 'expense')
 ];
@@ -58,14 +61,18 @@ const target = (i: ForecastInput) =>
 	buildForecast(i, '2026-12-15').outflows.find((o) => o.key === 'scheduled:ins:2026-12-05')!;
 
 describe('Allocate early', () => {
-	it("offers the next Cut-off's open Outflows, then later ones", () => {
+	it("offers the next Cut-off's open Outflows, or a chosen later Cut-off's", () => {
 		expect(allocationCandidates(input(), '2026-11-30').map((o) => o.key)).toEqual([
 			'scheduled:ins:2026-12-05'
 		]);
-		expect(allocationCandidates(input(), '2026-11-30', { cutoffs: 3 }).map((o) => o.key)).toEqual([
-			'scheduled:ins:2026-12-05',
-			'scheduled:ins:2027-01-05'
-		]);
+		expect(
+			allocationCandidates(input(), '2026-11-30', { target: '2027-01-15' }).map((o) => o.key)
+		).toEqual(['scheduled:ins:2027-01-05']);
+		expect(allocationCandidates(input(), '2026-11-30', { target: '2026-11-30' })).toEqual([]);
+	});
+
+	it('lists the upcoming Cut-offs to allocate for', () => {
+		expect(upcomingCutoffs('2026-11-30', 3)).toEqual(['2026-12-15', '2026-12-30', '2027-01-15']);
 	});
 
 	it('writes the transfer, the target sources and the reserve as the target Funding Account', () => {
@@ -366,5 +373,84 @@ describe('Early allocation for a Credit Card Statement', () => {
 		};
 		const paid = { ...after, chart: buildChart(cardAccounts, [dinner, moved]) };
 		expect(() => planResizeAllocation(paid, statementOf(paid), now)).toThrow(/moved/);
+	});
+});
+
+describe('Allocating several Outflows from several Accounts', () => {
+	const twoFunding = () =>
+		input({
+			forecasts: [
+				{
+					id: '2026-11-30',
+					fundingAccounts: ['everyday', 'savings'],
+					createdAt: now,
+					updatedAt: now
+				}
+			]
+		});
+	const targets = (i: ForecastInput) => [
+		target(i),
+		buildForecast(i, '2027-01-15').outflows.find((o) => o.key === 'scheduled:ins:2027-01-05')!
+	];
+	const ids = ['ea1', 'ea2'];
+	const many = (i: ForecastInput, from: { accountId: string; amount: number | null }[]) =>
+		planAllocateMany(i, {
+			cutoff: '2026-11-30',
+			targets: targets(i),
+			from,
+			reserveId: 'reserve',
+			newId: () => ids.shift() ?? 'extra',
+			now
+		});
+
+	it('funds the picks in order from the Accounts, a blank amount taking the rest', () => {
+		ids.splice(0, ids.length, 'ea1', 'ea2');
+		const writes = many(twoFunding(), [
+			{ accountId: 'everyday', amount: 300_000 },
+			{ accountId: 'savings', amount: null }
+		]);
+		const lines = (id: string) => {
+			const w = writes.find((x) => x.id === id);
+			return w?.op === 'setScheduled' ? w.data.versions[0].lines : [];
+		};
+		expect(lines('ea1')).toEqual([
+			{ accountId: 'everyday', side: 'from', amount: 250_000 },
+			{ accountId: 'reserve', side: 'to', amount: 250_000 }
+		]);
+		expect(lines('ea2')).toEqual([
+			{ accountId: 'everyday', side: 'from', amount: 50_000 },
+			{ accountId: 'savings', side: 'from', amount: 200_000 },
+			{ accountId: 'reserve', side: 'to', amount: 250_000 }
+		]);
+	});
+
+	it('keeps both picks of one plan, and adds the reserve only where a Cut-off lacks it', () => {
+		ids.splice(0, ids.length, 'ea1', 'ea2');
+		const writes = many(twoFunding(), [{ accountId: 'everyday', amount: null }]);
+		const plan = writes.filter((w) => w.id === 'ins');
+		expect(plan).toHaveLength(1);
+		expect(plan[0]).toMatchObject({
+			data: {
+				occurrences: {
+					'2026-12-05': { sources: [{ accountId: 'reserve', amount: 250_000 }] },
+					'2027-01-05': { sources: [{ accountId: 'reserve', amount: 250_000 }] }
+				}
+			}
+		});
+		// 15 Jan has no Funding Accounts of its own, so it takes 15 Dec's, reserve included.
+		expect(writes.filter((w) => w.op === 'setForecast').map((w) => w.id)).toEqual(['2026-12-15']);
+	});
+
+	it('refuses amounts that do not add up, two blanks, or an Account this Cut-off does not fund', () => {
+		expect(() => many(twoFunding(), [{ accountId: 'everyday', amount: 100_000 }])).toThrow(
+			/add up/
+		);
+		expect(() =>
+			many(twoFunding(), [
+				{ accountId: 'everyday', amount: null },
+				{ accountId: 'savings', amount: null }
+			])
+		).toThrow(/blank/);
+		expect(() => many(input(), [{ accountId: 'savings', amount: null }])).toThrow(/Funding/);
 	});
 });
