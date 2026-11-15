@@ -367,8 +367,14 @@
 			<div class="mb-3 flex flex-wrap items-center gap-2 text-sm">
 				<button class="rounded border bg-white px-2 py-1" onclick={manage}>Funding Accounts…</button
 				>
-				<button class="rounded border bg-white px-2 py-1" onclick={() => (allocating = !allocating)}
-					>Allocate early…</button
+				<button
+					class="rounded border bg-white px-2 py-1"
+					onclick={() => {
+						managing = false;
+						adding = null;
+						openKey = null;
+						allocating = true;
+					}}>Allocate early…</button
 				>
 				<button
 					class="rounded border bg-white px-2 py-1"
@@ -388,16 +394,6 @@
 					splits it · right-click or hold for more</span
 				>
 			</div>
-
-			{#if allocating}
-				<AllocatePanel
-					{input}
-					{cutoff}
-					lanes={view.lanes}
-					{name}
-					onclose={() => (allocating = false)}
-				/>
-			{/if}
 
 			{#snippet card(
 				o: ForecastOutflow,
@@ -462,6 +458,8 @@
 							? ' · estimated'
 							: ''}{sourceNote}{o.ealloc ? ' · E.Alloc' : ''}{o.allocatedIn
 							? ` · allocated in ${day(o.allocatedIn)}`
+							: ''}{o.allocationGap
+							? ` · reserve ${formatAmount(Math.abs(o.allocationGap))} ${o.allocationGap > 0 ? 'short' : 'over'}`
 							: ''}{o.carried && o.carried !== 'in' ? ` · carried to ${day(o.carried)}` : ''}
 					</span>
 					{#if o.charges?.length}<span class="block text-xs text-gray-500"
@@ -687,12 +685,7 @@
 	</main>
 
 	{#if managing && view}
-		<Drawer
-			id="forecast-wallet"
-			width={520}
-			label="Funding Accounts"
-			onclose={() => (managing = false)}
-		>
+		<Drawer label="Funding Accounts" onclose={() => (managing = false)}>
 			<FundingWallet
 				items={walletItems}
 				bind:picked
@@ -702,13 +695,18 @@
 				oncancel={() => (managing = false)}
 			/>
 		</Drawer>
+	{:else if allocating && view}
+		<Drawer label="Allocate early" onclose={() => (allocating = false)}>
+			<AllocatePanel
+				{input}
+				{cutoff}
+				lanes={view.lanes}
+				{name}
+				onclose={() => (allocating = false)}
+			/>
+		</Drawer>
 	{:else if adding && view}
-		<Drawer
-			id="forecast-add"
-			width={512}
-			label="Add to the Forecast"
-			onclose={() => (adding = null)}
-		>
+		<Drawer label="Add to the Forecast" onclose={() => (adding = null)}>
 			{#key adding}
 				<ForecastAddPanel
 					kind={adding}
@@ -721,7 +719,7 @@
 			{/key}
 		</Drawer>
 	{:else if open && view}
-		<Drawer id="forecast-outflow" label="Outflow" onclose={() => (openKey = null)}>
+		<Drawer label="Outflow" onclose={() => (openKey = null)}>
 			<ForecastDrawer
 				outflow={open}
 				{cutoff}

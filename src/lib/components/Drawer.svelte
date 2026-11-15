@@ -1,19 +1,16 @@
 <script lang="ts">
-	// A side drawer floating over the right of a page (the page keeps its width). Drag its left edge (or focus it and use the arrow
-	// keys) to resize; the width is remembered per drawer on this browser. Esc, or a click outside
-	// it, calls `onclose` (see overlays.svelte.ts).
+	// A side drawer floating over the right of a page (the page keeps its width). Every drawer opens
+	// at the same width, the New Transaction drawer's; drag its left edge (or focus it and use the
+	// arrow keys) to resize, and every drawer follows, remembered on this browser. Esc, or a click
+	// outside it, calls `onclose` (see overlays.svelte.ts).
 	import type { Snippet } from 'svelte';
 	import { openLayer } from '#lib/overlays.svelte.ts';
 
 	let {
-		id,
-		width: initial = 384,
 		onclose,
 		label,
 		children
 	}: {
-		id: string;
-		width?: number;
 		onclose: () => void;
 		/** Accessible name of the drawer. */
 		label?: string;
@@ -26,17 +23,20 @@
 	const MIN = 320;
 	const max = () => Math.max(MIN, Math.round(window.innerWidth * 0.8));
 	const clamp = (w: number) => Math.min(max(), Math.max(MIN, Math.round(w)));
-	const key = $derived(`perancial.drawer.${id}`);
+	/** The New Transaction drawer's width: the one every drawer shares. */
+	const initial = 640;
+	const key = 'perancial.drawer.width';
+	/** Where the New Transaction drawer kept its width before all drawers shared one. */
+	const legacyKey = 'perancial.drawer.new-transaction';
 
 	function stored(): number | null {
 		try {
-			const v = Number(localStorage.getItem(key));
+			const v = Number(localStorage.getItem(key) ?? localStorage.getItem(legacyKey));
 			return v > 0 ? v : null;
 		} catch {
 			return null;
 		}
 	}
-	// svelte-ignore state_referenced_locally
 	let width = $state(clamp(stored() ?? initial));
 	function remember() {
 		try {

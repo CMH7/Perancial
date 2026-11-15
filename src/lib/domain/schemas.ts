@@ -69,6 +69,15 @@ export const PaidLink = z.object({
 });
 export type PaidLink = z.infer<typeof PaidLink>;
 
+/**
+ * The Outflow an Early allocation sets money aside for: a paid link, or a Credit Card Statement
+ * (`planId` the card, `due` the Statement Date).
+ */
+export const AllocationLink = PaidLink.extend({
+	plan: z.enum(['scheduled', 'installment', 'statement'])
+});
+export type AllocationLink = z.infer<typeof AllocationLink>;
+
 export const TAG_PATTERN = /^[a-z0-9-]+$/;
 
 /**
@@ -234,8 +243,8 @@ export const ScheduledDoc = z.object({
 	occurrences: z.record(z.iso.date(), OccurrenceChange).default({}),
 	/** The owner's Forecast Section; none means the derived default. */
 	section: z.string().min(1).nullable().optional(),
-	/** Early allocation: the Outflow this transfer sets money aside for (paid-link shape). */
-	allocates: PaidLink.nullable().optional(),
+	/** Early allocation: the Outflow this transfer sets money aside for. */
+	allocates: AllocationLink.nullable().optional(),
 	createdAt: z.date(),
 	updatedAt: z.date()
 });

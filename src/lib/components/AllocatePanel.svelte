@@ -89,13 +89,13 @@
 	}
 </script>
 
-<div class="mb-3 max-w-2xl rounded-lg border bg-white p-3 text-sm">
-	<p class="font-medium">Allocate early from the {shortDate(cutoff)} Cut-off</p>
+<div class="space-y-1 text-sm">
+	<h2 class="text-lg font-semibold">Allocate early from the {shortDate(cutoff)} Cut-off</h2>
 	<p class="mb-2 text-xs text-gray-500">
 		Each pick becomes a transfer into the reserve, dated on this Cut-off (or today, when later); the
 		Outflow is then paid from the reserve.
 	</p>
-	<ul class="max-h-64 space-y-1 overflow-y-auto">
+	<ul class="space-y-1">
 		{#each candidates as o (o.key)}
 			<li>
 				<label class="flex items-center gap-2">
