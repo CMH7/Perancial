@@ -176,6 +176,40 @@ describe('Credit Card Statements in a Forecast', () => {
 		expect(buildForecast(input(refunded), DEC_15).outflows).toEqual([]);
 	});
 
+	it('bill a planned charge into an Asset (someone will pay it back) as a charge, never an Inflow', () => {
+		const chart = buildChart(
+			[...accounts, account('owed', 'asset', 'asset', { name: 'Owed by employer' })],
+			[]
+		);
+		const reimbursable: Scheduled = {
+			id: 'team',
+			versions: [
+				{
+					from: '2026-11-02',
+					description: 'Team plan',
+					note: '',
+					tags: [],
+					lines: [
+						{ accountId: 'visa', side: 'from', amount: 25000 },
+						{ accountId: 'owed', side: 'to', amount: 25000 }
+					],
+					rule: { type: 'monthly', day: 2, start: '2026-11-02' }
+				}
+			],
+			end: { type: 'never' },
+			occurrences: {},
+			createdAt: now,
+			updatedAt: now
+		};
+		const base = input([], { chart, scheduled: [reimbursable], today: '2026-11-01' });
+		expect(buildForecast(base, '2026-11-15').inflows).toEqual([]);
+		const [o] = buildForecast(base, DEC_15).outflows;
+		expect(o.key).toBe('statement:visa:2026-11-20');
+		expect(o.charges?.map((c) => [c.key, c.amount])).toEqual([
+			['scheduled:team:2026-11-02', 25000]
+		]);
+	});
+
 	it('leave a leftover card payment plan without the card’s charges', () => {
 		const leftover: Scheduled = {
 			id: 'old-pay',
