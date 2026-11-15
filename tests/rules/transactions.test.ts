@@ -68,3 +68,15 @@ describe('Transactions', () => {
 		await assertFails(setDoc(ref('tx1'), { ...full, pays: 'p1' }));
 	});
 });
+
+describe('Persons on Transactions', () => {
+	it('accept From and To Persons as lists', async () => {
+		await assertSucceeds(setDoc(ref('tx1'), { ...lunch, fromPersons: ['me'], toPersons: ['p1'] }));
+	});
+
+	it('reject Persons that are not a list, or more than 20', async () => {
+		await assertFails(setDoc(ref('tx1'), { ...lunch, toPersons: 'p1' }));
+		const many = Array.from({ length: 21 }, (_, i) => `p${i}`);
+		await assertFails(setDoc(ref('tx1'), { ...lunch, fromPersons: many }));
+	});
+});

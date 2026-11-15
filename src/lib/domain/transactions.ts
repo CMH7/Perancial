@@ -63,6 +63,9 @@ export type TransactionDraft = {
 	 * Blank or null for none; left out, an edit keeps the stored one.
 	 */
 	billOn?: IsoDate | null;
+	/** Who sent and who received it; left out, an edit keeps the stored ones. */
+	fromPersons?: string[];
+	toPersons?: string[];
 };
 
 /** Whether the draft charges a Liability (one on its From side), so it can be billed later. */
@@ -320,6 +323,8 @@ export function planSaveTransaction(
 				pays: existing ? existing.pays : (pays ?? null),
 				billOn: draft.billOn === undefined ? (existing?.billOn ?? null) : draft.billOn || null,
 				recordedWith: existing ? existing.recordedWith : (recordedWith ?? null),
+				fromPersons: [...new Set(draft.fromPersons ?? existing?.fromPersons ?? [])],
+				toPersons: [...new Set(draft.toPersons ?? existing?.toPersons ?? [])],
 				createdAt: existing?.createdAt ?? now,
 				updatedAt: now
 			}

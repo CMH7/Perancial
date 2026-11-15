@@ -99,6 +99,8 @@ export function openingWrite(
 				pays: null,
 				billOn: null,
 				recordedWith: null,
+				fromPersons: [],
+				toPersons: [],
 				createdAt,
 				updatedAt: now
 			}

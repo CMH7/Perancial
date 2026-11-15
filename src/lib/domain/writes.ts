@@ -3,6 +3,7 @@ import type {
 	ForecastDoc,
 	ForecastSettingsDoc,
 	InstallmentDoc,
+	PersonDoc,
 	ScheduledDoc,
 	StatementDoc,
 	TransactionDoc
@@ -20,6 +21,8 @@ export type ChartWrite =
 	| { op: 'deleteInstallment'; id: string }
 	/** `id` is the Cut-off date. */
 	| { op: 'setForecast'; id: string; data: ForecastDoc }
+	| { op: 'setPerson'; id: string; data: PersonDoc }
+	| { op: 'deletePerson'; id: string }
 	/** `id` is `{cardId}_{statementDate}` (see `statementId`). */
 	| { op: 'setStatement'; id: string; data: StatementDoc }
 	/** The one settings document, `settings/forecast`. */

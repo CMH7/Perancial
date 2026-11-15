@@ -323,11 +323,31 @@ describe('planSaveTransaction', () => {
 					pays: null,
 					billOn: null,
 					recordedWith: null,
+					fromPersons: [],
+					toPersons: [],
 					createdAt: later,
 					updatedAt: later
 				}
 			}
 		]);
+	});
+
+	it('writes the From and To Persons, and keeps stored ones when the draft leaves them out', () => {
+		const [w] = planSaveTransaction(chart, draft({ fromPersons: ['me'], toPersons: ['partner'] }), {
+			id: 'tx9',
+			now: later,
+			today
+		});
+		expect(w).toMatchObject({ data: { fromPersons: ['me'], toPersons: ['partner'] } });
+		if (w.op !== 'setTransaction') throw new Error('expected a Transaction');
+		const existing = { id: 'tx9', ...w.data, fromPersons: [], toPersons: ['parent'] };
+		const [kept] = planSaveTransaction(chart, draft(), {
+			id: existing.id,
+			now: later,
+			today,
+			existing
+		});
+		expect(kept).toMatchObject({ data: { fromPersons: [], toPersons: ['parent'] } });
 	});
 
 	it('refuses a draft with errors, naming the first one', () => {

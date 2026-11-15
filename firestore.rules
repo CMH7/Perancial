@@ -38,8 +38,11 @@ service cloud.firestore {
                 && day(d.card.statementDay) && day(d.card.dueDay) && d.type == 'liability');
         }
         function validShape(d) {
-          return d.keys().hasOnly(fields().concat(['madeFrom', 'card'])) && d.keys().hasAll(fields())
+          return d.keys().hasOnly(fields().concat(['madeFrom', 'card', 'personId']))
+            && d.keys().hasAll(fields())
             && validCard(d)
+            && (!('personId' in d) || d.personId == null
+              || (d.personId is string && d.personId.size() >= 1 && d.personId != 'me'))
             && (!('madeFrom' in d) || d.madeFrom == null
               || (d.madeFrom is string && d.madeFrom.size() >= 1))
             && d.name is string && d.description is string
@@ -84,7 +87,7 @@ service cloud.firestore {
         }
         // Added in v2; optional so documents written before them stay valid.
         function optional() {
-          return ['note', 'status', 'tags', 'pays', 'billOn', 'recordedWith'];
+          return ['note', 'status', 'tags', 'pays', 'billOn', 'recordedWith', 'fromPersons', 'toPersons'];
         }
         function validTags(d) {
           return !('tags' in d) || (d.tags is list && d.tags.size() <= 50
@@ -103,6 +106,8 @@ service cloud.firestore {
             && (!('pays' in d) || d.pays == null || d.pays is map)
             && (!('billOn' in d) || d.billOn == null || d.billOn is string)
             && (!('recordedWith' in d) || d.recordedWith == null || d.recordedWith is string)
+            && (!('fromPersons' in d) || (d.fromPersons is list && d.fromPersons.size() <= 20))
+            && (!('toPersons' in d) || (d.toPersons is list && d.toPersons.size() <= 20))
             && d.createdAt is timestamp && d.updatedAt is timestamp;
         }
 
@@ -185,6 +190,21 @@ service cloud.firestore {
 
         allow read, delete: if isOwner(uid);
         allow create, update: if isOwner(uid) && validStatement(request.resource.data);
+      }
+
+      // Persons involved in Transactions. Me is built in and never stored.
+      match /persons/{personId} {
+        function validPerson(d) {
+          return personId != 'me'
+            && d.keys().hasOnly(['name', 'archived', 'createdAt', 'updatedAt'])
+            && d.keys().hasAll(['name', 'archived', 'createdAt', 'updatedAt'])
+            && d.name is string && d.name.size() >= 1 && d.name.size() <= 60
+            && d.archived is bool
+            && d.createdAt is timestamp && d.updatedAt is timestamp;
+        }
+
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid) && validPerson(request.resource.data);
       }
 
       // Settings, one document per area. Only `forecast` (the Section lists) exists so far.

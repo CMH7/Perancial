@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
 	parseAccount,
 	parseInstallment,
+	parsePerson,
 	parseScheduled,
 	parseStatement,
 	parseTransaction
@@ -353,5 +354,52 @@ describe('parseStatement', () => {
 	it('rejects a negative amount and an id without a Statement Date', () => {
 		expect(() => parseStatement('visa_2026-11-20', { ...doc, amount: -1 })).toThrow();
 		expect(() => parseStatement('visa', doc)).toThrow();
+	});
+});
+
+describe('Persons on a Transaction', () => {
+	it('default to none, and keep From and To Persons', () => {
+		expect(parseTransaction('tx1', lunch)).toMatchObject({ fromPersons: [], toPersons: [] });
+		expect(
+			parseTransaction('tx1', { ...lunch, fromPersons: ['me'], toPersons: ['partner', 'parent'] })
+		).toMatchObject({ fromPersons: ['me'], toPersons: ['partner', 'parent'] });
+	});
+
+	it('rejects a Person twice on one side', () => {
+		expect(() =>
+			parseTransaction('tx1', { ...lunch, toPersons: ['partner', 'partner'] })
+		).toThrow();
+	});
+});
+
+describe('parsePerson', () => {
+	const person = { name: 'Partner', archived: false, createdAt: now, updatedAt: now };
+
+	it('parses a Person and attaches its id', () => {
+		expect(parsePerson('partner', person)).toEqual({ id: 'partner', ...person });
+	});
+
+	it('rejects a blank name, and the id reserved for Me', () => {
+		expect(() => parsePerson('partner', { ...person, name: '  ' })).toThrow();
+		expect(() => parsePerson('me', person)).toThrow();
+	});
+});
+
+describe('A Person link on an Account', () => {
+	const base = {
+		name: 'Owed by partner',
+		description: '',
+		type: 'asset',
+		parentId: 'asset',
+		system: null,
+		archived: false,
+		order: 0,
+		createdAt: now,
+		updatedAt: now
+	};
+
+	it('keeps the linked Person, but never Me', () => {
+		expect(parseAccount('owed', { ...base, personId: 'partner' }).personId).toBe('partner');
+		expect(() => parseAccount('owed', { ...base, personId: 'me' })).toThrow();
 	});
 });

@@ -129,6 +129,8 @@ describe('planCreateAccount', () => {
 					pays: null,
 					billOn: null,
 					recordedWith: null,
+					fromPersons: [],
+					toPersons: [],
 					createdAt: now,
 					updatedAt: now
 				}

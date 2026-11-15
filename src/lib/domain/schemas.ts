@@ -12,6 +12,15 @@ export const CardTerms = z.object({
 });
 export type CardTerms = z.infer<typeof CardTerms>;
 
+/** The built-in Person who stands for the owner. Never stored; Transactions name it by this id. */
+export const ME = 'me';
+
+/** Persons on one side of a Transaction or plan: each at most once. */
+export const PersonIds = z
+	.array(z.string().min(1))
+	.max(20)
+	.refine((ids) => new Set(ids).size === ids.length, 'A Person can be listed only once per side');
+
 /** `users/{uid}/accounts/{accountId}` document data. Timestamps arrive as `Date`. */
 export const AccountDoc = z
 	.object({
@@ -25,6 +34,13 @@ export const AccountDoc = z
 		order: z.number(),
 		/** Present on a Credit Card: a Liability Leaf billed in monthly Statements. */
 		card: CardTerms.nullable().optional(),
+		/** The Person whose money this Account tracks; its children inherit it. Never Me. */
+		personId: z
+			.string()
+			.min(1)
+			.refine((id) => id !== ME, 'Me cannot be linked to an Account')
+			.nullable()
+			.optional(),
 		createdAt: z.date(),
 		updatedAt: z.date()
 	})
@@ -86,6 +102,9 @@ export const TransactionDoc = z
 		billOn: z.iso.date().nullable().default(null),
 		/** A planned charge recorded together with this Liability payment: the payment's id. */
 		recordedWith: z.string().nullable().default(null),
+		/** Who sent and who received the money: descriptive only, never a Balance. */
+		fromPersons: PersonIds.default([]),
+		toPersons: PersonIds.default([]),
 		createdAt: z.date(),
 		updatedAt: z.date()
 	})
@@ -174,7 +193,10 @@ export const PlanVersion = z.object({
 		.refine((ls) => ls.some((l) => l.side === 'from') && ls.some((l) => l.side === 'to'), {
 			message: 'A plan needs a line on each side'
 		}),
-	rule: RepeatRule
+	rule: RepeatRule,
+	/** Persons copied to each Transaction recorded from this plan. */
+	fromPersons: PersonIds.optional(),
+	toPersons: PersonIds.optional()
 });
 export type PlanVersion = z.infer<typeof PlanVersion>;
 
@@ -358,4 +380,19 @@ export function parseStatement(id: string, data: unknown): Statement {
 	if (!match) throw new Error(`Not a Statement id: ${id}`);
 	const statementDate = z.iso.date().parse(match[2]);
 	return { id, cardId: match[1], statementDate, ...StatementDoc.parse(data) };
+}
+
+/** `users/{uid}/persons/{personId}`: a human involved in Transactions. Me is not stored. */
+export const PersonDoc = z.object({
+	name: z.string().trim().min(1, 'Name the Person').max(60, 'At most 60 characters'),
+	archived: z.boolean(),
+	createdAt: z.date(),
+	updatedAt: z.date()
+});
+export type PersonDoc = z.infer<typeof PersonDoc>;
+export type Person = PersonDoc & { id: string };
+
+export function parsePerson(id: string, data: unknown): Person {
+	if (id === ME) throw new Error('The id "me" is reserved for Me');
+	return { id, ...PersonDoc.parse(data) };
 }

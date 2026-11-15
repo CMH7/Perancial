@@ -6,6 +6,7 @@ import {
 	type Forecast,
 	type ForecastSettingsDoc,
 	type Installment,
+	type Person,
 	type Scheduled,
 	type Statement,
 	type Transaction
@@ -31,6 +32,8 @@ class Ledger {
 	forecasts = $state.raw<Forecast[]>([]);
 	/** Credit Card Statements with an entered amount or Paying sources (ADR 0006). */
 	statements = $state.raw<Statement[]>([]);
+	/** Persons involved in Transactions; Me is built in and not among them. */
+	persons = $state.raw<Person[]>([]);
 	/** The owner's Forecast Section lists; null until first saved (defaults apply). */
 	forecastSettings = $state.raw<ForecastSettingsDoc | null>(null);
 	/** True once both collections have loaded at least once. */
@@ -98,6 +101,7 @@ class Ledger {
 				installments,
 				forecasts,
 				statements,
+				persons,
 				forecastSettings
 			}) => {
 				this.accounts = accounts;
@@ -106,6 +110,7 @@ class Ledger {
 				this.installments = installments;
 				this.forecasts = forecasts;
 				this.statements = statements;
+				this.persons = persons;
 				this.forecastSettings = forecastSettings;
 				this.ready = true;
 			},
@@ -126,6 +131,7 @@ class Ledger {
 		this.installments = [];
 		this.forecasts = [];
 		this.statements = [];
+		this.persons = [];
 		this.forecastSettings = null;
 		this.ready = false;
 	}
