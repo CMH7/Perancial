@@ -1003,10 +1003,19 @@ function buildLanes(
 	const ids = [...fundingAccounts];
 	for (const i of inflows) if (!ids.includes(i.accountId)) ids.push(i.accountId);
 
+	// A payment into a Credit Card has no paid link, yet it is planned: it fills the card's oldest
+	// Statement (ADR 0006), so it shows there, not as Unplanned.
+	const paysCard = (tx: Transaction) =>
+		tx.entries.some((e) => e.amount > 0 && isCard(chart, e.accountId));
 	const unplanned: Unplanned[] = chart
 		.transactions()
 		.filter(
-			(tx) => tx.date !== null && tx.origin === 'normal' && !tx.pays && inRange(tx.date, funded)
+			(tx) =>
+				tx.date !== null &&
+				tx.origin === 'normal' &&
+				!tx.pays &&
+				!paysCard(tx) &&
+				inRange(tx.date, funded)
 		)
 		.flatMap((tx) =>
 			fundingAccounts

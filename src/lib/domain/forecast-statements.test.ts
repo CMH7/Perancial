@@ -94,6 +94,19 @@ describe('Credit Card Statements in a Forecast', () => {
 		expect(at('2026-11-30')).toEqual([]);
 	});
 
+	it('count a card payment from a Funding Account as paying the Statement, never as Unplanned', () => {
+		// The 20 Nov Statement is due 9 Dec; paid on 5 Dec from the bank, in the 15 Dec Cut-off.
+		const view = buildForecast(
+			input([charge('lunch', '2026-11-05', 50000), pay('p', '2026-12-05', 50000)], {
+				forecasts: [{ id: DEC_15, fundingAccounts: ['bank'], createdAt: now, updatedAt: now }],
+				today: '2026-12-06'
+			}),
+			DEC_15
+		);
+		expect(view.outflows[0]).toMatchObject({ status: 'paid', paid: 50000 });
+		expect(view.lanes.find((l) => l.accountId === 'bank')!.unplanned).toEqual([]);
+	});
+
 	const entered = (amount: number | null, sources: Statement['sources'] = []): Statement => ({
 		id: 'visa_2026-11-20',
 		cardId: 'visa',
