@@ -20,18 +20,21 @@ import {
 	ForecastSettingsDoc,
 	InstallmentDoc,
 	ScheduledDoc,
+	StatementDoc,
 	TransactionDoc,
 	parseAccount,
 	parseForecast,
 	parseForecastSettings,
 	parseInstallment,
 	parseScheduled,
+	parseStatement,
 	parseTransaction,
 	type Account,
 	type ChartWrite,
 	type Forecast,
 	type Installment,
 	type Scheduled,
+	type Statement,
 	type Transaction
 } from '#lib/domain/index.ts';
 
@@ -40,6 +43,7 @@ export const transactionsPath = (uid: string) => `users/${uid}/transactions`;
 export const scheduledPath = (uid: string) => `users/${uid}/scheduled`;
 export const installmentsPath = (uid: string) => `users/${uid}/installments`;
 export const forecastsPath = (uid: string) => `users/${uid}/forecasts`;
+export const statementsPath = (uid: string) => `users/${uid}/statements`;
 /** Collection of one-document settings, such as `settings/forecast`. */
 export const settingsPath = (uid: string) => `users/${uid}/settings`;
 
@@ -128,6 +132,8 @@ export type LedgerSnapshot = {
 	installments: Installment[];
 	/** Per-Cut-off Forecast documents (only Cut-offs whose Funding Accounts were changed). */
 	forecasts: Forecast[];
+	/** Credit Card Statements with an entered amount or Paying sources (ADR 0006). */
+	statements: Statement[];
 	/** The owner's Forecast Section lists; null until first saved. */
 	forecastSettings: ForecastSettingsDoc | null;
 };
@@ -148,6 +154,7 @@ export function subscribeLedger(
 	let scheduled: Scheduled[] | undefined;
 	let installments: Installment[] | undefined;
 	let forecasts: Forecast[] | undefined;
+	let statements: Statement[] | undefined;
 	let forecastSettings: ForecastSettingsDoc | null | undefined;
 	const publish = () => {
 		if (
@@ -156,9 +163,18 @@ export function subscribeLedger(
 			scheduled &&
 			installments &&
 			forecasts &&
+			statements &&
 			forecastSettings !== undefined
 		)
-			onData({ accounts, transactions, scheduled, installments, forecasts, forecastSettings });
+			onData({
+				accounts,
+				transactions,
+				scheduled,
+				installments,
+				forecasts,
+				statements,
+				forecastSettings
+			});
 	};
 	const parseAll = <T>(
 		docs: { id: string; ref: { path: string }; data(): DocumentData }[],
@@ -216,6 +232,14 @@ export function subscribeLedger(
 		},
 		onError
 	);
+	const stopStatements = onSnapshot(
+		collection(db, statementsPath(uid)),
+		(snap) => {
+			statements = parseAll(snap.docs, parseStatement);
+			publish();
+		},
+		onError
+	);
 	const stopSettings = onSnapshot(
 		doc(db, settingsPath(uid), 'forecast'),
 		(snap) => {
@@ -233,6 +257,7 @@ export function subscribeLedger(
 	);
 	return () => {
 		stopForecasts();
+		stopStatements();
 		stopSettings();
 		stopAccounts();
 		stopTransactions();
@@ -284,6 +309,9 @@ export async function commitLedger(db: Firestore, uid: string, writes: LedgerWri
 				break;
 			case 'setForecast':
 				batch.set(doc(db, forecastsPath(uid), w.id), ForecastDoc.parse(w.data));
+				break;
+			case 'setStatement':
+				batch.set(doc(db, statementsPath(uid), w.id), StatementDoc.parse(w.data));
 				break;
 			case 'setForecastSettings':
 				batch.set(doc(db, settingsPath(uid), w.id), ForecastSettingsDoc.parse(w.data));

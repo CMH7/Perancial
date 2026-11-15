@@ -4,6 +4,7 @@ import type {
 	ForecastSettingsDoc,
 	InstallmentDoc,
 	ScheduledDoc,
+	StatementDoc,
 	TransactionDoc
 } from './schemas.ts';
 
@@ -19,6 +20,8 @@ export type ChartWrite =
 	| { op: 'deleteInstallment'; id: string }
 	/** `id` is the Cut-off date. */
 	| { op: 'setForecast'; id: string; data: ForecastDoc }
+	/** `id` is `{cardId}_{statementDate}` (see `statementId`). */
+	| { op: 'setStatement'; id: string; data: StatementDoc }
 	/** The one settings document, `settings/forecast`. */
 	| { op: 'setForecastSettings'; id: 'forecast'; data: ForecastSettingsDoc };
 

@@ -7,6 +7,7 @@ import {
 	type ForecastSettingsDoc,
 	type Installment,
 	type Scheduled,
+	type Statement,
 	type Transaction
 } from '#lib/domain/index.ts';
 import { db } from '#lib/firebase/app.ts';
@@ -28,6 +29,8 @@ class Ledger {
 	scheduled = $state.raw<Scheduled[]>([]);
 	installments = $state.raw<Installment[]>([]);
 	forecasts = $state.raw<Forecast[]>([]);
+	/** Credit Card Statements with an entered amount or Paying sources (ADR 0006). */
+	statements = $state.raw<Statement[]>([]);
 	/** The owner's Forecast Section lists; null until first saved (defaults apply). */
 	forecastSettings = $state.raw<ForecastSettingsDoc | null>(null);
 	/** True once both collections have loaded at least once. */
@@ -88,12 +91,21 @@ class Ledger {
 		this.#stop = subscribeLedger(
 			db,
 			uid,
-			({ accounts, transactions, scheduled, installments, forecasts, forecastSettings }) => {
+			({
+				accounts,
+				transactions,
+				scheduled,
+				installments,
+				forecasts,
+				statements,
+				forecastSettings
+			}) => {
 				this.accounts = accounts;
 				this.transactions = transactions;
 				this.scheduled = scheduled;
 				this.installments = installments;
 				this.forecasts = forecasts;
+				this.statements = statements;
 				this.forecastSettings = forecastSettings;
 				this.ready = true;
 			},
@@ -113,6 +125,7 @@ class Ledger {
 		this.scheduled = [];
 		this.installments = [];
 		this.forecasts = [];
+		this.statements = [];
 		this.forecastSettings = null;
 		this.ready = false;
 	}

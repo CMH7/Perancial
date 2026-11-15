@@ -17,10 +17,12 @@ export { OWNER_UID };
 /** Registers before/after hooks and returns a getter for the test environment. */
 export function useEmulator(): () => RulesTestEnvironment {
 	let env: RulesTestEnvironment;
+	// `emulators:exec` sets FIRESTORE_EMULATOR_HOST, so an emulator on another port works too.
+	const [host, port] = (process.env.FIRESTORE_EMULATOR_HOST ?? '127.0.0.1:8080').split(':');
 	beforeAll(async () => {
 		env = await initializeTestEnvironment({
 			projectId: 'demo-perancial',
-			firestore: { rules: readFileSync('firestore.rules', 'utf8'), host: '127.0.0.1', port: 8080 }
+			firestore: { rules: readFileSync('firestore.rules', 'utf8'), host, port: Number(port) }
 		});
 	});
 	beforeEach(async () => {

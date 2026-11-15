@@ -59,7 +59,7 @@ The day a Statement closes. A charge dated on or before it bills in that Stateme
 The day a Statement must be paid by. Falls on the card's Due Day, in the month after the Statement Date when the Due Day is smaller than the Statement Day.
 
 **Statement Balance**
-What a Statement asks the owner to pay: the sum of the charges billed in it, less refunds billed in it and any overpayment carried from the previous Statement, until the owner enters the amount the real Statement shows. Paying a Credit Card in the Forecast means paying its full Statement Balance. Payments into the card fill the oldest unpaid Statement first; a refund is not a payment.
+What a Statement asks the owner to pay: the sum of the charges billed in it less the refunds billed in it (the first Statement also carries the Opening Balance), until the owner enters the amount the real Statement shows. Paying a Credit Card in the Forecast means paying its full Statement Balance. Payments into the card fill the oldest unpaid Statement first, and an overpayment or a negative Statement Balance counts toward the next one; a refund is not a payment.
 _Avoid_: SOA amount, minimum due (a different, smaller amount)
 
 **Opening Balance**
